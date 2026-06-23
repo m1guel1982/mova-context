@@ -1,0 +1,70 @@
+# ═══════════════════════════════════════
+# SISTEMA
+# ═══════════════════════════════════════
+.DS_Store
+Thumbs.db
+
+# ═══════════════════════════════════════
+# PYTHON (BACKEND)
+# ═══════════════════════════════════════
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+
+# entornos virtuales
+venv/
+.venv/
+env/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ═══════════════════════════════════════
+# NODE / FRONTEND
+# ═══════════════════════════════════════
+node_modules/
+dist/
+build/
+.cache/
+.vite/
+
+# logs npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ═══════════════════════════════════════
+# VARIABLES DE ENTORNO (CRÍTICO)
+# ═══════════════════════════════════════
+.env
+.env.*
+!.env.example
+
+frontend/.env.local
+backend/.env
+
+# ═══════════════════════════════════════
+# DOCKER / DATA
+# ═══════════════════════════════════════
+data/
+postgres-data/
+pgadmin_data/
+logs/
+.claude/
+.git/
+# ═══════════════════════════════════════
+# IDEs
+# ═══════════════════════════════════════
+.vscode/
+.idea/
+
+# ═══════════════════════════════════════
+# ARCHIVOS TEMPORALES
+# ═══════════════════════════════════════
+*.tmp
+*.swp
+
