@@ -1,0 +1,16 @@
+{
+  "name": "tareas-api",
+  "version": "1.0.0",
+  "description": "API mínima de tareas — generada con Mova Context (prueba corregida)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --experimental-sqlite server.js",
+    "test":  "node --experimental-sqlite --test"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
