@@ -1,0 +1,111 @@
+{
+  "project": "pruebas-locales",
+  "description": "Proyecto ficticio mínimo (API de tareas) para validar Mova Context de punta a punta: crear, modificar, devops, QA y memoria — sin tocar proyectos reales.",
+  "repo": "E:/nuevosProyectos21012026Mova/misProyectos/mova-context-test/app-prueba-local",
+  "default_task": "crear-proyecto",
+  "variables": {
+    "project": "pruebas-locales",
+    "stack": "Node.js + Express + SQLite",
+    "database": "SQLite",
+    "auth_method": "API key simple (header X-API-Key)",
+    "test_framework": "node:test",
+    "ci_provider": "GitHub Actions",
+    "cloud_provider": "ninguno",
+    "docker": "false",
+    "forbidden": "Dockerfile · docker-compose · carpetas vacías · dependencias no declaradas en package.json · .env · .eslintrc · archivos de configuración no solicitados · CI/CD · logging avanzado · autenticación compleja",
+    "constraints": "solo node server.js, sin procesos externos, sin Docker, sin herramientas de build"
+  },
+  "agents": {
+    "base": [
+      "yagni-core",
+      "backend-dev"
+    ],
+    "custom": []
+  },
+  "skills": {
+    "base": [
+      "kiss-dry-core",
+      "lazy-minimalism"
+    ],
+    "custom": []
+  },
+  "tasks": {
+    "crear-proyecto": {
+      "prompt": {
+        "base": "create-project"
+      },
+      "variables": {
+        "project_name": "tareas-api",
+        "description": "API mínima de tareas (to-do list) con 3 endpoints: crear, listar, marcar completada"
+      }
+    },
+    "agregar-modulo-categorias": {
+      "prompt": {
+        "base": "create-module"
+      },
+      "variables": {
+        "module": "categorias",
+        "api_prefix": "/api/v1"
+      }
+    },
+    "auditar-modulo-tareas": {
+      "prompt": {
+        "base": "audit-module"
+      },
+      "agents": {
+        "base": [
+          "security-architect"
+        ]
+      },
+      "variables": {
+        "module_name": "tareas"
+      },
+      "focus": [
+        "taskController.js",
+        "taskService.js",
+        "crearTarea()"
+      ]
+    },
+    "configurar-cicd": {
+      "prompt": {
+        "base": "cicd-setup"
+      },
+      "agents": {
+        "base": [
+          "devops-engineer"
+        ]
+      }
+    },
+    "generar-tests": {
+      "prompt": {
+        "base": "create-module"
+      },
+      "agents": {
+        "base": [
+          "qa-engineer"
+        ]
+      },
+      "skills": {
+        "base": [
+          "generate-tests"
+        ]
+      },
+      "variables": {
+        "module": "tareas"
+      }
+    },
+    "refactor-ponytail": {
+      "prompt": {
+        "custom": "ponytail"
+      },
+      "skills": {
+        "base": [
+          "lazy-minimalism"
+        ]
+      },
+      "focus": [
+        "taskRepository.js"
+      ]
+    }
+  }
+}

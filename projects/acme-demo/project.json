@@ -1,0 +1,36 @@
+{
+  "project": "acme-demo",
+  "description": "API interna multi-tenant de ejemplo",
+  "repo": "C:/acme/acme-api-interna",
+  "default_task": "review-complete",
+  "variables": {
+    "project": "acme-api-interna",
+    "stack": "FastAPI + PostgreSQL + Redis",
+    "api_prefix": "/api/v1",
+    "auth_method": "JWT RS256"
+  },
+  "agents": {"base": ["backend-dev", "security-architect"], "custom": ["acme-backend"]},
+  "skills": {"base": ["jwt-security"], "custom": ["acme-conventions"]},
+  "tasks": {
+    "audit-auth": {
+      "prompt": {"base": "audit-module"},
+      "variables": {"module": "auth"}
+    },
+    "audit-payments": {
+      "prompt": {"base": "audit-module", "custom": "audit-payments-acme"},
+      "variables": {"module": "payments"},
+      "skills": {"base": ["sql-optimization"]}
+    },
+    "review-complete": {
+      "prompt": {"base": "review-project"},
+      "agents": {"base": ["architect"]},
+      "variables": {"review_type": "complete"}
+    },
+    "new-module": {
+      "prompt": {"base": "create-project", "custom": "create-acme-module"},
+      "agents": {"base": ["architect"]},
+      "skills": {"custom": ["acme-module-rules"]},
+      "variables": {"module": "users", "database": "PostgreSQL"}
+    }
+  }
+}
