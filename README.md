@@ -1,3 +1,10 @@
+<!-- Mensaje de cambio de rama / Branch language note -->
+> 🌐 **Nota sobre el idioma / Language Note:**  
+> Este proyecto está disponible en inglés en la rama `english`. Si prefieres leer la documentación en ese idioma, por favor cambia de rama.  
+> *This project is available in English on the `english` branch. If you prefer to read the documentation in English, please switch branches.*
+
+---
+
 # Mova Context
 
 **Una capa portable de conocimiento operativo para proyectos asistidos por IA.**
