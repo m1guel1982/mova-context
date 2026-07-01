@@ -55,6 +55,13 @@ projects/finanzas-cmf/
 # Oculta los módulos comerciales para liberarlos de a poco
 # ====================================================================
 
+# 3. Agents Corporativos y Módulos de Compliance (Privados)
+agents/callcenter/
+agents/legal/
+agents/privacidad/
+agents/base/i18n/es/compliance/
+agents/base/i18n/en/compliance/
+
 # 1. Prompts Corporativos (Privados)
 prompts/callcenter/
 prompts/finanzas/
