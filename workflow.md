@@ -2,24 +2,22 @@
 
 Sistema de instrucciones para resolver contexto de proyecto.
 
+> Documentación completa: [docs/i18n/es/workflow.md](docs/i18n/es/workflow.md) · [docs/i18n/en/workflow.md](docs/i18n/en/workflow.md)
+
+---
+
 ## WORKSPACE
 
 ```text
 mova-context/              ← repo de la convención (agents, skills, prompts, projects)
-├── agents/
-│   ├── base/
-│   └── custom/
-├── skills/
-│   ├── base/
-│   └── custom/
-├── prompts/
-│   ├── base/
-│   └── custom/
+├── agents/[domain]/i18n/[lang]/
+├── skills/[domain]/i18n/[lang]/
+├── prompts/[domain]/i18n/[lang]/
 ├── projects/
 │   └── [PROJECT]/
 │       ├── project.json
 │       └── memory.md
-└── workflow.md
+└── workflow.md             ← estás aquí
 ```
 
 El código generado puede vivir en cualquier directorio — dentro o fuera de `mova-context`.
@@ -64,6 +62,8 @@ Lee workflow.md → [PROJECT] → [TASK]
 
 carga [PROJECT]
 ejecuta [TASK] de [PROJECT]
+
+Read workflow.md → [PROJECT] → [TASK]
 ```
 
 ---
@@ -72,7 +72,7 @@ ejecuta [TASK] de [PROJECT]
 
 ```text
 SI el entorno permite acceso a filesystem
-→ localizar y leer archivos automáticamente
+→ localizar y leer archivos automáticamente, de forma recursiva dentro de "repo" y de mova-context
 
 SI el entorno NO permite acceso a filesystem
 → solicitar únicamente los archivos faltantes
@@ -135,17 +135,33 @@ SI default_task no existe
 ## SECUENCIA DE EJECUCIÓN
 
 ```text
-1. Leer project.json
-2. Resolver task
-3. Cargar agents
-4. Cargar skills
-5. Cargar prompts
-6. Leer memory.md
-7. Fusionar variables
-8. Inyectar variables
-9. Ejecutar
-10. Actualizar memory.md
+1.  Leer project.json
+2.  Resolver lang (idioma configurado)
+3.  Resolver llm_profile (proveedor + modelo + perfil)
+4.  Resolver adapter (almacenamiento: file / postgresql / mongodb)
+5.  Resolver task
+6.  Cargar agents
+7.  Cargar skills
+8.  Cargar prompt
+9.  Leer memory.md
+10. Fusionar variables (task > global)
+11. Inyectar variables
+12. Ejecutar
+13. Actualizar memory.md
 ```
+
+---
+
+## RESOLUCIÓN DE ARCHIVOS (i18n + domain)
+
+Para `agent: backend-dev`, `domain: software`, `lang: es`:
+
+```text
+agents/software/i18n/es/backend-dev.md   ← usar
+agents/software/i18n/en/backend-dev.md   ← fallback si es/ no existe
+```
+
+Misma lógica de resolución aplica a `skills/` y `prompts/`.
 
 ---
 
@@ -153,25 +169,19 @@ SI default_task no existe
 
 ```json
 "agents": {
-  "base": ["agent-a"],
-  "custom": ["agent-b"]
+  "domain": "software",
+  "use": ["backend-dev", "security-architect"]
 }
 ```
 
-Carga:
+Carga, en orden, para cada nombre en `use`:
 
 ```text
-agents/base/[nombre].md
-agents/custom/[nombre].md
+1. agents/[domain]/i18n/[lang]/[nombre].md      ← base del dominio
+2. agents/custom/i18n/[lang]/[nombre].md        ← override específico del proyecto, si existe
 ```
 
-Orden:
-
-```text
-base → custom
-```
-
-Los agents definidos en una task se agregan a los globales.
+Los agents definidos en una task se agregan a los globales (no los reemplazan).
 
 ---
 
@@ -179,48 +189,37 @@ Los agents definidos en una task se agregan a los globales.
 
 ```json
 "skills": {
-  "base": ["skill-a"],
-  "custom": ["skill-b"]
+  "domain": "legal",
+  "use": ["ley-21719-obligaciones", "derechos-titulares"]
 }
 ```
 
-Carga:
+Carga, en orden, para cada nombre en `use`:
 
 ```text
-skills/base/[nombre].md
-skills/custom/[nombre].md
+1. skills/[domain]/i18n/[lang]/[nombre].md      ← base del dominio
+2. skills/custom/i18n/[lang]/[nombre].md        ← override específico del proyecto, si existe
 ```
 
-Orden:
-
-```text
-base → custom
-```
-
-Las skills definidas en una task se agregan a las globales.
+Las skills definidas en una task se agregan a las globales (no las reemplazan).
 
 ---
 
 ## PROMPTS
 
 ```json
-"prompt": {
-  "base": "prompt-base",
-  "custom": "prompt-custom"
+"tasks": {
+  "analizar-contrato": {
+    "prompt": "analizar-contrato-datos"
+  }
 }
 ```
 
 Carga:
 
 ```text
-prompts/base/[nombre].md
-prompts/custom/[nombre].md
-```
-
-Orden:
-
-```text
-base → custom
+1. prompts/[domain]/i18n/[lang]/[nombre].md     ← base del dominio
+2. prompts/custom/i18n/[lang]/[nombre].md       ← override específico del proyecto, si existe
 ```
 
 ---
@@ -245,14 +244,12 @@ Normalización automática:
 ```text
 Toda clave en snake_case se convierte a {{UPPER_CASE}} para inyección.
 
-Regla: reemplazar "_" por "_", convertir a mayúsculas, envolver en {{ }}
+Regla: convertir a mayúsculas, envolver en {{ }}
 
 Ejemplos:
   project        → {{PROJECT}}
   api_prefix     → {{API_PREFIX}}
-  test_framework → {{TEST_FRAMEWORK}}
-  ci_provider    → {{CI_PROVIDER}}
-  module_name    → {{MODULE_NAME}}
+  tipo_documento → {{TIPO_DOCUMENTO}}
   cualquier_clave_nueva → {{CUALQUIER_CLAVE_NUEVA}}
 ```
 
@@ -267,6 +264,7 @@ Variables reservadas del sistema (siempre disponibles sin declararlas):
 {{PROJECT}}    → valor de "project" en project.json
 {{REPO}}       → valor de "repo" en project.json
 {{TASK}}       → nombre de la task activa
+{{LANG}}       → idioma configurado
 ```
 
 ---
@@ -320,15 +318,10 @@ projects/[PROJECT]/memory.md
 Reglas:
 
 ```text
-SI existe
-→ leer
+SI existe → leer antes de ejecutar
+SI no existe → crear
 
-SI no existe
-→ crear
-→ continuar
-
-Leer antes de ejecutar.
-Actualizar al finalizar.
+Actualizar al finalizar cada sesión.
 ```
 
 Formato:
@@ -345,10 +338,33 @@ Formato:
 
 ---
 
+## ARCHIVOS CORE
+
+Cada sección tiene un archivo core obligatorio que se carga automáticamente, una sola vez, antes de cualquier otro archivo de esa sección.
+
+| Sección | Core           | Ubicación                                  |
+|---------|----------------|--------------------------------------------|
+| Agents  | yagni-core.md  | agents/{domain}/i18n/{lang}/yagni-core.md  |
+| Skills  | kiss-dry-core.md | skills/{domain}/i18n/{lang}/kiss-dry-core.md |
+| Prompts | ockham-core.md | prompts/{domain}/i18n/{lang}/ockham-core.md |
+
+Reglas:
+
+```text
+Cada core se carga exactamente una vez por contexto.
+Si el core no existe en el dominio activo → buscarlo recursivamente en agents/skills/prompts.
+Si un agent/skill/prompt lista el core como nombre → omitirlo (ya fue cargado).
+Nunca duplicar contenido de core.
+```
+
+El sistema resuelve el core automáticamente sin importar la profundidad del árbol de directorios.
+
+---
+
 ## REGLAS DE CARGA
 
 ```text
-base → custom
+base/domain → custom
 
 custom complementa o sobreescribe base.
 ```
@@ -361,18 +377,21 @@ SI un archivo no existe
 Orden completo:
 
 ```text
-1. agents globales base
-2. agents globales custom
-3. agents task base
-4. agents task custom
+1.  core de agents (yagni-core) — una sola vez
+2.  agents globales del dominio (base)
+3.  agents globales custom
+4.  agents task del dominio (base)
+5.  agents task custom
 
-5. skills globales base
-6. skills globales custom
-7. skills task base
-8. skills task custom
+6.  core de skills (kiss-dry-core) — una sola vez
+7.  skills globales del dominio (base)
+8.  skills globales custom
+9.  skills task del dominio (base)
+10. skills task custom
 
-9. prompt base
-10. prompt custom
+11. core de prompts (ockham-core) — una sola vez
+12. prompt del dominio (base)
+13. prompt custom
 ```
 
 ---
@@ -394,10 +413,10 @@ ruta absoluta
 ## RESULTADO ESPERADO
 
 ```text
-1. Resolver proyecto
-2. Resolver task
-3. Cargar contexto requerido
-4. Aplicar variables
-5. Ejecutar usando agents, skills, prompts y memory.md
-6. Actualizar memory.md al finalizar
+1. Resolver proyecto y task
+2. Resolver lang, llm_profile y adapter
+3. Cargar contexto (agents + skills + prompt + memory) de forma recursiva
+4. Aplicar y fusionar variables (incluyendo focus)
+5. Ejecutar
+6. Actualizar memory.md
 ```

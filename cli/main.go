@@ -1,441 +1,259 @@
-// mova — CLI para Mova Context
-// Empaqueta agents + skills + prompts + memory.md en un único bloque
-// listo para pegar en cualquier LLM web (Claude, GPT, Gemini, etc.)
-//
-// Uso:
-//   mova run [proyecto] [tarea]
-//   mova memory [proyecto] "texto de respuesta del LLM"
-//   mova list
-//   mova init [nombre]
-//
-// Sin dependencias externas. Compila con: go build -o mova .
-
+// main.go — Mova Context CLI v3
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"strconv"
 	"strings"
-	"time"
 )
 
-// ── Estructuras del project.json ──────────────────────────────────────────────
-
-type AgentSkillBlock struct {
-	Base   []string `json:"base"`
-	Custom []string `json:"custom"`
-}
-
-type PromptBlock struct {
-	Base   string `json:"base"`
-	Custom string `json:"custom"`
-}
-
-type Task struct {
-	Prompt    PromptBlock       `json:"prompt"`
-	Agents    AgentSkillBlock   `json:"agents"`
-	Skills    AgentSkillBlock   `json:"skills"`
-	Variables map[string]string `json:"variables"`
-	Focus     []string          `json:"focus"`
-}
-
-type Project struct {
-	Project     string            `json:"project"`
-	Description string            `json:"description"`
-	Repo        string            `json:"repo"`
-	DefaultTask string            `json:"default_task"`
-	Variables   map[string]string `json:"variables"`
-	Focus       []string          `json:"focus"`
-	Agents      AgentSkillBlock   `json:"agents"`
-	Skills      AgentSkillBlock   `json:"skills"`
-	Tasks       map[string]Task   `json:"tasks"`
-}
-
-// ── Rutas ─────────────────────────────────────────────────────────────────────
-
-func movaRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
+func main() {
+	if len(os.Args) < 2 {
+		usage()
+		return
 	}
+
+	root, err := findRoot()
+	if err != nil {
+		die(err.Error())
+	}
+
+	getAdapter := func(projectName string) Adapter {
+		if projectName == "" {
+			return newFileAdapter(root)
+		}
+		fa := newFileAdapter(root)
+		proj, _ := fa.GetProject(projectName)
+		return newAdapter(root, proj)
+	}
+
+	switch os.Args[1] {
+
+	case "run":
+		project, task := arg(2, ""), arg(3, "")
+		if project == "" {
+			project = autoDetect(root)
+		}
+		ctx, err := buildContext(getAdapter(project), project, task)
+		must(err)
+		consolePrint(ctx)
+
+	case "memory":
+		project, response := needArg(2, "project"), needArg(3, "response")
+		block, err := extractMemoryBlock(response)
+		must(err)
+		must(getAdapter(project).AppendMemory(project, block))
+		consolePrint("memory updated: " + project + "\n")
+
+	case "memory-read":
+		project := needArg(2, "project")
+		all := flagBool("--all")
+		month := flagStr("--month", "")
+		adapter := getAdapter(project)
+		if month != "" {
+			path := filepath.Join(root, "projects", project, "memory-archive", month+".md")
+			data, err := os.ReadFile(path)
+			must(err)
+			consolePrint(string(data))
+		} else if all {
+			c, err := adapter.GetMemoryAll(project)
+			must(err)
+			consolePrint(c)
+		} else {
+			c, err := adapter.GetMemory(project)
+			must(err)
+			consolePrint(c)
+		}
+
+	case "memory-archive":
+		project := needArg(2, "project")
+		days := flagInt("--days", 30)
+		must(getAdapter(project).ArchiveMemory(project, days))
+		consolePrint(fmt.Sprintf("archived: %s (entries older than %d days)\n", project, days))
+
+	case "list":
+		projects, err := newFileAdapter(root).ListProjects()
+		must(err)
+		for _, p := range projects {
+			lang := p.Lang
+			if lang == "" {
+				lang = "legacy"
+			}
+			consolePrint(fmt.Sprintf("  %-22s [%s] %s\n    tasks: %s\n",
+				p.Name, lang, p.Description, strings.Join(p.Tasks, ", ")))
+		}
+
+	case "init":
+		name := needArg(2, "name")
+		dir := filepath.Join(root, "projects", name)
+		os.MkdirAll(dir, 0755)
+		os.WriteFile(filepath.Join(dir, "project.json"), []byte(projectTemplate(name)), 0644)
+		os.WriteFile(filepath.Join(dir, "memory.md"), []byte(""), 0644)
+		consolePrint("created: projects/" + name + "/\n")
+
+	case "search":
+		query := needArg(2, "query")
+		domain := arg(3, "")
+		results, err := newFileAdapter(root).Search(query, domain)
+		must(err)
+		if len(results) == 0 {
+			consolePrint("no results for: " + query + "\n")
+			return
+		}
+		for _, r := range results {
+			consolePrint(fmt.Sprintf("  [%s/%s/%s] %s\n  %s\n\n",
+				r.Kind, r.Domain, r.Lang, r.Name, r.Excerpt))
+		}
+
+	case "mcp":
+		if arg(2, "") != "start" {
+			die("usage: mova mcp start [--port 3000] [--stdio]")
+		}
+		
+		adapter := newFileAdapter(root)
+		
+		// Si se pasa --stdio, se inicia en modo consola directa para herramientas de IA
+		if flagBool("--stdio") {
+			must(startMCPStdio(adapter))
+		} else {
+			port := flagInt("--port", 3000)
+			must(startMCPHttp(adapter, port))
+		}
+
+	case "memory-clear":
+		project := needArg(2, "project")
+		runMemoryClear(getAdapter(project), root, project)
+
+	case "memory-config":
+		project := needArg(2, "project")
+		action := needArg(3, "action (enable|disable|days|confirm|keep-memory-only)")
+		value := arg(4, "")
+		runMemoryConfig(root, project, action, value)
+
+	default:
+		usage()
+	}
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+func findRoot() (string, error) {
+	dir, _ := os.Getwd()
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "workflow.md")); err == nil {
 			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", fmt.Errorf("no se encontró workflow.md — ejecuta mova desde dentro de mova-context")
+			return "", fmt.Errorf("workflow.md not found — run from inside mova-context")
 		}
 		dir = parent
 	}
 }
 
-// ── Archivos ──────────────────────────────────────────────────────────────────
-
-// readFile lee el archivo y garantiza que el resultado es UTF-8 válido.
-// Si el archivo está en Latin-1 / CP1252 (tildes como bytes > 0x7F sueltos),
-// convierte cada byte al rune equivalente — que es exactamente lo que hace
-// la tabla Latin-1: codepoint == byte value.
-func readFile(path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
+func autoDetect(root string) string {
+	entries, _ := os.ReadDir(filepath.Join(root, "projects"))
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
 	}
-	if isValidUTF8(data) {
-		return string(data)
-	}
-	// Convertir Latin-1/CP1252 → UTF-8: cada byte es su propio codepoint.
-	runes := make([]rune, len(data))
-	for i, b := range data {
-		runes[i] = rune(b)
-	}
-	return string(runes)
-}
-
-// isValidUTF8 verifica si el slice de bytes es UTF-8 válido.
-func isValidUTF8(data []byte) bool {
-	for i := 0; i < len(data); {
-		b := data[i]
-		var size int
-		switch {
-		case b < 0x80:
-			size = 1
-		case b < 0xC2:
-			return false // byte de continuación huérfano o sobrecodificación
-		case b < 0xE0:
-			size = 2
-		case b < 0xF0:
-			size = 3
-		case b < 0xF5:
-			size = 4
-		default:
-			return false
-		}
-		if i+size > len(data) {
-			return false
-		}
-		for j := 1; j < size; j++ {
-			if data[i+j]&0xC0 != 0x80 {
-				return false
-			}
-		}
-		i += size
-	}
-	return true
-}
-
-func walkFind(root, filename string) string {
-	var result string
-	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || result != "" {
-			return nil
-		}
-		if !info.IsDir() && info.Name() == filename {
-			result = path
-		}
-		return nil
-	})
-	return result
-}
-
-func resolveFile(root, kind, name string) string {
-	for _, subdir := range []string{"base", "custom"} {
-		found := walkFind(filepath.Join(root, kind, subdir), name+".md")
-		if found != "" {
-			return readFile(found)
-		}
+	if len(names) == 1 {
+		return names[0]
 	}
 	return ""
 }
 
-// ── Variables ─────────────────────────────────────────────────────────────────
-
-func mergeVars(global, task map[string]string) map[string]string {
-	merged := make(map[string]string)
-	for k, v := range global {
-		merged[k] = v
-	}
-	for k, v := range task {
-		merged[k] = v
-	}
-	return merged
+func projectTemplate(name string) string {
+	return `{\n  "project": "` + name + `",\n  "description": "",\n  "repo": ".",\n  "lang": "en",\n  "adapter": "file",\n  "llm": "claude",\n  "default_task": "",\n  "variables": {},\n  "agents": { "domain": "software", "use": [] },\n  "skills": { "domain": "software", "use": [] },\n  "tasks": {}\n}`
 }
 
-func injectVars(text string, vars map[string]string) string {
-	for k, v := range vars {
-		text = strings.ReplaceAll(text, "{{"+strings.ToUpper(k)+"}}", v)
+func arg(i int, def string) string {
+	if i < len(os.Args) {
+		return os.Args[i]
 	}
-	return text
+	return def
 }
 
-// ── Construcción del contexto ─────────────────────────────────────────────────
-
-func loadSection(root, kind string, block AgentSkillBlock, vars map[string]string, label string) string {
-	var sb strings.Builder
-	for _, name := range append(block.Base, block.Custom...) {
-		content := resolveFile(root, kind, name)
-		if content == "" {
-			continue
-		}
-		sb.WriteString(fmt.Sprintf("\n\n<!-- %s: %s -->\n%s", label, name, injectVars(content, vars)))
+func needArg(i int, label string) string {
+	if i < len(os.Args) {
+		return os.Args[i]
 	}
-	return sb.String()
-}
-
-func loadPrompt(root string, prompt PromptBlock, vars map[string]string) string {
-	var sb strings.Builder
-	for _, name := range []string{prompt.Base, prompt.Custom} {
-		if name == "" {
-			continue
-		}
-		content := resolveFile(root, "prompts", name)
-		if content == "" {
-			continue
-		}
-		sb.WriteString(fmt.Sprintf("\n\n<!-- prompt: %s -->\n%s", name, injectVars(content, vars)))
-	}
-	return sb.String()
-}
-
-// ── Comandos ──────────────────────────────────────────────────────────────────
-
-func cmdRun(root, projectName, taskName string) {
-	data, err := os.ReadFile(filepath.Join(root, "projects", projectName, "project.json"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: no se encontró projects/%s/project.json\n", projectName)
-		os.Exit(1)
-	}
-
-	var proj Project
-	if err := json.Unmarshal(data, &proj); err != nil {
-		fmt.Fprintf(os.Stderr, "Error leyendo project.json: %v\n", err)
-		os.Exit(1)
-	}
-
-	if taskName == "" {
-		taskName = proj.DefaultTask
-	}
-	task, ok := proj.Tasks[taskName]
-	if !ok {
-		fmt.Fprintf(os.Stderr, "Error: task '%s' no existe.\nTasks disponibles: %s\n",
-			taskName, strings.Join(taskNames(proj), ", "))
-		os.Exit(1)
-	}
-
-	vars := mergeVars(proj.Variables, task.Variables)
-	vars["project"] = proj.Project
-	vars["repo"] = proj.Repo
-	vars["task"] = taskName
-
-	focus := proj.Focus
-	if len(task.Focus) > 0 {
-		focus = task.Focus
-	}
-	if len(focus) > 0 {
-		vars["focus"] = "- " + strings.Join(focus, "\n- ")
-	}
-
-	agents := AgentSkillBlock{
-		Base:   append(proj.Agents.Base, task.Agents.Base...),
-		Custom: append(proj.Agents.Custom, task.Agents.Custom...),
-	}
-	skills := AgentSkillBlock{
-		Base:   append(proj.Skills.Base, task.Skills.Base...),
-		Custom: append(proj.Skills.Custom, task.Skills.Custom...),
-	}
-
-	var out strings.Builder
-	out.WriteString(fmt.Sprintf("# Contexto Mova Context — %s / %s\n", proj.Project, taskName))
-	out.WriteString(fmt.Sprintf("Generado: %s\nRepo de trabajo: %s\n", time.Now().Format("2006-01-02 15:04"), proj.Repo))
-
-	if len(focus) > 0 {
-		out.WriteString("\n\n---\n## FOCUS (trabajar solo sobre esto)\n")
-		for _, f := range focus {
-			out.WriteString(fmt.Sprintf("- `%s`\n", f))
-		}
-		out.WriteString("\nSi un elemento no tiene ruta completa, buscarlo dentro de `" + proj.Repo + "`.\n")
-		out.WriteString("Si aparece en más de un lugar, informar las coincidencias antes de continuar.\n")
-	}
-
-	out.WriteString("\n\n---\n## AGENTS\n")
-	out.WriteString(loadSection(root, "agents", agents, vars, "agent"))
-	out.WriteString("\n\n---\n## SKILLS\n")
-	out.WriteString(loadSection(root, "skills", skills, vars, "skill"))
-	out.WriteString("\n\n---\n## PROMPT\n")
-	out.WriteString(loadPrompt(root, task.Prompt, vars))
-
-	if mem := readFile(filepath.Join(root, "projects", projectName, "memory.md")); mem != "" {
-		out.WriteString("\n\n---\n## MEMORIA (sesiones anteriores)\n")
-		out.WriteString(mem)
-	}
-
-	out.WriteString("\n\n---\n## INSTRUCCIÓN\n")
-	out.WriteString(fmt.Sprintf("Eres un asistente trabajando en el proyecto **%s**.\n", proj.Project))
-	out.WriteString(fmt.Sprintf("Directorio de trabajo: `%s`\n", proj.Repo))
-	out.WriteString("Aplica los agents, skills y prompt cargados arriba.\n")
-	out.WriteString("Al finalizar, responde con un bloque:\n\n")
-	out.WriteString("```memory\n## YYYY-MM-DD — sesión\n**Hecho:**\n**Resuelto:**\n**Pendiente:**\n**Decisiones:**\n**Errores LLM:**\n```\n")
-	out.WriteString("\nEse bloque se usará para actualizar memory.md.\n")
-
-	consolePrint(out.String())
-}
-
-func cmdMemory(root, projectName, response string) {
-	start := strings.Index(response, "```memory")
-	end := strings.LastIndex(response, "```")
-	if start == -1 || end <= start {
-		fmt.Fprintln(os.Stderr, "No se encontró bloque ```memory en la respuesta.")
-		os.Exit(1)
-	}
-	block := strings.TrimSpace(response[start+len("```memory") : end])
-	memPath := filepath.Join(root, "projects", projectName, "memory.md")
-	updated := block + "\n\n---\n\n" + readFile(memPath)
-	if err := os.WriteFile(memPath, []byte(updated), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "Error escribiendo memory.md: %v\n", err)
-		os.Exit(1)
-	}
-	consolePrint("memory.md actualizado en " + memPath + "\n")
-}
-
-func cmdList(root string) {
-	entries, err := os.ReadDir(filepath.Join(root, "projects"))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "No se encontró el directorio projects/")
-		os.Exit(1)
-	}
-	consolePrint("Proyectos disponibles:\n")
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(root, "projects", e.Name(), "project.json"))
-		if err != nil {
-			continue
-		}
-		var proj Project
-		if err := json.Unmarshal(data, &proj); err != nil {
-			continue
-		}
-		consolePrint(fmt.Sprintf("  %s — %s\n    Tasks: %s\n", e.Name(), proj.Description, strings.Join(taskNames(proj), ", ")))
-	}
-}
-
-func cmdInit(root, name string) {
-	dir := filepath.Join(root, "projects", name)
-	os.MkdirAll(dir, 0755)
-	template := `{
-  "project": "` + name + `",
-  "description": "",
-  "repo": ".",
-  "default_task": "",
-  "variables": {},
-  "agents": { "base": [], "custom": [] },
-  "skills":  { "base": [], "custom": [] },
-  "tasks": {}
-}`
-	os.WriteFile(filepath.Join(dir, "project.json"), []byte(template), 0644)
-	consolePrint("Creado projects/" + name + "/project.json\n")
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-func taskNames(proj Project) []string {
-	names := make([]string, 0, len(proj.Tasks))
-	for k := range proj.Tasks {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	return names
-}
-
-func autoDetectProject(root string) string {
-	entries, err := os.ReadDir(filepath.Join(root, "projects"))
-	if err != nil {
-		return ""
-	}
-	var valid []string
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		if _, err := os.Stat(filepath.Join(root, "projects", e.Name(), "project.json")); err == nil {
-			valid = append(valid, e.Name())
-		}
-	}
-	if len(valid) == 1 {
-		return valid[0]
-	}
+	die("missing argument: " + label)
 	return ""
+}
+
+func flagBool(flag string) bool {
+	for _, a := range os.Args {
+		if a == flag {
+			return true
+		}
+	}
+	return false
+}
+
+func flagStr(flag, def string) string {
+	for i, a := range os.Args {
+		if a == flag && i+1 < len(os.Args) {
+			return os.Args[i+1]
+		}
+	}
+	return def
+}
+
+func flagInt(flag string, def int) int {
+	s := flagStr(flag, "")
+	if s == "" {
+		return def
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return v
+}
+
+func must(err error) {
+	if err != nil {
+		die(err.Error())
+	}
+}
+
+func die(msg string) {
+	fmt.Fprintln(os.Stderr, "error: "+msg)
+	os.Exit(1)
 }
 
 func usage() {
-	consolePrint(`mova — Mova Context CLI
+	consolePrint(`mova — Mova Context v3
 
-Uso:
-  mova run [proyecto] [tarea]     Genera el contexto completo para pegar en un LLM
-  mova memory [proyecto] "texto"  Actualiza memory.md con la respuesta del LLM
-  mova list                       Lista proyectos y tareas disponibles
-  mova init [nombre]              Crea un nuevo proyecto
+  mova run   [project] [task]        generate context for LLM
+  mova memory [project] "response"    save session to memory.md
+  mova memory-read [project]          print active memory
+    --all                             include archives
+    --month 2024-01                   specific archive month
+  mova memory-archive [project]        archive old entries
+    --days N                          keep N days active (default 30)
+  mova list                           list all projects
+  mova init [name]                    create project
+  mova search "query" [domain]        search knowledge
+  mova mcp start                      start MCP server
+    --port 3000                       run as HTTP server (default)
+    --stdio                           run as Stdio server (for Claude/Cursor)
+  mova memory-clear [project]         delete ALL memory
+    --archived                        delete only archived months
+    --keep-active                     delete archives, keep memory.md
+    --date 2024-06-15                 delete a specific day
+    --from 2024-06-01 --to 2024-06-30 delete date range
+    --yes                             skip confirmation
+  mova memory-config [project] [action] [value]
+    enable | disable                  toggle auto-archive
+    days N                            set retention days (1, 10, 30, 90...)
+    confirm true|false                toggle confirmation on delete
 
-Ejecuta mova desde dentro del repositorio mova-context (donde está workflow.md).
+  MOVA_ADAPTER=db  MOVA_DSN=postgres://... mova run project task
 `)
-}
-
-// ── Main ──────────────────────────────────────────────────────────────────────
-
-func main() {
-	if len(os.Args) < 2 {
-		usage()
-		os.Exit(0)
-	}
-
-	root, err := movaRoot()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	switch os.Args[1] {
-	case "init":
-		if len(os.Args) < 3 {
-			fmt.Fprintln(os.Stderr, "Uso: mova init [nombre-proyecto]")
-			os.Exit(1)
-		}
-		cmdInit(root, os.Args[2])
-
-	case "run":
-		projectName, taskName := "", ""
-		if len(os.Args) >= 3 {
-			projectName = os.Args[2]
-		}
-		if len(os.Args) >= 4 {
-			taskName = os.Args[3]
-		}
-		if projectName == "" {
-			projectName = autoDetectProject(root)
-			if projectName == "" {
-				fmt.Fprintln(os.Stderr, "Especifica el proyecto: mova run [proyecto] [tarea]")
-				cmdList(root)
-				os.Exit(1)
-			}
-		}
-		cmdRun(root, projectName, taskName)
-
-	case "memory":
-		if len(os.Args) < 4 {
-			fmt.Fprintln(os.Stderr, "Uso: mova memory [proyecto] \"respuesta del LLM\"")
-			os.Exit(1)
-		}
-		cmdMemory(root, os.Args[2], os.Args[3])
-
-	case "list":
-		cmdList(root)
-
-	default:
-		usage()
-		os.Exit(1)
-	}
 }

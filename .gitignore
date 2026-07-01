@@ -1,70 +1,96 @@
-# ═══════════════════════════════════════
-# SISTEMA
-# ═══════════════════════════════════════
+# ====================================================================
+# SYSTEM & ENVIRONMENT
+# ====================================================================
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+*.code-workspace
 
-# ═══════════════════════════════════════
-# PYTHON (BACKEND)
-# ═══════════════════════════════════════
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.log
-
-# entornos virtuales
-venv/
-.venv/
-env/
-
-# pytest / coverage
-.pytest_cache/
-.coverage
-htmlcov/
-
-# ═══════════════════════════════════════
-# NODE / FRONTEND
-# ═══════════════════════════════════════
-node_modules/
-dist/
-build/
-.cache/
-.vite/
-
-# logs npm/yarn
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# ═══════════════════════════════════════
-# VARIABLES DE ENTORNO (CRÍTICO)
-# ═══════════════════════════════════════
+# Variables y secretos
 .env
 .env.*
 !.env.example
 
-frontend/.env.local
-backend/.env
+# ====================================================================
+# GO DEPENDENCIES & ARTIFACTS
+# ====================================================================
+*.exe
+*.test
+*.out
+cli/dist/
 
-# ═══════════════════════════════════════
-# DOCKER / DATA
-# ═══════════════════════════════════════
-data/
-postgres-data/
-pgadmin_data/
-logs/
-.claude/
-.git/
-# ═══════════════════════════════════════
-# IDEs
-# ═══════════════════════════════════════
-.vscode/
-.idea/
-
-# ═══════════════════════════════════════
-# ARCHIVOS TEMPORALES
-# ═══════════════════════════════════════
+# Archivos temporales de compilación de contexto
 *.tmp
-*.swp
+*.log
+contexto.txt
+context.txt
+contexto_mova.txt
 
+# Frontend / Herramientas de desarrollo
+node_modules/
+
+# Documentos privados de estrategia, cambios y validación
+PUBLICACION_GITHUB.md
+OPEN_SOURCE_STRATEGY.md
+CAMBIOS_REALIZADOS.md
+docs/i18n/es/validation-guide.md
+
+# Bloqueo de archivos de esquema de base de datos o arquitectura
+*schema*
+*.schema
+
+# ====================================================================
+# PRIVATE PROJECTS (Ignorados para mantener privacidad de código)
+# ====================================================================
+projects/privacidad-presidio/
+projects/omnicanal-demo/
+projects/ley-21719/
+projects/finanzas-cmf/
+
+# ====================================================================
+# MOVA ENTERPRISE & PROPRIETARY VERTICALS (Premium Features)
+# Oculta los módulos comerciales para liberarlos de a poco
+# ====================================================================
+
+# 1. Prompts Corporativos (Privados)
+prompts/callcenter/
+prompts/finanzas/
+prompts/legal/
+prompts/privacidad/
+
+# 2. Skills Corporativas (Privadas)
+skills/callcenter/
+skills/custom/
+skills/finanzas/
+skills/laboral/
+skills/legal/
+skills/privacidad/
+skills/salud/
+skills/tributario/
+
+# 3. Ejemplos Enterprise (Ignorar todo excepto Ollama y MCP)
+examples/i18n/es/*
+examples/i18n/en/*
+
+# EXCEPCIONES: Permitir código de Ollama y MCP pero OCULTAR sus README.md intencionalmente
+!examples/i18n/es/ollama/
+!examples/i18n/es/ollama/**
+examples/i18n/es/ollama/README.md
+examples/i18n/es/ollama/README_CON_LEY21739.md
+
+
+!examples/i18n/es/mcp/
+!examples/i18n/es/mcp/**
+examples/i18n/es/mcp/README.md
+
+!examples/i18n/en/ollama/
+!examples/i18n/en/ollama/**
+examples/i18n/en/ollama/README.md
+examples/i18n/en/ollama/README_CON_LEY21739.md
+
+!examples/i18n/en/mcp/
+!examples/i18n/en/mcp/**
+examples/i18n/en/mcp/README.md
