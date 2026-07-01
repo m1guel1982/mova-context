@@ -1,5 +1,5 @@
 // memory_mgmt.go — memory management commands for Mova Context.
-//
+// 
 // Commands added here (all prefixed with "memory"):
 //   mova memory-clear [project]              delete ALL memory (active + archives)
 //   mova memory-clear [project] --archived   delete only archived months
@@ -9,6 +9,7 @@
 //   mova memory-config [project] enable      enable auto-archive
 //   mova memory-config [project] disable     disable auto-archive
 //   mova memory-config [project] days N      set retention to N days
+//   mova memory-read [project]
 //
 // Every destructive command asks for confirmation unless --yes is passed.
 // Configuration lives entirely in project.json under "archive".
