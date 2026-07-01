@@ -37,6 +37,9 @@ PUBLICACION_GITHUB.md
 OPEN_SOURCE_STRATEGY.md
 CAMBIOS_REALIZADOS.md
 docs/i18n/es/validation-guide.md
+docs/i18n/en/validation-guide.md
+docs/i18n/es/adapters.md
+docs/i18n/en/adapters.md
 
 # Bloqueo de archivos de esquema de base de datos o arquitectura
 *schema*
@@ -55,20 +58,20 @@ projects/finanzas-cmf/
 # Oculta los módulos comerciales para liberarlos de a poco
 # ====================================================================
 
-# 3. Agents Corporativos y Módulos de Compliance (Privados)
+# 1. Agents Corporativos y Módulos de Compliance (Privados)
 agents/callcenter/
 agents/legal/
 agents/privacidad/
 agents/base/i18n/es/compliance/
 agents/base/i18n/en/compliance/
 
-# 1. Prompts Corporativos (Privados)
+# 2. Prompts Corporativos (Privados)
 prompts/callcenter/
 prompts/finanzas/
 prompts/legal/
 prompts/privacidad/
 
-# 2. Skills Corporativas (Privadas)
+# 3. Skills Corporativas (Privadas)
 skills/callcenter/
 skills/custom/
 skills/finanzas/
