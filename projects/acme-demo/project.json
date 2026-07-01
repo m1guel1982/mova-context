@@ -2,35 +2,45 @@
   "project": "acme-demo",
   "description": "API interna multi-tenant de ejemplo",
   "repo": "C:/acme/acme-api-interna",
+  "lang": "es",
+  "adapter": "file",
   "default_task": "review-complete",
+
+  "agents": { "domain": "base", "use": ["backend-dev", "security-architect"], "custom": ["acme-backend"] },
+  "skills": { "domain": "base", "use": ["jwt-security"], "custom": ["acme-conventions"] },
+
   "variables": {
     "project": "acme-api-interna",
     "stack": "FastAPI + PostgreSQL + Redis",
     "api_prefix": "/api/v1",
     "auth_method": "JWT RS256"
   },
-  "agents": {"base": ["backend-dev", "security-architect"], "custom": ["acme-backend"]},
-  "skills": {"base": ["jwt-security"], "custom": ["acme-conventions"]},
+
   "tasks": {
     "audit-auth": {
-      "prompt": {"base": "audit-module"},
-      "variables": {"module": "auth"}
+      "prompt": "audit-module",
+      "variables": { "module": "auth" }
     },
     "audit-payments": {
-      "prompt": {"base": "audit-module", "custom": "audit-payments-acme"},
-      "variables": {"module": "payments"},
-      "skills": {"base": ["sql-optimization"]}
+      "prompt": "audit-module",
+      "skills": ["sql-optimization"],
+      "variables": { "module": "payments" }
     },
     "review-complete": {
-      "prompt": {"base": "review-project"},
-      "agents": {"base": ["architect"]},
-      "variables": {"review_type": "complete"}
+      "prompt": "review-project",
+      "agents": ["architect"],
+      "variables": { "review_type": "complete" }
     },
     "new-module": {
-      "prompt": {"base": "create-project", "custom": "create-acme-module"},
-      "agents": {"base": ["architect"]},
-      "skills": {"custom": ["acme-module-rules"]},
-      "variables": {"module": "users", "database": "PostgreSQL"}
+      "prompt": "create-project",
+      "agents": ["architect"],
+      "variables": { "module": "users", "database": "PostgreSQL" }
     }
+  },
+
+  "llm_profile": {
+    "type": "powerful",
+    "provider": "claude",
+    "model": "claude-sonnet-4-6"
   }
 }

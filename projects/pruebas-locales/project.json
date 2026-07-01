@@ -1,111 +1,56 @@
 {
   "project": "pruebas-locales",
-  "description": "Proyecto ficticio mínimo (API de tareas) para validar Mova Context de punta a punta: crear, modificar, devops, QA y memoria — sin tocar proyectos reales.",
-  "repo": "E:/nuevosProyectos21012026Mova/misProyectos/mova-context-test/app-prueba-local",
+  "description": "Ejemplo mínimo oficial — API de tareas para validar Mova Context de punta a punta",
+  "repo": ".",
+  "lang": "es",
+  "adapter": "file",
   "default_task": "crear-proyecto",
+
+  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
+  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+
   "variables": {
-    "project": "pruebas-locales",
     "stack": "Node.js + Express + SQLite",
     "database": "SQLite",
     "auth_method": "API key simple (header X-API-Key)",
     "test_framework": "node:test",
     "ci_provider": "GitHub Actions",
-    "cloud_provider": "ninguno",
-    "docker": "false",
-    "forbidden": "Dockerfile · docker-compose · carpetas vacías · dependencias no declaradas en package.json · .env · .eslintrc · archivos de configuración no solicitados · CI/CD · logging avanzado · autenticación compleja",
-    "constraints": "solo node server.js, sin procesos externos, sin Docker, sin herramientas de build"
+    "forbidden": "Docker · dependencias no declaradas · .env · CI/CD · logging avanzado"
   },
-  "agents": {
-    "base": [
-      "yagni-core",
-      "backend-dev"
-    ],
-    "custom": []
-  },
-  "skills": {
-    "base": [
-      "kiss-dry-core",
-      "lazy-minimalism"
-    ],
-    "custom": []
-  },
+
   "tasks": {
     "crear-proyecto": {
-      "prompt": {
-        "base": "create-project"
-      },
+      "prompt": "create-project",
       "variables": {
         "project_name": "tareas-api",
-        "description": "API mínima de tareas (to-do list) con 3 endpoints: crear, listar, marcar completada"
+        "description": "API mínima de tareas con 3 endpoints: crear, listar, marcar completada"
       }
     },
-    "agregar-modulo-categorias": {
-      "prompt": {
-        "base": "create-module"
-      },
-      "variables": {
-        "module": "categorias",
-        "api_prefix": "/api/v1"
-      }
+    "agregar-modulo": {
+      "prompt": "create-module",
+      "variables": { "module": "categorias", "api_prefix": "/api/v1" }
     },
-    "auditar-modulo-tareas": {
-      "prompt": {
-        "base": "audit-module"
-      },
-      "agents": {
-        "base": [
-          "security-architect"
-        ]
-      },
-      "variables": {
-        "module_name": "tareas"
-      },
-      "focus": [
-        "taskController.js",
-        "taskService.js",
-        "crearTarea()"
-      ]
+    "auditar-modulo": {
+      "prompt": "audit-module",
+      "agents": ["security-architect"],
+      "variables": { "module": "tareas" }
     },
     "configurar-cicd": {
-      "prompt": {
-        "base": "cicd-setup"
-      },
-      "agents": {
-        "base": [
-          "devops-engineer"
-        ]
-      }
+      "prompt": "cicd-setup",
+      "agents": ["devops-engineer"]
     },
     "generar-tests": {
-      "prompt": {
-        "base": "create-module"
-      },
-      "agents": {
-        "base": [
-          "qa-engineer"
-        ]
-      },
-      "skills": {
-        "base": [
-          "generate-tests"
-        ]
-      },
-      "variables": {
-        "module": "tareas"
-      }
-    },
-    "refactor-ponytail": {
-      "prompt": {
-        "custom": "ponytail"
-      },
-      "skills": {
-        "base": [
-          "lazy-minimalism"
-        ]
-      },
-      "focus": [
-        "taskRepository.js"
-      ]
+      "prompt": "create-module",
+      "agents": ["qa-engineer"],
+      "skills": ["generate-tests"],
+      "variables": { "module": "tareas" }
     }
+  },
+
+ "llm_profile": {
+    "type": "local",
+    "provider": "ollama",
+    "model": "llama3.2:3b",
+    "base_url": "http://localhost:11434"
   }
 }
