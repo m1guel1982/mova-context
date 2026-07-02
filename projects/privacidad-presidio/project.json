@@ -1,0 +1,64 @@
+{
+  "project": "privacidad-presidio",
+  "description": "Análisis de documentos con PII anonimizada — Presidio + bge-m3 + Ley 21.719",
+  "repo": ".",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "analizar-contrato",
+
+  "agents": {
+    "domain": "base",
+    "use": ["compliance-officer"],
+    "custom": ["analista-presidio"]
+  },
+  "skills": {
+    "domain": "privacidad",
+    "use": ["deteccion-pii", "cumplimiento-ley-21719"],
+    "custom": []
+  },
+
+  "variables": {
+    "empresa":              "Mi Empresa SpA",
+    "rut_empresa":          "<RUT_EMPRESA>",
+    "responsable_datos":    "Encargado de Protección de Datos",
+    "email_dpo":            "<EMAIL_DPO>",
+    "ley_aplicable":        "Ley 21.719 — Chile",
+    "min_score_reranker":   "0.7"
+  },
+
+  "tasks": {
+    "analizar-contrato": {
+      "prompt":    "analizar-documento-anonimizado",
+      "variables": { "tipo_documento": "contrato laboral" }
+    },
+    "evaluar-politica": {
+      "prompt":    "evaluar-cumplimiento",
+      "variables": { "tipo_documento": "política de privacidad" }
+    },
+    "evaluar-formulario": {
+      "prompt":    "evaluar-cumplimiento",
+      "variables": { "tipo_documento": "formulario de recolección de datos" }
+    },
+    "analizar-terminos": {
+      "prompt":    "analizar-documento-anonimizado",
+      "variables": { "tipo_documento": "términos y condiciones" }
+    }
+  },
+
+  "llm_profile": {
+    "type":     "powerful",
+    "provider": "claude",
+    "model":    "claude-sonnet-4-6"
+  },
+  "embedding": {
+    "provider": "ollama",
+    "model":    "bge-m3",
+    "base_url": "http://localhost:11434"
+  },
+  "reranker": {
+    "provider":   "ollama",
+    "model":      "bge-reranker-v2-m3",
+    "base_url":   "http://localhost:11434",
+    "min_score":  0.7
+  }
+}
