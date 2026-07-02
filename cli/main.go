@@ -1,4 +1,6 @@
-// main.go — Mova Context CLI v3
+// main.go — Mova Context CLI v3 (Unified Engine)
+//
+// Build: cd cli && go build -o mova .
 package main
 
 import (
@@ -20,6 +22,8 @@ func main() {
 		die(err.Error())
 	}
 
+	// El adaptador se genera tras leer la configuración del proyecto (vía project.json)
+	// Para comandos globales o basales, interactúa usando el fileAdapter directo.
 	getAdapter := func(projectName string) Adapter {
 		if projectName == "" {
 			return newFileAdapter(root)
@@ -36,9 +40,20 @@ func main() {
 		if project == "" {
 			project = autoDetect(root)
 		}
-		ctx, err := buildContext(getAdapter(project), project, task)
+		ctx, err := resolveContext(getAdapter(project), root, project, task)
 		must(err)
 		consolePrint(ctx)
+
+	case "compile":
+		project, task := arg(2, ""), arg(3, "")
+		if project == "" {
+			project = autoDetect(root)
+		}
+		ctx, err := buildCompiledContext(getAdapter(project), root, project, task)
+		must(err)
+		outPath := filepath.Join(root, "projects", project, "contexto.txt")
+		must(os.WriteFile(outPath, []byte(ctx), 0644))
+		consolePrint("compiled: projects/" + project + "/contexto.txt\n")
 
 	case "memory":
 		project, response := needArg(2, "project"), needArg(3, "response")
@@ -114,12 +129,12 @@ func main() {
 		
 		adapter := newFileAdapter(root)
 		
-		// Si se pasa --stdio, se inicia en modo consola directa para herramientas de IA
+		// Flag --stdio determina si se levanta por Entrada/Salida estándar o por HTTP
 		if flagBool("--stdio") {
-			must(startMCPStdio(adapter))
+			must(startMCPStdio(adapter, root))
 		} else {
 			port := flagInt("--port", 3000)
-			must(startMCPHttp(adapter, port))
+			must(startMCPHttp(adapter, root, port))
 		}
 
 	case "memory-clear":
@@ -168,7 +183,19 @@ func autoDetect(root string) string {
 }
 
 func projectTemplate(name string) string {
-	return `{\n  "project": "` + name + `",\n  "description": "",\n  "repo": ".",\n  "lang": "en",\n  "adapter": "file",\n  "llm": "claude",\n  "default_task": "",\n  "variables": {},\n  "agents": { "domain": "software", "use": [] },\n  "skills": { "domain": "software", "use": [] },\n  "tasks": {}\n}`
+	return `{
+  "project": "` + name + `",
+  "description": "",
+  "repo": ".",
+  "lang": "en",
+  "adapter": "file",
+  "llm": "claude",
+  "default_task": "",
+  "variables": {},
+  "agents": { "domain": "software", "use": [] },
+  "skills": { "domain": "software", "use": [] },
+  "tasks": {}
+}`
 }
 
 func arg(i int, def string) string {
@@ -230,29 +257,30 @@ func die(msg string) {
 func usage() {
 	consolePrint(`mova — Mova Context v3
 
-  mova run   [project] [task]        generate context for LLM
-  mova memory [project] "response"    save session to memory.md
-  mova memory-read [project]          print active memory
-    --all                             include archives
-    --month 2024-01                   specific archive month
-  mova memory-archive [project]        archive old entries
-    --days N                          keep N days active (default 30)
-  mova list                           list all projects
-  mova init [name]                    create project
-  mova search "query" [domain]        search knowledge
-  mova mcp start                      start MCP server
-    --port 3000                       run as HTTP server (default)
-    --stdio                           run as Stdio server (for Claude/Cursor)
-  mova memory-clear [project]         delete ALL memory
-    --archived                        delete only archived months
-    --keep-active                     delete archives, keep memory.md
-    --date 2024-06-15                 delete a specific day
-    --from 2024-06-01 --to 2024-06-30 delete date range
-    --yes                             skip confirmation
+  mova run           [project] [task]        generate context for LLM
+  mova compile       [project] [task]        distill + prune context → contexto.txt
+  mova memory        [project] "response"    save session to memory.md
+  mova memory-read   [project]               print active memory
+    --all                                    include archives
+    --month 2024-01                          specific archive month
+  mova memory-archive [project]              archive old entries
+    --days N                                 keep N days active (default 30)
+  mova list                                  list all projects
+  mova init          [name]                  create project
+  mova search        "query" [domain]        search knowledge
+  mova mcp start                             start MCP server
+    --port 3000                              run as HTTP server (default)
+    --stdio                                  run as Stdio server (for Claude/Cursor)
+  mova memory-clear  [project]               delete ALL memory
+    --archived                               delete only archived months
+    --keep-active                            delete archives, keep memory.md
+    --date 2024-06-15                        delete a specific day
+    --from 2024-06-01 --to 2024-06-30        delete date range
+    --yes                                    skip confirmation
   mova memory-config [project] [action] [value]
-    enable | disable                  toggle auto-archive
-    days N                            set retention days (1, 10, 30, 90...)
-    confirm true|false                toggle confirmation on delete
+    enable | disable                         toggle auto-archive
+    days N                                   set retention days (1, 10, 30, 90...)
+    confirm true|false                       toggle confirmation on delete
 
   MOVA_ADAPTER=db  MOVA_DSN=postgres://... mova run project task
 `)

@@ -126,7 +126,6 @@ func buildContext(adapter Adapter, projectName, taskName string) (string, error)
 	return out.String(), nil
 }
 
-// loadCore loads a core file once. Returns "" if already loaded or not found.
 func loadCore(adapter Adapter, kind, domain, lang, name string, loaded map[string]bool) string {
 	if loaded[name] {
 		return ""

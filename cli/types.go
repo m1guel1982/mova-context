@@ -19,7 +19,9 @@ type Project struct {
 	Agents      KnowledgeRef      `json:"agents"`
 	Skills      KnowledgeRef      `json:"skills"`
 	Tasks       map[string]Task   `json:"tasks"`
-	Archive     *ArchiveConfig    `json:"archive"` // optional memory management config
+	Archive     *ArchiveConfig    `json:"archive"`         // optional memory management config
+	Focus       []string          `json:"focus"`           // optional: files/dirs/symbols to work on (see workflow.md#FOCUS)
+	ContextCompiler *CompilerConfig `json:"contextCompiler"` // optional: Context Compiler config (see docs/context-compiler)
 }
 
 // KnowledgeRef points to agents/skills: domain + list of names.
@@ -35,6 +37,7 @@ type Task struct {
 	Agents    []string          `json:"agents"`    // extra agents for this task
 	Skills    []string          `json:"skills"`    // extra skills for this task
 	Variables map[string]string `json:"variables"` // task-level variable overrides
+	Focus     []string          `json:"focus"`      // task-level focus (overrides global focus if set)
 }
 
 // ProjectSummary is used by mova list.
@@ -93,6 +96,41 @@ func retentionDays(cfg *ArchiveConfig) int {
 		return 30
 	}
 	return cfg.RetentionDays
+}
+
+// CompilerConfig maps project.json "contextCompiler" block.
+// Controls the Context Compiler (mova compile). Absent = compiler off,
+// zero behavior change (backward compatible with every existing project).
+type CompilerConfig struct {
+	Enabled  *bool  `json:"enabled"`  // default false
+	Mode     string `json:"mode"`     // "manual" (default) | "automatic"
+	Strategy string `json:"strategy"` // "semantic" (default) | "full"
+}
+
+func compilerEnabled(cfg *CompilerConfig) bool {
+	return cfg != nil && cfg.Enabled != nil && *cfg.Enabled
+}
+
+func compilerMode(cfg *CompilerConfig) string {
+	if cfg == nil || cfg.Mode == "" {
+		return "manual"
+	}
+	return cfg.Mode
+}
+
+func compilerStrategy(cfg *CompilerConfig) string {
+	if cfg == nil || cfg.Strategy == "" {
+		return "semantic"
+	}
+	return cfg.Strategy
+}
+
+// resolveFocus applies workflow.md FOCUS priority: task > global (override, not merge).
+func resolveFocus(proj *Project, task *Task) []string {
+	if task != nil && len(task.Focus) > 0 {
+		return task.Focus
+	}
+	return proj.Focus
 }
 
 // LLMProfile controls how the engine formats context for different model capabilities.

@@ -1,0 +1,38 @@
+{
+  "project": "compiler-demo",
+  "description": "Demo del Context Compiler (mova compile) con focus y modo automatico",
+  "repo": "examples/compiler-demo-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "revisar-ordenes",
+  "agents": {
+    "domain": "base",
+    "use": [
+      "backend-dev"
+    ]
+  },
+  "skills": {
+    "domain": "base",
+    "use": [
+      "kiss-dry-core"
+    ]
+  },
+  "variables": {
+    "project": "compiler-demo"
+  },
+  "contextCompiler": {
+    "enabled": true,
+    "mode": "manual",
+    "strategy": "semantic"
+  },
+  "tasks": {
+    "revisar-ordenes": {
+      "prompt": "review-project",
+      "focus": [
+        "CreateOrder()",
+        "manual.md",
+        "Artículo 6"
+      ]
+    }
+  }
+} 
