@@ -1,4 +1,5 @@
-// mcp.go — MCP (Model Context Protocol) server.
+// mcp.go — MCP (Model Context Protocol) server for Mova.
+// Puede iniciarse en modo HTTP o STDIO manteniendo el mismo motor base.
 package main
 
 import (
@@ -11,7 +12,7 @@ import (
 	"os"
 )
 
-// Estructura Base del Protocolo JSON-RPC 2.0
+// mcpRequest representa la estructura base del protocolo JSON-RPC 2.0
 type mcpRequest struct {
 	JSONRPC string         `json:"jsonrpc"`
 	ID      any            `json:"id"`
@@ -20,21 +21,21 @@ type mcpRequest struct {
 }
 
 // startMCPHttp inicia el servidor utilizando protocolo HTTP (ideal para Postman/Curl)
-func startMCPHttp(adapter Adapter, port int) error {
+func startMCPHttp(adapter Adapter, root string, port int) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
 			return
 		}
-		
+
 		var req mcpRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSONPayload(w, serializeError(-32700, "parse error", nil))
+			mcpErrorHTTP(w, -32700, "parse error", nil)
 			return
 		}
 
-		responseBytes := processMCP(adapter, req)
+		responseBytes := processMCP(adapter, root, req)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(responseBytes)
 	})
@@ -50,7 +51,7 @@ func startMCPHttp(adapter Adapter, port int) error {
 }
 
 // startMCPStdio inicia el servidor usando Entrada/Salida estándar (Requerido por Claude Desktop/Cursor)
-func startMCPStdio(adapter Adapter) error {
+func startMCPStdio(adapter Adapter, root string) error {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		var req mcpRequest
@@ -58,21 +59,21 @@ func startMCPStdio(adapter Adapter) error {
 		if len(bytes.TrimSpace(inputBytes)) == 0 {
 			continue
 		}
-		
+
 		if err := json.Unmarshal(inputBytes, &req); err != nil {
 			resp, _ := json.Marshal(serializeError(-32700, "parse error", nil))
 			fmt.Println(string(resp))
 			continue
 		}
 
-		responseBytes := processMCP(adapter, req)
+		responseBytes := processMCP(adapter, root, req)
 		fmt.Println(string(responseBytes))
 	}
 	return scanner.Err()
 }
 
 // processMCP centraliza la ejecución de métodos y herramientas de Mova de forma unificada
-func processMCP(adapter Adapter, req mcpRequest) []byte {
+func processMCP(adapter Adapter, root string, req mcpRequest) []byte {
 	var resp map[string]any
 
 	switch req.Method {
@@ -89,7 +90,7 @@ func processMCP(adapter Adapter, req mcpRequest) []byte {
 	case "tools/call":
 		tool := str(req.Params, "name")
 		args, _ := req.Params["arguments"].(map[string]any)
-		resp = executeTool(adapter, tool, args, req.ID)
+		resp = executeTool(adapter, root, tool, args, req.ID)
 
 	default:
 		resp = serializeError(-32601, "method not found: "+req.Method, req.ID)
@@ -99,12 +100,13 @@ func processMCP(adapter Adapter, req mcpRequest) []byte {
 	return data
 }
 
-func executeTool(adapter Adapter, tool string, args map[string]any, id any) map[string]any {
+func executeTool(adapter Adapter, root, tool string, args map[string]any, id any) map[string]any {
 	project := str(args, "project")
 	task := str(args, "task")
 	kind := str(args, "kind")
 	domain := str(args, "domain")
 	lang := str(args, "lang")
+	name := str(args, "name")
 	query := str(args, "query")
 
 	var result string
@@ -112,9 +114,13 @@ func executeTool(adapter Adapter, tool string, args map[string]any, id any) map[
 
 	switch tool {
 	case "get_full_context":
-		result, err = buildContext(adapter, project, task)
+		// Retorna el contexto compilado automáticamente cuando project.json lo habilita
+		result, err = resolveContext(adapter, root, project, task)
+	case "compile_context":
+		// Fuerza la compilación del contexto ignorando el modo por defecto
+		result, err = buildCompiledContext(adapter, root, project, task)
 	case "get_knowledge":
-		result, err = adapter.GetKnowledge(kind, domain, lang, str(args, "name"))
+		result, err = adapter.GetKnowledge(kind, domain, lang, name)
 	case "get_memory":
 		result, err = adapter.GetMemory(project)
 	case "get_memory_all":
@@ -147,7 +153,9 @@ func executeTool(adapter Adapter, tool string, args map[string]any, id any) map[
 
 func mcpTools() []map[string]any {
 	return []map[string]any{
-		tool("get_full_context", "Full assembled context (= mova run). Primary tool.",
+		tool("get_full_context", "Full assembled context (= mova run). Compiled automatically when project.json enables it. Primary tool.",
+			req("project"), opt("task")),
+		tool("compile_context", "Force the Context Compiler regardless of mode (= mova compile). Distilled + focus-pruned.",
 			req("project"), opt("task")),
 		tool("get_knowledge", "Get a single agent, skill, or prompt.",
 			req("kind"), req("domain"), opt("lang"), req("name")),
@@ -196,9 +204,10 @@ func str(m map[string]any, k string) string {
 	return v
 }
 
-func writeJSONPayload(w http.ResponseWriter, v any) {
+// mcpErrorHTTP helper exclusivo para respuestas rápidas de fallos de parsing en HTTP
+func mcpErrorHTTP(w http.ResponseWriter, code int, msg string, id any) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(v)
+	json.NewEncoder(w).Encode(serializeError(code, msg, id))
 }
 
 func serializeResult(result any, id any) map[string]any {
