@@ -1,0 +1,58 @@
+{
+  "project": "ley-21719",
+  "description": "Ley 21.719 — Protección de Datos Personales (Chile)",
+  "repo": ".",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "analizar-contrato",
+
+  "variables": {
+    "ley": "Ley 21.719",
+    "pais": "Chile",
+    "autoridad": "Agencia de Protección de Datos Personales",
+    "vigencia": "2026"
+  },
+
+  "agents": {
+    "domain": "legal",
+    "use": ["abogado-datos"]
+  },
+
+  "skills": {
+    "domain": "legal",
+    "use": ["ley-21719-obligaciones", "derechos-titulares"]
+  },
+
+  "tasks": {
+    "analizar-contrato": {
+      "prompt": "analizar-contrato-datos",
+      "variables": {
+        "tipo_documento": "contrato"
+      }
+    },
+    "evaluar-cumplimiento": {
+      "prompt": "evaluar-cumplimiento",
+      "variables": {
+        "tipo_evaluacion": "completa"
+      }
+    },
+    "redactar-politica": {
+      "prompt": "redactar-politica-privacidad",
+      "variables": {
+        "tipo_documento": "política de privacidad"
+      }
+    },
+    "responder-titular": {
+      "prompt": "responder-solicitud-titular",
+      "variables": {
+        "tipo_solicitud": "acceso"
+      }
+    }
+  },
+
+  "llm_profile": {
+    "type": "powerful",
+    "provider": "claude",
+    "model": "claude-sonnet-4-6"
+  }
+}
