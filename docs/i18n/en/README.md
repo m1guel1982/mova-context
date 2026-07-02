@@ -154,6 +154,7 @@ Only the adapter changes. The workflow stays the same.
 ```bash
 mova list                                    # list available projects
 mova run [project] [task]                    # generate context
+mova compile [project] [task]                # distilled + pruned context → contexto.txt
 mova memory [project] "llm response"         # update memory
 mova init [name]                             # create new project
 mova mcp start                               # start MCP server
@@ -176,6 +177,8 @@ mova mcp start                               # start MCP server
 - [mcp.md](mcp.md) — MCP integration
 - [adapters.md](adapters.md) — storage adapters
 - [schema.md](schema.md) — database schema
+- [context-compiler.md](context-compiler.md) — `mova compile`, Phase 1 and Phase 2
+- [core-extensions.md](core-extensions.md) — Core + Extensions architecture
 
 ---
 

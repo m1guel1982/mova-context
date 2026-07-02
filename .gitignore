@@ -41,6 +41,12 @@ docs/i18n/en/validation-guide.md
 docs/i18n/es/adapters.md
 docs/i18n/en/adapters.md
 
+docs/i18n/es/context-compiler.md
+docs/i18n/en/context-compiler.md
+
+docs/i18n/es/core-extensions.md
+docs/i18n/en/core-extensions.md
+
 # Bloqueo de archivos de esquema de base de datos o arquitectura
 *schema*
 *.schema
@@ -104,3 +110,12 @@ examples/i18n/en/ollama/README_CON_LEY21739.md
 !examples/i18n/en/mcp/
 !examples/i18n/en/mcp/**
 examples/i18n/en/mcp/README.md
+
+# ====================================================================
+# EXCLUSIONES ESPECÍFICAS DE COMPILACIÓN Y CONFIGURACIÓN LOCAL
+# ====================================================================
+.gitignore
+.gitignore_private
+cli/compiler_semantic.go
+cli/compiler_run.go
+cli/compiler_focus.go

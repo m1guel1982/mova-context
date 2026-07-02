@@ -154,6 +154,7 @@ Solo cambia el adaptador. El workflow permanece igual.
 ```bash
 mova list                                    # ver proyectos disponibles
 mova run [proyecto] [tarea]                  # generar contexto
+mova compile [proyecto] [tarea]              # contexto distilado + podado → contexto.txt
 mova memory [proyecto] "respuesta del LLM"   # actualizar memoria
 mova init [nombre]                           # crear nuevo proyecto
 mova mcp start                               # iniciar servidor MCP
@@ -176,6 +177,8 @@ mova mcp start                               # iniciar servidor MCP
 - [mcp.md](mcp.md) — integración MCP
 - [adapters.md](adapters.md) — adaptadores de almacenamiento
 - [schema.md](schema.md) — esquema de base de datos
+- [context-compiler.md](context-compiler.md) — `mova compile`, Fase 1 y Fase 2
+- [core-extensions.md](core-extensions.md) — arquitectura Core + Extensions
 
 ---
 
