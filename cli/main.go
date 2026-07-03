@@ -17,10 +17,22 @@ func main() {
 		return
 	}
 
-	root, err := findRoot()
-	if err != nil {
-		die(err.Error())
+	var (
+		root string
+		err  error
+	)
+
+	// Si el usuario indicó explícitamente el proyecto (ideal para MCP),
+	// úsalo directamente.
+	if p := os.Getenv("MOVA_PROJECT_PATH"); p != "" {
+		root = filepath.Clean(p)
+	} else {
+		root, err = findRoot()
+		if err != nil {
+			die(err.Error())
+		}
 	}
+	 
 
 	// El adaptador se genera tras leer la configuración del proyecto (vía project.json)
 	// Para comandos globales o basales, interactúa usando el fileAdapter directo.
@@ -32,7 +44,6 @@ func main() {
 		proj, _ := fa.GetProject(projectName)
 		return newAdapter(root, proj)
 	}
-
 	switch os.Args[1] {
 
 	case "run":
@@ -123,19 +134,18 @@ func main() {
 		}
 
 	case "mcp":
-		if arg(2, "") != "start" {
-			die("usage: mova mcp start [--port 3000] [--stdio]")
-		}
-		
-		adapter := newFileAdapter(root)
-		
-		// Flag --stdio determina si se levanta por Entrada/Salida estándar o por HTTP
-		if flagBool("--stdio") {
-			must(startMCPStdio(adapter, root))
-		} else {
-			port := flagInt("--port", 3000)
-			must(startMCPHttp(adapter, root, port))
-		}
+	if arg(2, "") != "start" {
+		die("usage: mova mcp start [--transport http] [--port 3000]")
+	}
+
+	adapter := newFileAdapter(root)
+
+	if strings.EqualFold(flagStr("--transport", "stdio"), "http") {
+		port := flagInt("--port", 3000)
+		must(startMCPHttp(adapter, root, port))
+	} else {
+		must(startMCPStdio(adapter, root))
+	}
 
 	case "memory-clear":
 		project := needArg(2, "project")
@@ -155,17 +165,59 @@ func main() {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 func findRoot() (string, error) {
-	dir, _ := os.Getwd()
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "workflow.md")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("workflow.md not found — run from inside mova-context")
-		}
-		dir = parent
+	// Lugares desde donde intentaremos buscar el proyecto.
+	var candidates []string
+
+	// 1. Variable de entorno (ideal para MCP)
+	if root := os.Getenv("MOVA_PROJECT_ROOT"); root != "" {
+		candidates = append(candidates, filepath.Clean(root))
 	}
+
+	// 2. Directorio actual (CLI)
+	if cwd, err := os.Getwd(); err == nil {
+		fmt.Fprintf(os.Stderr, "CWD: %s\n", cwd)
+		candidates = append(candidates, filepath.Clean(cwd))
+	}
+
+	// 3. Directorio del ejecutable
+	if exe, err := os.Executable(); err == nil {
+		fmt.Fprintf(os.Stderr, "EXE: %s\n", exe)
+		candidates = append(candidates, filepath.Dir(filepath.Clean(exe)))
+	}
+
+	visited := make(map[string]struct{})
+
+	for _, start := range candidates {
+		if start == "" {
+			continue
+		}
+
+		dir := start
+
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "workflow.md")); err == nil {
+				return dir, nil
+			}
+
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+
+			dir = parent
+		}
+
+		visited[start] = struct{}{}
+	}
+
+	return "", fmt.Errorf(
+		"workflow.md not found.\n"+
+			"Search locations:\n"+
+			"  • MOVA_PROJECT_ROOT\n"+
+			"  • Current working directory\n"+
+			"  • Executable directory\n\n"+
+			"Open Claude/Cursor inside the project or define MOVA_PROJECT_ROOT.",
+	)
 }
 
 func autoDetect(root string) string {
