@@ -1,0 +1,121 @@
+# ====================================================================
+# SYSTEM & ENVIRONMENT
+# ====================================================================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+*.code-workspace
+
+# Variables y secretos
+.env
+.env.*
+!.env.example
+
+# ====================================================================
+# GO DEPENDENCIES & ARTIFACTS
+# ====================================================================
+*.exe
+*.test
+*.out
+cli/dist/
+
+# Archivos temporales de compilación de contexto
+*.tmp
+*.log
+contexto.txt
+context.txt
+contexto_mova.txt
+
+# Frontend / Herramientas de desarrollo
+node_modules/
+
+# Documentos privados de estrategia, cambios y validación
+PUBLICACION_GITHUB.md
+OPEN_SOURCE_STRATEGY.md
+CAMBIOS_REALIZADOS.md
+docs/i18n/es/validation-guide.md
+docs/i18n/en/validation-guide.md
+docs/i18n/es/adapters.md
+docs/i18n/en/adapters.md
+
+docs/i18n/es/context-compiler.md
+docs/i18n/en/context-compiler.md
+
+docs/i18n/es/core-extensions.md
+docs/i18n/en/core-extensions.md
+
+# Bloqueo de archivos de esquema de base de datos o arquitectura
+*schema*
+*.schema
+
+# ====================================================================
+# PRIVATE PROJECTS (Ignorados para mantener privacidad de código)
+# ====================================================================
+projects/privacidad-presidio/
+projects/omnicanal-demo/
+projects/ley-21719/
+projects/finanzas-cmf/
+
+# ====================================================================
+# MOVA ENTERPRISE & PROPRIETARY VERTICALS (Premium Features)
+# Oculta los módulos comerciales para liberarlos de a poco
+# ====================================================================
+
+# 1. Agents Corporativos y Módulos de Compliance (Privados)
+agents/callcenter/
+agents/legal/
+agents/privacidad/
+agents/base/i18n/es/compliance/
+agents/base/i18n/en/compliance/
+
+# 2. Prompts Corporativos (Privados)
+prompts/callcenter/
+prompts/finanzas/
+prompts/legal/
+prompts/privacidad/
+
+# 3. Skills Corporativas (Privadas)
+skills/callcenter/
+skills/custom/
+skills/finanzas/
+skills/laboral/
+skills/legal/
+skills/privacidad/
+skills/salud/
+skills/tributario/
+
+# 3. Ejemplos Enterprise (Ignorar todo excepto Ollama y MCP)
+examples/i18n/es/*
+examples/i18n/en/*
+
+# EXCEPCIONES: Permitir código de Ollama y MCP pero OCULTAR sus README.md intencionalmente
+!examples/i18n/es/ollama/
+!examples/i18n/es/ollama/**
+examples/i18n/es/ollama/README.md
+examples/i18n/es/ollama/README_CON_LEY21739.md
+
+
+!examples/i18n/es/mcp/
+!examples/i18n/es/mcp/**
+examples/i18n/es/mcp/README.md
+
+!examples/i18n/en/ollama/
+!examples/i18n/en/ollama/**
+examples/i18n/en/ollama/README.md
+examples/i18n/en/ollama/README_CON_LEY21739.md
+
+!examples/i18n/en/mcp/
+!examples/i18n/en/mcp/**
+examples/i18n/en/mcp/README.md
+
+# ====================================================================
+# EXCLUSIONES ESPECÍFICAS DE COMPILACIÓN Y CONFIGURACIÓN LOCAL
+# ====================================================================
+.gitignore
+.gitignore_private
+cli/compiler_semantic.go
+cli/compiler_run.go
+cli/compiler_focus.go
