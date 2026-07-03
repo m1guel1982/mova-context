@@ -133,19 +133,22 @@ func main() {
 				r.Kind, r.Domain, r.Lang, r.Name, r.Excerpt))
 		}
 
-	case "mcp":
+case "mcp":
 	if arg(2, "") != "start" {
-		die("usage: mova mcp start [--transport http] [--port 3000]")
+		die("usage: mova mcp start [--port 3000] [--stdio]")
 	}
 
 	adapter := newFileAdapter(root)
 
-	if strings.EqualFold(flagStr("--transport", "stdio"), "http") {
-		port := flagInt("--port", 3000)
-		must(startMCPHttp(adapter, root, port))
-	} else {
+	// Claude Desktop / Cursor
+	if flagBool("--stdio") {
 		must(startMCPStdio(adapter, root))
+		return
 	}
+
+	// HTTP (por defecto)
+	port := flagInt("--port", 3000)
+	must(startMCPHttp(adapter, root, port))
 
 	case "memory-clear":
 		project := needArg(2, "project")
