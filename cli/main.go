@@ -175,13 +175,11 @@ func findRoot() (string, error) {
 
 	// 2. Directorio actual (CLI)
 	if cwd, err := os.Getwd(); err == nil {
-		fmt.Fprintf(os.Stderr, "CWD: %s\n", cwd)
 		candidates = append(candidates, filepath.Clean(cwd))
 	}
 
 	// 3. Directorio del ejecutable
 	if exe, err := os.Executable(); err == nil {
-		fmt.Fprintf(os.Stderr, "EXE: %s\n", exe)
 		candidates = append(candidates, filepath.Dir(filepath.Clean(exe)))
 	}
 
