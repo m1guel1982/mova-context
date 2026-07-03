@@ -55,10 +55,10 @@ func buildCompiledContext(adapter Adapter, root, projectName, taskName string) (
 	coreLoaded := map[string]bool{}
 
 	distill := func(c string) string {
-		c = inject(adaptContent(c, profile), vars)
 		if strategy == "semantic" {
-			c = CompileInstruction(c)
-		}
+            c = CompileInstruction(c)
+        }
+        c = inject(adaptContent(c, profile), vars)
 		return c
 	}
 

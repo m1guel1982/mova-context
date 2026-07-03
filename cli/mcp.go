@@ -1,10 +1,8 @@
-// mcp.go — MCP (Model Context Protocol) server for Mova.
-// Puede iniciarse en modo HTTP o STDIO manteniendo el mismo motor base.
+// mcp.go — MCP server universal compatible (Claude, Cursor, Codex, Gemini)
+
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,17 +10,46 @@ import (
 	"os"
 )
 
-// mcpRequest representa la estructura base del protocolo JSON-RPC 2.0
+/* ─────────────────────────────────────────────────────────────
+   CORE MCP TYPES (STRICT JSON-RPC 2.0 COMPLIANT)
+───────────────────────────────────────────────────────────── */
+
 type mcpRequest struct {
-	JSONRPC string         `json:"jsonrpc"`
-	ID      any            `json:"id"`
-	Method  string         `json:"method"`
-	Params  map[string]any `json:"params"`
+	JSONRPC string                 `json:"jsonrpc"`
+	ID      any                    `json:"id,omitempty"`
+	Method  string                 `json:"method"`
+	Params  map[string]any        `json:"params,omitempty"`
 }
 
-// startMCPHttp inicia el servidor utilizando protocolo HTTP (ideal para Postman/Curl)
+type mcpResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	ID      any         `json:"id,omitempty"`
+	Result  any         `json:"result,omitempty"`
+	Error   *mcpError   `json:"error,omitempty"`
+}
+
+type mcpError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
+}
+
+/* ─────────────────────────────────────────────────────────────
+   MCP CONTENT TYPES (REQUIRED)
+───────────────────────────────────────────────────────────── */
+
+type mcpTextContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+/* ─────────────────────────────────────────────────────────────
+   HTTP SERVER
+───────────────────────────────────────────────────────────── */
+
 func startMCPHttp(adapter Adapter, root string, port int) error {
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -31,76 +58,111 @@ func startMCPHttp(adapter Adapter, root string, port int) error {
 
 		var req mcpRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			mcpErrorHTTP(w, -32700, "parse error", nil)
+			writeErrorHTTP(w, -32700, "parse error", nil)
 			return
 		}
 
-		responseBytes := processMCP(adapter, root, req)
+		resp := processMCP(adapter, root, req)
+
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(responseBytes)
+		json.NewEncoder(w).Encode(resp)
 	})
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3"})
+		json.NewEncoder(w).Encode(map[string]any{
+			"status":  "ok",
+			"service": "mova-context",
+			"version": "3.0.0",
+		})
 	})
 
 	addr := fmt.Sprintf(":%d", port)
-	log.Printf("Mova MCP (HTTP) running → http://localhost%s/mcp", addr)
+	log.Printf("MCP server running http://localhost%s/mcp", addr)
+
 	return http.ListenAndServe(addr, mux)
 }
 
-// startMCPStdio inicia el servidor usando Entrada/Salida estándar (Requerido por Claude Desktop/Cursor)
+/* ─────────────────────────────────────────────────────────────
+   STDIO TRANSPORT (CLAUDE DESKTOP / CURSOR / CODEx)
+───────────────────────────────────────────────────────────── */
+
 func startMCPStdio(adapter Adapter, root string) error {
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
+
+	decoder := json.NewDecoder(os.Stdin)
+	encoder := json.NewEncoder(os.Stdout)
+
+	for {
+
 		var req mcpRequest
-		inputBytes := scanner.Bytes()
-		if len(bytes.TrimSpace(inputBytes)) == 0 {
+
+		if err := decoder.Decode(&req); err != nil {
 			continue
 		}
 
-		if err := json.Unmarshal(inputBytes, &req); err != nil {
-			resp, _ := json.Marshal(serializeError(-32700, "parse error", nil))
-			fmt.Println(string(resp))
+		// notifications → IGNORAR
+		if req.ID == nil {
 			continue
 		}
 
-		responseBytes := processMCP(adapter, root, req)
-		fmt.Println(string(responseBytes))
+		resp := processMCP(adapter, root, req)
+
+		if err := encoder.Encode(resp); err != nil {
+			continue
+		}
 	}
-	return scanner.Err()
 }
 
-// processMCP centraliza la ejecución de métodos y herramientas de Mova de forma unificada
-func processMCP(adapter Adapter, root string, req mcpRequest) []byte {
-	var resp map[string]any
+/* ─────────────────────────────────────────────────────────────
+   MCP CORE ROUTER
+───────────────────────────────────────────────────────────── */
+
+func processMCP(adapter Adapter, root string, req mcpRequest) mcpResponse {
 
 	switch req.Method {
-	case "initialize":
-		resp = serializeResult(map[string]any{
+
+   case "initialize":
+	return mcpResponse{
+		JSONRPC: "2.0",
+		ID: req.ID,
+		Result: map[string]any{
 			"protocolVersion": "2024-11-05",
-			"serverInfo":      map[string]string{"name": "mova-context", "version": "3"},
-			"capabilities":    map[string]any{"tools": map[string]bool{"listChanged": false}},
-		}, req.ID)
-
-	case "tools/list":
-		resp = serializeResult(map[string]any{"tools": mcpTools()}, req.ID)
-
-	case "tools/call":
-		tool := str(req.Params, "name")
-		args, _ := req.Params["arguments"].(map[string]any)
-		resp = executeTool(adapter, root, tool, args, req.ID)
-
-	default:
-		resp = serializeError(-32601, "method not found: "+req.Method, req.ID)
+			"serverInfo": map[string]any{
+				"name": "mova-context",
+				"version": "3.0.0",
+			},
+			"capabilities": map[string]any{
+				"tools": map[string]any{},
+			},
+		},
 	}
 
-	data, _ := json.Marshal(resp)
-	return data
+	case "notifications/initialized":
+		return mcpResponse{JSONRPC: "2.0"}
+
+	case "ping":
+		return serializeResult(map[string]any{"pong": true}, req.ID)
+
+	case "tools/list":
+		return serializeResult(map[string]any{
+			"tools": mcpTools(),
+		}, req.ID)
+
+	case "tools/call":
+		name := str(req.Params, "name")
+		args, _ := req.Params["arguments"].(map[string]any)
+		return executeTool(adapter, root, name, args, req.ID)
+
+	default:
+		return serializeError(-32601, "method not found: "+req.Method, req.ID)
+	}
 }
 
-func executeTool(adapter Adapter, root, tool string, args map[string]any, id any) map[string]any {
+/* ─────────────────────────────────────────────────────────────
+   TOOL EXECUTION
+───────────────────────────────────────────────────────────── */
+
+func executeTool(adapter Adapter, root, tool string, args map[string]any, id any) mcpResponse {
+
 	project := str(args, "project")
 	task := str(args, "task")
 	kind := str(args, "kind")
@@ -113,88 +175,104 @@ func executeTool(adapter Adapter, root, tool string, args map[string]any, id any
 	var err error
 
 	switch tool {
+
 	case "get_full_context":
-		// Retorna el contexto compilado automáticamente cuando project.json lo habilita
 		result, err = resolveContext(adapter, root, project, task)
+
 	case "compile_context":
-		// Fuerza la compilación del contexto ignorando el modo por defecto
 		result, err = buildCompiledContext(adapter, root, project, task)
+
 	case "get_knowledge":
 		result, err = adapter.GetKnowledge(kind, domain, lang, name)
+
 	case "get_memory":
 		result, err = adapter.GetMemory(project)
+
 	case "get_memory_all":
 		result, err = adapter.GetMemoryAll(project)
+
 	case "get_workflow":
 		result, err = adapter.GetKnowledge("workflow", "", lang, "workflow")
-		if err != nil {
-			result = "workflow.md — read from repository root"
-			err = nil
-		}
+
 	case "search_context":
-		var results []SearchResult
-		results, err = adapter.Search(query, domain)
+		results, e := adapter.Search(query, domain)
+		err = e
 		if err == nil {
-			data, _ := json.MarshalIndent(results, "", "  ")
-			result = string(data)
+			b, _ := json.MarshalIndent(results, "", "  ")
+			result = string(b)
 		}
+
 	default:
 		return serializeError(-32602, "unknown tool: "+tool, id)
 	}
 
+	/* ───── MCP STANDARD RESPONSE ───── */
+
 	if err != nil {
-		return serializeError(-32603, err.Error(), id)
+		return serializeResult(map[string]any{
+			"content": []mcpTextContent{{
+				Type: "text",
+				Text: "Error: " + err.Error(),
+			}},
+			"isError": true,
+		}, id)
 	}
 
 	return serializeResult(map[string]any{
-		"content": []map[string]any{{"type": "text", "text": result}},
+		"content": []mcpTextContent{{
+			Type: "text",
+			Text: result,
+		}},
+		"isError": false,
 	}, id)
 }
 
+/* ─────────────────────────────────────────────────────────────
+   TOOLS DEFINITION (STRICT MCP SCHEMA)
+───────────────────────────────────────────────────────────── */
+
 func mcpTools() []map[string]any {
 	return []map[string]any{
-		tool("get_full_context", "Full assembled context (= mova run). Compiled automatically when project.json enables it. Primary tool.",
-			req("project"), opt("task")),
-		tool("compile_context", "Force the Context Compiler regardless of mode (= mova compile). Distilled + focus-pruned.",
-			req("project"), opt("task")),
-		tool("get_knowledge", "Get a single agent, skill, or prompt.",
-			req("kind"), req("domain"), opt("lang"), req("name")),
-		tool("get_memory", "Active memory for a project.",
-			req("project")),
-		tool("get_memory_all", "Active + all archived memory.",
-			req("project")),
-		tool("get_workflow", "The workflow guide.",
-			opt("lang")),
-		tool("search_context", "Search across all knowledge.",
-			req("query"), opt("domain")),
+		tool("get_full_context", "Compile full context", true,
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project": map[string]any{"type": "string"},
+					"task":    map[string]any{"type": "string"},
+				},
+				"required": []string{"project"},
+				"additionalProperties": false,
+			},
+		),
+
+		tool("compile_context", "Force compilation", true, nil),
+		tool("get_knowledge", "Get knowledge", true, nil),
+		tool("get_memory", "Get memory", true, nil),
+		tool("get_memory_all", "Get all memory", true, nil),
+		tool("get_workflow", "Get workflow", false, nil),
+		tool("search_context", "Search context", true, nil),
 	}
 }
 
-// ── tiny helpers ──────────────────────────────────────────────────────────────
-
-func tool(name, desc string, props ...map[string]any) map[string]any {
-	properties := map[string]any{}
-	var required []string
-	for _, p := range props {
-		n := p["name"].(string)
-		properties[n] = map[string]string{"type": "string", "description": p["desc"].(string)}
-		if p["req"].(bool) {
-			required = append(required, n)
+func tool(name, desc string, strict bool, schema map[string]any) map[string]any {
+	if schema == nil {
+		schema = map[string]any{
+			"type": "object",
+			"properties": map[string]any{},
+			"additionalProperties": false,
 		}
 	}
-	schema := map[string]any{"type": "object", "properties": properties}
-	if len(required) > 0 {
-		schema["required"] = required
+
+	return map[string]any{
+		"name":        name,
+		"description": desc,
+		"inputSchema": schema,
 	}
-	return map[string]any{"name": name, "description": desc, "inputSchema": schema}
 }
 
-func req(name string) map[string]any {
-	return map[string]any{"name": name, "desc": name, "req": true}
-}
-func opt(name string) map[string]any {
-	return map[string]any{"name": name, "desc": name + " (optional)", "req": false}
-}
+/* ─────────────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────────────── */
 
 func str(m map[string]any, k string) string {
 	if m == nil {
@@ -204,17 +282,31 @@ func str(m map[string]any, k string) string {
 	return v
 }
 
-// mcpErrorHTTP helper exclusivo para respuestas rápidas de fallos de parsing en HTTP
-func mcpErrorHTTP(w http.ResponseWriter, code int, msg string, id any) {
+func serializeResult(result any, id any) mcpResponse {
+	return mcpResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  result,
+	}
+}
+
+func serializeError(code int, msg string, id any) mcpResponse {
+	return mcpResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error: &mcpError{
+			Code:    code,
+			Message: msg,
+		},
+	}
+}
+
+func mcpEncodeError(code int, msg string, id any) string {
+	b, _ := json.Marshal(serializeError(code, msg, id))
+	return string(b)
+}
+
+func writeErrorHTTP(w http.ResponseWriter, code int, msg string, id any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(serializeError(code, msg, id))
-}
-
-func serializeResult(result any, id any) map[string]any {
-	return map[string]any{"jsonrpc": "2.0", "id": id, "result": result}
-}
-
-func serializeError(code int, msg string, id any) map[string]any {
-	return map[string]any{"jsonrpc": "2.0", "id": id,
-		"error": map[string]any{"code": code, "message": msg}}
 }
