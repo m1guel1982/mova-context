@@ -44,7 +44,7 @@ Extensions → Core     (correcto)
 Core → Extensions     (nunca)
 ```
 
-El Core define contratos (la interfaz `Adapter` en `cli/adapter.go`, el bloque `contextCompiler` en `project.json`, los puntos de extensión del Context Compiler). Las Extensions los implementan o los amplían — nunca los modifican.
+El Core define contratos (la interfaz `Adapter` en `src/cli/adapter.go`, el bloque `contextCompiler` en `project.json`, los puntos de extensión del Context Compiler). Las Extensions los implementan o los amplían — nunca los modifican.
 
 ---
 

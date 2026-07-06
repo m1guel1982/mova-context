@@ -80,7 +80,7 @@ CREATE TABLE memory (
 );
 ```
 
-Full schema at `schema/postgresql.sql`.
+Full schema at `schema/postgresql.sql` — it also includes `compile_reports`, prepared to persist Compiler v2 evidence (see [`context-compiler.md`](context-compiler.md)); today the `file` adapter already persists the equivalent as `contexto.report.json`, and `src/adapters/db_adapter.go` doesn't yet implement the matching method for the `db` adapter.
 
 ---
 
@@ -120,7 +120,7 @@ Full schema at `schema/postgresql.sql`.
 }
 ```
 
-Full schema at `schema/mongodb.md`.
+Full schema at `schema/mongodb.md` — it also includes `compileReports` (same purpose as `compile_reports` above).
 
 ---
 
