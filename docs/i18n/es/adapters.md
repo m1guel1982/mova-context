@@ -80,7 +80,7 @@ CREATE TABLE memory (
 );
 ```
 
-El esquema completo está en `schema/postgresql.sql`.
+El esquema completo está en `schema/postgresql.sql` — incluye además `compile_reports`, preparada para persistir la evidencia del Compiler v2 (ver [`context-compiler.md`](context-compiler.md)); hoy el adapter `file` ya persiste el equivalente como `contexto.report.json`, y `src/adapters/db_adapter.go` todavía no implementa el método correspondiente para el adapter `db`.
 
 ---
 
@@ -120,7 +120,7 @@ El esquema completo está en `schema/postgresql.sql`.
 }
 ```
 
-El esquema completo está en `schema/mongodb.md`.
+El esquema completo está en `schema/mongodb.md` — incluye además `compileReports` (mismo propósito que `compile_reports` arriba).
 
 ---
 
