@@ -2,7 +2,7 @@
 
 Sistema de instrucciones para resolver contexto de proyecto.
 
-> Documentación completa: [docs/i18n/es/workflow.md](docs/i18n/es/workflow.md) · [docs/i18n/en/workflow.md](docs/i18n/en/workflow.md)
+> Documentación: [docs/i18n/es/README.md](docs/i18n/es/README.md) · [docs/i18n/en/README.md](docs/i18n/en/README.md)
 
 ---
 

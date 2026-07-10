@@ -1,191 +1,204 @@
 # Mova Context
 
-**A portable operational knowledge layer for AI-assisted projects.**
-
 > **Operational knowledge belongs to the project. Reasoning belongs to the model.**
 
-Works with any tool or model capable of reading text files.
+Docs: **[English](README.md)** · **[Español](../es/README.md)**
 
 ---
 
-## The problem
+# Philosophy
 
-When a project uses AI, operational knowledge ends up scattered across chats, provider-specific configurations, isolated documents, and individual team members' memory.
+All project knowledge lives in version-controlled text files.
 
-Over time, familiar problems emerge:
+The CLI (`mova`) simply automates repetitive tasks.
 
-- technical decisions that are hard to trace
-- conventions explained repeatedly
-- context rebuilt from scratch every session
-- dependency on specific tools or providers
-
-**Project context should live with the project.**
+If the `mova` executable disappeared tomorrow, your project would continue to work because the knowledge remains in the repository—not inside a tool.
 
 ---
 
-## The idea
+## The Problem
 
-Mova Context keeps operational knowledge in versionable files that travel alongside the repository.
+When you use AI in a project, much of the operational knowledge—conventions, business rules, architectural decisions, and session history—ends up **trapped inside chat conversations**.
+
+Over time, the same problems always appear:
+
+- You have to explain the project again in every conversation.
+- You switch models or providers and lose the context.
+- Every team member explains the project differently.
+- No one remembers exactly what was decided weeks ago.
+
+Mova Context turns that operational knowledge into a first-class part of your repository.
+
+Instead of living inside conversations with an LLM, it lives in version-controlled text files that any model can use without you having to explain everything again to Claude, GPT, Gemini, Ollama, or any other model.
+
+---
+
+## The Essentials
+
+**Mova Context is a file convention, not a tool.**
+
+Everything you need is this structure:
 
 ```text
-Project
-│
-├── Code
-├── Conventions
-├── Memory
-├── Operational rules
-└── Shared context
+workflow.md                       ← specification describing how to build the context
+
+agents/[domain]/                  ← who reasons (role, expertise)
+skills/[domain]/                  ← what the model knows (technical/business knowledge)
+prompts/[domain]/                 ← what the model should do (task)
+
+projects/[project]/
+├── project.json                  ← which agents, skills and prompts to use
+└── memory.md                     ← project session history
 ```
 
-Models may change. Project context remains.
+You can use all of this **without installing anything**.
 
----
+You only need an AI agent capable of reading your repository (Claude Code, Cursor, Claude Desktop, Gemini CLI, etc.), or you can even copy the files manually into a chat.
 
-## What it is
-
-An organizational convention for managing operational knowledge in AI-assisted projects.
-
-It aims to enable:
-
-- context reuse
-- knowledge preservation
-- team collaboration
-- portability across tools
-- decision traceability
-
----
-
-## What it is not
-
-- Not an AI framework
-- Not a runtime
-- Not an automation platform
-- Not a replacement for Claude, GPT, Gemini, or any model
-
----
-
-## Structure
+For example:
 
 ```text
-mova-context/
-│
-├── README.md                    ← language selector
-├── workflow.md                  ← single entry point
-│
-├── docs/i18n/{es,en}/           ← bilingual documentation
-│
-├── agents/{domain}/i18n/{lang}/ ← who the model behaves as
-├── skills/{domain}/i18n/{lang}/ ← what the model knows
-├── prompts/{domain}/i18n/{lang}/← what the model must do
-│
-├── projects/{PROJECT}/
-│   ├── project.json             ← source of truth
-│   └── memory.md                ← session history
-│
-├── adapters/                    ← filesystem · postgresql · mongodb
-├── schema/                      ← database schemas
-├── cli/                         ← command-line tool
-└── mcp/                         ← MCP integration
+Read workflow.md, resolve project [name], execute task [task], and build the context.
+```
+
+An agent capable of accessing the repository can follow `workflow.md` to assemble the context automatically.
+
+By following that specification, it:
+
+- resolves the project defined in `project.json`
+- loads the appropriate `agents`, `skills`, and `prompts`
+- injects the required variables
+- includes the project's memory
+- builds the final context
+
+If you're working from a web chat (ChatGPT, Claude.ai, or Gemini), where the model cannot access your repository directly, **`mova run`** generates that exact same context, ready to copy and paste.
+
+**The CLI (`mova`) is not required for Mova Context to work. It simply automates context assembly and additional tasks such as memory management, HTTP, and MCP integration.**
+
+---
+
+## How It Works
+
+```text
+                     Mova Context
+
+          agents/
+          skills/
+          prompts/
+          project.json
+          memory.md
+                 │
+                 ▼
+           workflow.md
+          (specification)
+                 │
+      ┌──────────┴──────────┐
+      │                     │
+      ▼                     ▼
+Repository-aware       mova run (CLI)
+AI agent               (optional)
+      │                     │
+      └──────────┬──────────┘
+                 ▼
+        Assembled Context
+                 │
+                 ▼
+ Claude • GPT • Gemini • Ollama
+      or any other LLM
 ```
 
 ---
 
-## project.json — source of truth
+## When Should You Use the CLI?
 
-```json
-{
-  "project": "my-project",
-  "description": "Project description",
-  "repo": ".",
-  "lang": "en",
-  "adapter": "file",
-  "llm": "claude",
-  "default_task": "my-task",
+| Situation | Do You Need the CLI? |
+|---|---|
+| You already use Claude Code, Cursor, or another repository-aware AI agent | **No.** The agent follows `workflow.md` directly. |
+| You want to paste the context into a web chat (Claude.ai, ChatGPT, Gemini) | **Yes.** `mova run` generates the assembled context, ready to copy and paste. |
+| You want to call an LLM API from a script or automation | **Yes.** It's faster than having the model read all the files itself. |
+| You want to run a local model (Ollama) | **Yes.** `mova run ... \| ollama run model` in a single command. |
+| You want to save session memory without editing `memory.md` manually | **Yes.** `mova memory` updates the file automatically. |
+| You want to expose the context through HTTP or as an MCP server | **Yes.** `mova http` or `mova mcp start`. |
 
-  "variables": {
-    "company": "Acme Corp"
-  },
-  "agents": { "domain": "software", "use": ["backend-dev"] },
-  "skills": { "domain": "software", "use": ["api-security"] },
+**In short:**
 
-  "tasks": {
-    "my-task": {
-      "prompt": "review-project",
-      "variables": { "module": "auth" }
-    }
-  }
-}
+Without the CLI, you lose convenience.
+
+With the CLI, you gain speed, automation, and integrations.
+
+The single source of truth is always:
+
+- `workflow.md`
+- `agents/`
+- `skills/`
+- `prompts/`
+- `project.json`
+- `memory.md`
+
+Never the executable.
+
+---
+
+## Before vs Mova Context
+
+```text
+BEFORE                              MOVA CONTEXT
+
+Context lives inside chats     →     Context lives inside the repository
+
+Changing models means          →     Change a single line in project.json
+starting over
+
+Every developer explains       →     A single source of truth
+the project differently
+
+Important decisions            →     memory.md preserves project history
+are lost
+
+Knowledge depends              →     Knowledge belongs to the project,
+on the provider                      not the provider
 ```
 
-One file controls everything. Everything else is Markdown.
-
 ---
 
-## Supported LLMs
-
-The project works identically with any model. Only `project.json` changes.
-
-| Field | Value |
-|-------|-------|
-| `"llm": "claude"` | Anthropic Claude |
-| `"llm": "gpt"` | OpenAI GPT |
-| `"llm": "gemini"` | Google Gemini |
-| `"llm": "ollama"` | Ollama (local) |
-| `"llm": "openrouter"` | OpenRouter (multi-model) |
-
-Code, agents, skills, and prompts never change.
-
----
-
-## Adapters
-
-| Adapter | Description |
-|---------|-------------|
-| `"adapter": "file"` | Markdown files (default) |
-| `"adapter": "postgresql"` | PostgreSQL database |
-| `"adapter": "mongodb"` | MongoDB database |
-
-Only the adapter changes. The workflow stays the same.
-
----
-
-## CLI
+## Install the CLI (Optional)
 
 ```bash
-mova list                                    # list available projects
-mova run [project] [task]                    # generate context
-mova compile [project] [task]                # distilled + pruned context → contexto.txt
-mova memory [project] "llm response"         # update memory
-mova init [name]                             # create new project
-mova mcp start                               # start MCP server
+go build -o mova ./src/cli
+```
+
+See **[COMMANDS.md](COMMANDS.md)** for all available commands (`run`, `memory`, `search`, `focus`, `mcp`, `http`, etc.).
+
+---
+
+## Minimal Example
+
+A complete sample project is available at:
+
+```text
+projects/pruebas-locales/
+```
+
+You can inspect its `project.json` or generate the project context by running:
+
+```bash
+mova run pruebas-locales
 ```
 
 ---
 
-## Official examples
+## Learn More
 
-- [Chilean Privacy Law 21.719](../../examples/i18n/en/privacy-law/)
-- [Enterprise Omnichannel](../../examples/i18n/en/omnichannel/)
-
----
-
-## Documentation
-
-- [workflow.md](workflow.md) — full operational guide
-- [architecture.md](architecture.md) — philosophy and principles
-- [cli.md](cli.md) — CLI reference
-- [mcp.md](mcp.md) — MCP integration
-- [adapters.md](adapters.md) — storage adapters
-- [schema.md](schema.md) — database schema
-- [context-compiler.md](context-compiler.md) — `mova compile`, Phase 1 and Phase 2
-- [core-extensions.md](core-extensions.md) — Core + Extensions architecture
+| I want to... | Document |
+|---|---|
+| View all commands (Memory, Focus, MCP, HTTP included) | [COMMANDS.md](COMMANDS.md) |
+| Read the complete specification followed by every model | [workflow.md](../../../workflow.md) |
+| Understand the source code (Resolvers, Adapters, and extensibility) | [SOURCE.md](../SOURCE.md) |
 
 ---
-
-## Core principle
 
 > **Operational knowledge belongs to the project. Reasoning belongs to the model.**
-
-Models will change. Providers will change. Tools will change.
-
-The accumulated knowledge of the project should remain under the control of the team that builds it.
+>
+> Mova Context is the convention formed by `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, and `memory.md`.
+>
+> The CLI simply automates working with that convention—it does not replace it.
