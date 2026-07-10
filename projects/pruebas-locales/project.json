@@ -1,7 +1,7 @@
 {
   "project": "pruebas-locales",
   "description": "Ejemplo mínimo oficial — API de tareas para validar Mova Context de punta a punta",
-  "repo": ".",
+  "repo": "examples/pruebas-locales-repo",
   "lang": "es",
   "adapter": "file",
   "default_task": "crear-proyecto",
@@ -44,6 +44,13 @@
       "agents": ["qa-engineer"],
       "skills": ["generate-tests"],
       "variables": { "module": "tareas" }
+    },
+    "revisar-demo-local": {
+      "prompt": "review-project",
+      "focus": [
+        "CreateOrder()",
+        "ordenes"
+      ]
     }
   },
 

@@ -1,0 +1,17 @@
+# Build artifacts
+dist/
+*.exe
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Generated per-project output
+projects/*/contexto.txt
+projects/*/contexto.report.md
+projects/*/contexto.report.json
+
+# Local build script
+/Makefile
