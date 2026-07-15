@@ -15,7 +15,7 @@ Instead of being trapped inside conversations with a model, knowledge lives in v
 The `mova` CLI is completely optional. Its only purpose is to automate tasks such as assembling the context, managing project memory, or exposing it through HTTP and MCP.
 
 If the `mova` executable disappeared tomorrow, the project would continue to work exactly the same because the knowledge belongs to the repository, not to a tool.
----
+-----
 
 ## The Problem
 

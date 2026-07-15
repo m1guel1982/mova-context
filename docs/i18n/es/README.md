@@ -15,7 +15,7 @@ En lugar de quedar atrapado dentro de conversaciones con un modelo, el conocimie
 El CLI (`mova`) es completamente opcional. Su única función es automatizar tareas como ensamblar el contexto, administrar la memoria o exponer servicios mediante HTTP y MCP.
 
 Si mañana desaparece el ejecutable `mova`, el proyecto sigue funcionando exactamente igual, porque el conocimiento sigue perteneciendo al repositorio y no a una herramienta.
----
+-----
 
 ## El problema
 
