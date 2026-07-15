@@ -8,12 +8,13 @@ Docs: **[Español](README.md)** · **[English](../en/README.md)**
 
 # Filosofía
 
-Todo el conocimiento de un proyecto vive en archivos de texto versionables.
+Mova Context convierte el conocimiento operativo del proyecto en un contexto portable, independiente del proveedor de IA.
 
-El CLI (`mova`) únicamente automatiza tareas repetitivas.
+En lugar de quedar atrapado dentro de conversaciones con un modelo, el conocimiento vive en archivos de texto versionables que forman parte del repositorio. Así puede reutilizarse con GPT, Claude, Gemini, Ollama o cualquier otro LLM sin tener que volver a explicar el proyecto.
 
-Si mañana desaparece el ejecutable `mova`, tu proyecto sigue funcionando porque el conocimiento continúa estando en el repositorio, no dentro de una herramienta.
+El CLI (`mova`) es completamente opcional. Su única función es automatizar tareas como ensamblar el contexto, administrar la memoria o exponer servicios mediante HTTP y MCP.
 
+Si mañana desaparece el ejecutable `mova`, el proyecto sigue funcionando exactamente igual, porque el conocimiento sigue perteneciendo al repositorio y no a una herramienta.
 ---
 
 ## El problema

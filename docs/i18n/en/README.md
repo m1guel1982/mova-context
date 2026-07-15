@@ -8,12 +8,13 @@ Docs: **[English](README.md)** · **[Español](../es/README.md)**
 
 # Philosophy
 
-All project knowledge lives in version-controlled text files.
+Mova Context transforms a project's operational knowledge into portable context, independent of any AI provider.
 
-The CLI (`mova`) simply automates repetitive tasks.
+Instead of being trapped inside conversations with a model, knowledge lives in version-controlled text files that are part of the repository. This allows the same project context to be reused with GPT, Claude, Gemini, Ollama, or any other LLM without having to explain the project again.
 
-If the `mova` executable disappeared tomorrow, your project would continue to work because the knowledge remains in the repository—not inside a tool.
+The `mova` CLI is completely optional. Its only purpose is to automate tasks such as assembling the context, managing project memory, or exposing it through HTTP and MCP.
 
+If the `mova` executable disappeared tomorrow, the project would continue to work exactly the same because the knowledge belongs to the repository, not to a tool.
 ---
 
 ## The Problem
