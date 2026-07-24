@@ -33,6 +33,32 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 		w.Write(responseBytes)
 	})
 
+	mux.HandleFunc("/save", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			mcpErrorHTTP(w, -32700, "parse error", nil)
+			return
+		}
+		// Reexpressed as an ordinary tools/call so it runs through the exact
+		// same mcp.Process → executeTool → documentTool → documents.Save
+		// path the "save" MCP tool and the chat's /save command already
+		// use — POST /save is a convenience shape on top, not a second
+		// implementation. See mova.local/documents/save_service.go.
+		req := mcp.Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage("1"),
+			Method:  "tools/call",
+			Params:  map[string]any{"name": "save", "arguments": args},
+		}
+		responseBytes := mcp.Process(adapter, root, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseBytes)
+	})
+
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3"})

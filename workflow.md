@@ -269,6 +269,28 @@ Variables reservadas del sistema (siempre disponibles sin declararlas):
 
 ---
 
+## RESOLUCIÓN DE PROVEEDOR LLM
+
+Un único punto de configuración decide qué proveedor/modelo recibe el contexto de un proyecto — el mismo desde CLI, MCP, HTTP y el chat REPL:
+
+```text
+project.json → llm_profile { type, provider, config }
+```
+
+Si `llm_profile.provider` está definido, ese proveedor se usa para esa sesión — `config/models/<provider>/<config>.json` es el ÚNICO archivo que define tanto su tipo real ("ollama" | "openai-compatible" | "anthropic") y conexión como sus parámetros de inferencia (ya no hay un `config.json` separado por proveedor). Sin `llm_profile`, se usa el proveedor global activo (`config/models/active.json`, un puntero `{provider, config}` fijado con `mova config <provider>`).
+
+```text
+mova chat <project>  →  ¿llm_profile.provider definido?
+                            sí → usar ese proveedor/modelo (no toca el default global)
+                            no → usar el proveedor activo global
+```
+
+Antes de enviar el contexto ensamblado a cualquier proveedor (local o Cloud), se valida el límite `budget.max_tokens` si está configurado — ver COMMANDS.md, sección "Presupuesto como regla". Si se supera, la ejecución se detiene ahí, antes de gastar un token real.
+
+Agregar un proveedor Cloud nuevo (además de OpenAI/Anthropic/Google, ya soportados) es solo un `config/models/<nombre>/<config>.json` nuevo, y si su API no es compatible con el formato OpenAI, una implementación nueva de la interfaz `Provider` en `models/provider.go` — nunca se toca `core`, `budget`, `cli` ni `mcp` para agregar un proveedor.
+
+---
+
 ## FOCUS
 
 Define sobre qué trabajar exactamente: archivos, directorios o símbolos concretos del código fuente.
