@@ -1,0 +1,15 @@
+{
+  "base_url": "http://localhost:11434",
+  "timeout_seconds": 300,
+  "model": "llama3.2:3b",
+  "top_k": 40,
+  "top_p": 0.9,
+  "num_ctx": 4096,
+  "threads": 6,
+  "mirostat": 0,
+  "keep_alive": "24h",
+  "num_predict": 512, 
+  "temperature": 0,
+  "context_window": 131072,
+  "repeat_penalty": 1.1
+}

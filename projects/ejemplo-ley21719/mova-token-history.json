@@ -1,0 +1,6 @@
+{
+  "ollama": {
+    "total_local_tokens": 49092,
+    "total_api_tokens": 77136
+  }
+}

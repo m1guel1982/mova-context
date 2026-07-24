@@ -1,0 +1,28 @@
+<!--
+  checkout.html — flujo de pago de ejemplo (genérico, aplicable a cualquier
+  negocio: e-commerce, banco, retail, salud, sistema legacy o nuevo).
+
+  Este archivo representa CUALQUIER pantalla de tu sistema donde el usuario
+  tiene que aceptar algo antes de continuar: checkout, registro, firma de
+  contrato, alta de cliente. El bug de abajo es genérico a propósito.
+-->
+<form id="checkout-form">
+  <h2>Confirmar pago</h2>
+
+  <label for="card">Número de tarjeta</label>
+  <input id="card" type="text" />
+
+  <!-- ⚠️ BUG: un solo checkbox agrupa tres finalidades distintas de
+       consentimiento. El usuario no puede pagar si no acepta las tres
+       juntas — exactamente lo que la Ley 21.719 prohíbe (consentimiento
+       debe ser libre, específico e informado, finalidad por finalidad). -->
+  <label>
+    <input type="checkbox" id="accept-all" required />
+    Acepto los <a href="/terminos">Términos y Condiciones</a>,
+    la <a href="/privacidad">Política de Privacidad</a> y el
+    <a href="/tratamiento-datos">tratamiento de mis datos personales</a>
+    con fines de marketing y perfilamiento.
+  </label>
+
+  <button type="submit" disabled-unless="accept-all">Pagar ahora</button>
+</form>

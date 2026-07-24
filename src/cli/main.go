@@ -46,9 +46,7 @@ func main() {
 		if project == "" {
 			project = runtime.AutoDetect(root)
 		}
-		ctx, err := core.BuildContext(getAdapter(project), root, project, task)
-		must(err)
-		consolePrint(ctx)
+		runProject(root, getAdapter(project), project, task)
 
 	case "memory":
 		project, response := needArg(2, "project"), needArg(3, "response")
@@ -142,6 +140,39 @@ func main() {
 		value := arg(4, "")
 		runMemoryConfig(root, project, action, value)
 
+	// ── modelos locales (Ollama, LM Studio, vLLM...) ────────────────────
+	// ver models_cmd.go / chat_cmd.go / mova.local/models
+
+	case "config":
+		provider := needArg(2, "provider (ollama, lmstudio, ...)")
+		runConfigProvider(root, provider)
+
+	case "show":
+		if arg(2, "") != "config" {
+			die("usage: mova show config [model]")
+		}
+		runShowConfig(root, arg(3, ""))
+
+	case "install":
+		runInstall(root, needArg(2, "models (comma-separated: llama3.1,mistral)"))
+
+	case "model-list":
+		runModelList(root)
+
+	case "remove":
+		runRemove(root, needArg(2, "models (comma-separated: llama3.1,mistral)"))
+
+	case "chat":
+		project, task := arg(2, ""), arg(3, "")
+		runChat(root, project, task)
+
+	case "budget":
+		project, task := positionalArgs(2)
+		if project == "" {
+			project = runtime.AutoDetect(root)
+		}
+		runBudget(root, project, task, flagBool("--focus"))
+
 	default:
 		usage()
 	}
@@ -170,6 +201,28 @@ func arg(i int, def string) string {
 		return os.Args[i]
 	}
 	return def
+}
+
+// positionalArgs returns the first two non-flag arguments starting at
+// os.Args[startIdx] — used by commands like `mova budget [project] [task]
+// --focus` that combine positional args with boolean flags, so a flag
+// occupying what would otherwise be a positional slot is never mistaken
+// for it (e.g. "mova budget my-project --focus" must not read "--focus"
+// as the task name).
+func positionalArgs(startIdx int) (first, second string) {
+	var found []string
+	for i := startIdx; i < len(os.Args); i++ {
+		if !strings.HasPrefix(os.Args[i], "--") {
+			found = append(found, os.Args[i])
+		}
+	}
+	if len(found) > 0 {
+		first = found[0]
+	}
+	if len(found) > 1 {
+		second = found[1]
+	}
+	return first, second
 }
 
 func needArg(i int, label string) string {
@@ -219,40 +272,4 @@ func must(err error) {
 func die(msg string) {
 	fmt.Fprintln(os.Stderr, "error: "+msg)
 	os.Exit(1)
-}
-
-func usage() {
-	consolePrint(`mova — Mova Context v3
-
-  mova run           [project] [task]        generate context for LLM
-  mova memory        [project] "response"    save session to memory.md
-  mova memory-read   [project]               print active memory
-    --all                                    include archives
-    --month 2024-01                          specific archive month
-  mova memory-archive [project]              archive old entries
-    --days N                                 keep N days active (default 30)
-  mova list                                  list all projects
-  mova init          [name]                  create project
-  mova search        "query" [domain]        search knowledge
-  mova mcp start                             start MCP server
-    --port 3000                              run as HTTP server (default)
-    --stdio                                  run as Stdio server (for Claude/Cursor)
-  mova memory-clear  [project]               delete ALL memory
-    --archived                               delete only archived months
-    --keep-active                            delete archives, keep memory.md
-    --date 2024-06-15                        delete a specific day
-    --from 2024-06-01 --to 2024-06-30        delete date range
-    --yes                                    skip confirmation
-  mova memory-config [project] [action] [value]
-    enable | disable                         toggle auto-archive
-    days N                                   set retention days (1, 10, 30, 90...)
-    confirm true|false                       toggle confirmation on delete
-
-  MOVA_ADAPTER=db  MOVA_DSN=postgres://... mova run project task
-
-  MOVA_PROJECT_ROOT=/path/to/project  mova mcp start --stdio
-    Needed when an MCP client (Claude Desktop, Cursor) launches mova from
-    a working directory outside the project. MOVA_PROJECT_PATH also works
-    and skips the workflow.md search entirely. See docs/i18n/en/COMMANDS.md.
-`)
 }

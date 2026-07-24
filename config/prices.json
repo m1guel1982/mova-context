@@ -1,0 +1,32 @@
+{
+  "report_path": "/projects/ejemplo-gemini-flash/mova-budget-report.md",
+  "currency": "USD",
+  "exchange_rate_clp": 950,
+  "unit": "per_1k_tokens",
+  "providers": {
+    "openai": {
+      "models": {
+        "gpt-5": {
+          "input": 0.005,
+          "output": 0.015
+        }
+      }
+    },
+    "anthropic": {
+      "models": {
+        "claude": {
+          "input": 0.003,
+          "output": 0.015
+        }
+      }
+    },
+    "google": {
+      "models": {
+        "gemini": {
+          "input": 0.00125,
+          "output": 0.005
+        }
+      }
+    }
+  }
+}

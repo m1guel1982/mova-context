@@ -109,13 +109,29 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
         }
 
     case "get_full_context":
-        result, err = core.BuildContext(adapter, root, project, task)
+        result, err = fullContextTool(adapter, root, project, task)
     case "get_knowledge":
         result, err = adapter.GetKnowledge(kind, domain, lang, name)
     case "get_memory":
         result, err = adapter.GetMemory(project)
     case "get_memory_all":
         result, err = adapter.GetMemoryAll(project)
+    case "save_memory":
+        // The only memory WRITE path exposed over MCP/HTTP — get_memory/
+        // get_memory_all were read-only. Appends "entry" verbatim to
+        // projects/<project>/memory.md, most-recent-first, exactly like
+        // `mova memory <project> "<entry>"` and `mova chat`'s `/memory`
+        // already do (see cli/chat_cmd.go's runChatMemory) — same
+        // adapter.AppendMemory underneath, so all three stay consistent.
+        entry := str(args, "entry")
+        if entry == "" {
+            err = fmt.Errorf("save_memory: \"entry\" is required")
+        } else {
+            err = adapter.AppendMemory(project, entry)
+            if err == nil {
+                result = "✓ memory saved: projects/" + project + "/memory.md"
+            }
+        }
     case "get_workflow":
         result, err = adapter.GetKnowledge("workflow", "", lang, "workflow")
         if err != nil {
@@ -129,6 +145,14 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
             data, _ := json.MarshalIndent(results, "", "  ")
             result = string(data)
         }
+    case "chat_completion":
+        result, err = chatCompletionTool(adapter, root, args)
+    case "estimate_budget":
+        result, err = budgetTool(adapter, root, args)
+    case "read_document_layer", "generate_word_contract", "generate_pdf_document",
+        "generate_vector_graphic", "generate_excel_report", "trigger_diffusion_image",
+        "read_file", "write_file", "patch_file", "create_directory", "save":
+        result, err = documentTool(adapter, root, tool, args)
     default:
         return serializeError(-32602, "unknown tool: "+tool, id)
     }
@@ -161,10 +185,38 @@ func tools() []map[string]any {
             req("project")),
         tool("get_memory_all", "Active + all archived memory.",
             req("project")),
+        tool("save_memory", "Append an entry to a project's memory.md (most-recent-first) — the only memory WRITE path exposed over MCP/HTTP; get_memory/get_memory_all are read-only. Same underlying AppendMemory as `mova chat`'s /memory and the `mova memory` CLI command use, so all three stay in sync.",
+            req("project"), req("entry")),
         tool("get_workflow", "The workflow guide.",
             opt("lang")),
         tool("search_context", "Search across all knowledge.",
             req("query"), opt("domain")),
+        tool("chat_completion", "Send a message to a local model (Ollama, LM Studio, vLLM...) configured under config/models/. Optionally attaches the full Mova context (project+task) as the system prompt. Natural language that asks to MODIFY an existing file (\"fix the bug in auth.go\", \"update report.md\") is detected automatically: the proposed change (a precise line diff) is returned but NOT written unless `apply_edits` is true — there's no interactive y/n on this door, so pass `apply_edits: true` on the same message once you've reviewed the diff to actually write it.",
+            req("message"), opt("model"), opt("project"), opt("task"), opt("apply_edits")),
+        tool("estimate_budget", "Estimate the token/USD cost of a project's real context (agents+skills+prompt+focus+memory — the same assembly get_full_context produces), broken down per component, using the local tiktoken-go tokenizer and config/prices.json. 100% local: no LLM call, nothing leaves this machine. Writes mova-budget-report.md. `focus`=\"true\" also compares full-repo vs. focus-only token cost.",
+            req("project"), opt("task"), opt("focus")),
+        tool("save", "THE unified way to create or edit ANY file or directory — Markdown, plain text, source code, JSON/YAML, .docx, .pdf, .xlsx, .svg... the format is picked automatically from the extension in `path`, so you never need to know which generator handles which format (no generate_pdf_document/generate_word_contract/generate_excel_report/write_file to remember). Pass `directory` instead of `path` to only create a folder — missing parent directories are always created automatically either way. `content` is plain text/Markdown/HTML/CSV — the internal Writer decides how to turn it into the real format. `overwrite`/`append` control what happens if the file already exists (default: overwrite, same as before).",
+            opt("path"), opt("directory"), opt("content"), opt("overwrite"), opt("append"), opt("project")),
+        tool("create_directory", "Create a directory, recursively creating any missing parent directories (like `mkdir -p`). Works cross-platform (Linux, macOS, Windows). `path` may be: empty (defaults to the project's repo), an absolute path in Unix (`/a/b`) or Windows (`C:/a/b`, `C:\\a\\b`) style, a bare name (searched for among existing directories in the repo — asks which one if more than one matches), or an explicit relative path. Kept for backward compatibility — equivalent to `save` with only `directory` set.",
+            opt("path"), opt("project")),
+        tool("read_document_layer", "Extract the plain-text layer from a .docx, .xlsx, or .pdf file. `filename` resolves the same way as create_directory's `path`.",
+            req("filename"), opt("project")),
+        tool("read_file", "Read the raw content of any text file (.txt, .md, .json, .yml/.yaml, .xml, source code...).",
+            req("filename"), opt("project")),
+        tool("write_file", "(legacy — prefer `save`) Create a new text file or fully overwrite an existing one (.txt, .md, .json, .yml/.yaml, .xml). Validates .json/.xml well-formedness before writing.",
+            req("filename"), req("content"), opt("project")),
+        tool("patch_file", "Surgically replace one exact, unique occurrence of `search` with `replace` inside an existing text file — the rest of the file is untouched.",
+            req("filename"), req("search"), req("replace"), opt("project")),
+        tool("generate_word_contract", "(legacy — prefer `save`) Compile strongly-structured markdown into a real .docx file.",
+            req("filename"), req("markdown_content"), opt("project")),
+        tool("generate_pdf_document", "(legacy — prefer `save`) Compile clean HTML/CSS layout text into a real .pdf file.",
+            req("filename"), req("layout_html_css"), opt("project")),
+        tool("generate_vector_graphic", "(legacy — prefer `save`) Write native SVG code to a .svg file (diagrams, architecture maps).",
+            req("filename"), req("svg_code"), opt("project")),
+        tool("generate_excel_report", "(legacy — prefer `save`) Compile typed tabular sheets_data (JSON) into a real .xlsx file.",
+            req("filename"), req("sheets_data"), opt("project")),
+        tool("trigger_diffusion_image", "Route a prompt to the local diffusion server configured at config/models/diffusion/config.json and save the resulting image.",
+            req("filename"), req("prompt"), opt("aspect_ratio"), opt("project")),
     }
 }
 // ── tiny helpers ──────────────────────────────────────────────────────────

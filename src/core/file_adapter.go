@@ -33,6 +33,13 @@ func NewFileAdapter(root string) *fileAdapter { return &fileAdapter{root} }
 //  9. recursive walk: domain/           (any subdir under domain)
 // 10. recursive walk: root/             (finds custom/, etc.)
 func (a *fileAdapter) GetKnowledge(kind, domain, lang, name string) (string, error) {
+	if domain == "" {
+		domain = "base"
+	}
+	if lang == "" {
+		lang = "es"
+	}
+
 	base := filepath.Join(a.root, kind+"s", domain)
 	filename := name + ".md"
 
@@ -285,5 +292,3 @@ func (a *fileAdapter) Search(query, domain string) ([]SearchResult, error) {
 	sort.Slice(results, func(i, j int) bool { return results[i].Score > results[j].Score })
 	return results, nil
 }
-
-// ── helpers ───────────────────────────────────────────────────────────────────

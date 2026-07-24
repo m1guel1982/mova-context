@@ -21,6 +21,28 @@ type Project struct {
 	Tasks           map[string]Task   `json:"tasks"`
 	Archive         *ArchiveConfig    `json:"archive"`         // optional memory management config
 	Focus           []string          `json:"focus"`           // optional: files/dirs/symbols to work on (see workflow.md#FOCUS)
+	Budget          *BudgetConfig     `json:"budget"`          // optional: token ceiling for `mova budget` (see BudgetConfig)
+	TokenHistoryPath string           `json:"token_history_path"` // optional: custom location for mova-token-history.json (default: alongside project.json)
+	Tools           *ToolsConfig      `json:"tools"`           // optional: lets mova chat / chat_completion call MCP file/document tools mid-conversation (see ToolsConfig)
+}
+
+// ToolsConfig turns "mova chat" (and the MCP "chat_completion" tool) into
+// a small agent: when enabled, the model can ask Mova — in plain text,
+// using a simple marker-based protocol described in
+// mova.local/mcp/agent_tools.go — to create directories/files, write a
+// .docx/.pdf/.xlsx/.svg, patch an existing file, etc., and keep
+// answering using the real result. Works with ANY provider (Ollama,
+// Gemini, Claude, GPT...) because it doesn't rely on each API's native
+// function-calling format — same "simplicidad" principle as the rest of
+// Mova: one plain-text protocol, three doors (CLI/MCP/HTTP).
+type ToolsConfig struct {
+	Enabled bool     `json:"enabled"`         // default false — opt-in per project
+	Allow   []string `json:"allow,omitempty"` // optional whitelist (subset of mova.local/mcp.AgentToolNames()); empty/omitted = all of them allowed
+}
+
+// ToolsEnabled reports whether a project turned on chat tool-calling.
+func ToolsEnabled(cfg *ToolsConfig) bool {
+	return cfg != nil && cfg.Enabled
 }
 
 // KnowledgeRef points to agents/skills: domain + list of names.
@@ -37,6 +59,7 @@ type Task struct {
 	Skills    []string          `json:"skills"`    // extra skills for this task
 	Variables map[string]string `json:"variables"` // task-level variable overrides
 	Focus     []string          `json:"focus"`     // task-level focus (overrides global focus if set)
+	Budget    *BudgetConfig     `json:"budget"`    // task-level budget ceiling (overrides project-level if set)
 }
 
 // ProjectSummary is used by mova list.
@@ -64,6 +87,33 @@ type ArchiveConfig struct {
 	KeepMemoryOnly bool   `json:"keep_memory_only"` // true = delete archives, keep memory.md
 	CleanupPolicy  string `json:"cleanup_policy"`   // "manual" (default) | "auto"
 	ConfirmDelete  *bool  `json:"confirm_delete"`   // default true
+}
+
+// BudgetConfig sets an optional token ceiling for `mova budget` — a soft
+// (actually hard, see EnforceLimit) limit on the ASSEMBLED CONTEXT size
+// (agents+skills+prompt+focus+memory), checked by mova.local/budget like
+// a linter: "this project's context grew past what you budgeted for".
+// This is a completely different knob from the model config's own
+// "num_predict" (config/models/<provider>/<config>.json) — that one caps
+// how many tokens the MODEL's own REPLY may generate, applied per-request
+// by the provider itself, not by Mova. Two different "max size" concepts
+// that are easy to confuse because of the similar names:
+//
+//	budget.max_tokens (this struct, project.json)        → INPUT  ceiling, enforced by Mova BEFORE sending anything
+//	model_config.num_predict (config/models/.../*.json)  → OUTPUT ceiling, sent to the provider AS a request parameter
+type BudgetConfig struct {
+	MaxTokens int `json:"max_tokens"` // 0 = no limit configured, mova budget never flags anything
+}
+
+// ResolveBudget decides which BudgetConfig applies to a run: the task's
+// own `budget` (if set) wins and REPLACES the project's, same rule as
+// ResolveFocus. Returns nil if neither declares one — "no limit
+// configured" is not the same as "limit of 0".
+func ResolveBudget(proj *Project, task *Task) *BudgetConfig {
+	if task.Budget != nil {
+		return task.Budget
+	}
+	return proj.Budget
 }
 
 // MemoryDeleteRequest describes a delete operation (CLI → Adapter).
@@ -104,12 +154,20 @@ func RetentionDays(cfg *ArchiveConfig) int {
 //
 // This is the ONLY place where the LLM type influences behavior.
 // Agents, Skills, Prompts, and workflow.md never change.
+// Single source of truth: "provider" + "config" is a POINTER, nothing
+// more — it names config/models/<provider>/<config>.json, the one file
+// that holds the actual connection details (base_url, api_key, timeout)
+// AND inference parameters (temperature, num_predict, the real model
+// tag...) for that model. Nothing about the model is duplicated here.
+// (Older projects used "model" + "max_tokens" + "base_url" directly on
+// this struct; those fields are gone — "max_tokens" was never wired to
+// anything besides this struct itself, since every provider already
+// reads its output-token cap from the model config's own "num_predict",
+// and "base_url" now lives there too.)
 type LLMProfile struct {
-	Type      string `json:"type"`       // "powerful" | "local" (default: "powerful")
-	Provider  string `json:"provider"`   // "claude" | "gpt" | "gemini" | "ollama" | "openai-compatible"
-	Model     string `json:"model"`      // e.g. "claude-sonnet-4-6", "llama3.1", "mistral"
-	MaxTokens int    `json:"max_tokens"` // 0 = no limit applied
-	BaseURL   string `json:"base_url"`   // for ollama / openai-compatible endpoints
+	Type     string `json:"type"`               // "powerful" | "local" (default: "powerful") — only knob that changes CONTEXT FORMATTING, see adaptContent. Unrelated to provider identity (see Provider below).
+	Provider string `json:"provider,omitempty"` // OPTIONAL. "ollama" | "google" | "anthropic" | "openai" | "lmstudio" | ... — a subfolder of config/models/. When omitted, it is resolved automatically from "config" (see models.ResolveConfigProvider) by locating the one provider folder that has that file — the provider's real identity then comes from that single file's own "type" field (e.g. "google", "anthropic", "openai-compatible", "ollama"), never duplicated here. Set this explicitly only to disambiguate a "config" filename that exists under more than one provider folder.
+	Config   string `json:"config"`             // filename (no .json) under config/models/<provider>/ — e.g. "llama3.2.3b", "gemini-2.5-flash"
 }
 
 // EmbeddingProfile configures the model used to generate vector embeddings.
