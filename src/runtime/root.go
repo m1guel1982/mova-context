@@ -56,13 +56,13 @@ func FindRoot() (string, error) {
 	}
 
 	return "", fmt.Errorf(
-		"workflow.md not found.\n" +
+		"ERROR\n\n" +
+			"No Mova project was found (looking for workflow.md, the project root marker).\n\n" +
+			"Suggestion:\nRun \"mova init\" or move to a Mova project directory.\n\n" +
 			"Search locations:\n" +
 			"  • MOVA_PROJECT_ROOT (or MOVA_PROJECT_PATH for a direct path)\n" +
 			"  • current working directory\n" +
-			"  • the mova binary's directory\n\n" +
-			"Run mova from inside the project, or set MOVA_PROJECT_ROOT / MOVA_PROJECT_PATH " +
-			"(useful when configuring mova as an MCP server in Claude Desktop / Cursor).",
+			"  • the mova binary's directory",
 	)
 }
 

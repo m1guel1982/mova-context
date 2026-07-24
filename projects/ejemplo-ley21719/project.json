@@ -1,0 +1,38 @@
+{
+  "project": "ejemplo-ley21719",
+  "description": "Demo genérica: detectar y corregir un checkbox de consentimiento que mezcla T&C, privacidad y tratamiento de datos. Aplica a cualquier negocio — sistemas legacy o nuevos, cualquier stack.",
+  "repo": "examples/ejemplo-ley21719-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "auditar-checkout",
+
+  "agents": { "domain": "base", "use": ["privacy-auditor"], "custom": [] },
+  "skills": { "domain": "base", "use": ["granular-consent"], "custom": [] },
+
+  "variables": {
+    "stack": "cualquiera — el ejemplo usa un checkout genérico en HTML",
+    "regulation": "Ley 21.719 (Chile) — aplicable con el mismo criterio a GDPR y equivalentes"
+  },
+
+  "tasks": {
+    "auditar-checkout": {
+      "prompt": "audit-consent-flow",
+      "variables": { "module": "checkout", "regulation": "Ley 21.719 (Chile)" },
+      "focus": [
+        "checkout.html"
+      ]
+    }
+  },
+
+  "llm_profile": {
+    "provider": "ollama",
+    "config": "llama3.2.3b"
+  },
+    "budget": {
+    "max_tokens": 5
+  },
+
+  "tools": {
+    "enabled": false
+  }
+}

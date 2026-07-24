@@ -14,7 +14,11 @@
 // Responsabilidad de cada archivo:
 //
 //	main.go            — dispatcher de subcomandos (run, memory, list, ...)
+//	help.go            — texto de ayuda (`mova` sin argumentos)
 //	adapter_select.go  — decide file vs. db adapter (nunca lo decide core)
 //	memory_mgmt.go     — memory-clear / memory-config
+//	models_cmd.go      — config / show config / install / model-list / remove
+//	budget_cmd.go      — mova budget (estimación local de tokens/costo, ver mova.local/budget)
+//	chat_cmd.go        — mova chat (REPL con modelos locales)
 //	console_*.go       — helpers de terminal específicos por SO
 package main

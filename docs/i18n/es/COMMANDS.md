@@ -1,27 +1,42 @@
 # COMMANDS — guía de comandos
 
-> Docs: [Español](COMMANDS.md) · [English](../en/COMMANDS.md)
+> Docs: [Español](COMMANDS.md) · [English](COMMANDS.en.md)
 
-El CLI (`mova`) es un complemento — todo lo que hace también se puede hacer pidiéndole a un modelo que lea `workflow.md` directamente. Ver [README.md](README.md#lo-esencial-antes-que-nada).
+El CLI (`mova`) es un complemento — todo lo que hace también podés pedírselo a un modelo leyendo `workflow.md` directamente. Ver [README.md](README.md#1-la-convención).
 
 `mova` sube directorios automáticamente hasta encontrar `workflow.md`, así que funciona desde cualquier subcarpeta del repo. Si hay un único proyecto en `projects/`, `[project]` es opcional — se detecta solo.
 
-## Todos los comandos
+## Índice
+
+1. [Referencia rápida](#1-referencia-rápida) — todos los comandos en una tabla
+2. [Ensamblar el contexto — `mova run`](#2-ensamblar-el-contexto--mova-run)
+3. [Focus — trabajar sobre una parte del proyecto](#3-focus--trabajar-sobre-una-parte-del-proyecto)
+4. [Memoria](#4-memoria)
+5. [Proyectos — list, init, search](#5-proyectos--list-init-search)
+6. [Modelos y proveedores](#6-modelos-y-proveedores)
+7. [Chat con un modelo local o Cloud](#7-chat-con-un-modelo-local-o-cloud)
+8. [Crear archivos hablando: lenguaje natural en el chat](#8-crear-archivos-hablando-lenguaje-natural-en-el-chat)
+9. [`save` — crear o editar cualquier archivo o directorio](#9-save--crear-o-editar-cualquier-archivo-o-directorio)
+10. [Tool-calling autónomo desde el chat](#10-tool-calling-autónomo-desde-el-chat)
+11. [Documentos de oficina y medios (PDF, Word, Excel, SVG, imágenes)](#11-documentos-de-oficina-y-medios-pdf-word-excel-svg-imágenes)
+12. [Archivos de texto y código](#12-archivos-de-texto-y-código)
+13. [Servidor MCP — `mova mcp start`](#13-servidor-mcp--mova-mcp-start)
+14. [Variables de entorno](#14-variables-de-entorno)
+15. [Tokenomics — `mova budget`](#15-tokenomics--mova-budget)
+16. [Instalación global del CLI](#16-instalación-global-del-cli)
+
+---
+
+## 1. Referencia rápida
 
 ```text
-mova run           [project] [task]        genera el contexto para el LLM
+mova run           [project] [task]         genera el contexto para el LLM
 mova memory        [project] "respuesta"    guarda la sesión en memory.md
 mova memory-read   [project]                imprime la memoria activa
   --all                                     incluye archivos históricos
   --month 2024-01                           un mes archivado específico
 mova memory-archive [project]               archiva entradas antiguas
   --days N                                  días a mantener activos (default 30)
-mova list                                   lista todos los proyectos
-mova init          [name]                   crea un proyecto
-mova search        "consulta" [dominio]     busca en el conocimiento
-mova mcp start                              inicia el servidor MCP
-  --port 3000                               como servidor HTTP (default)
-  --stdio                                   como servidor Stdio (para Claude/Cursor)
 mova memory-clear  [project]                borra TODA la memoria
   --archived                                borra solo los meses archivados
   --keep-active                             borra archivos, conserva memory.md
@@ -32,115 +47,82 @@ mova memory-config [project] [action] [value]
   enable | disable                          activa/desactiva el archivado automático
   days N                                    días de retención (1, 10, 30, 90...)
   confirm true|false                        activa/desactiva confirmación al borrar
+
+mova list                                   lista todos los proyectos
+mova init          [name]                   crea un proyecto
+mova search        "consulta" [dominio]     busca en el conocimiento, sin usar un modelo
+
+mova config        <provider>               fija el proveedor activo (ollama, lmstudio...)
+mova show          config [modelo]          muestra el proveedor activo, o la config de un modelo
+mova install       llama3.1,mistral         instala modelos (con barra de progreso)
+mova model-list                             lista los modelos instalados
+mova remove        llama3.1,mistral         elimina modelos instalados
+
+mova chat          [project] [task]         chat interactivo con un modelo local o Cloud
+  set -model <nombre>                       cambia de modelo sin perder el historial
+  /memory                                   guarda el último intercambio en memory.md
+  /budget                                   genera mova-budget-report.md del proyecto activo
+  /save "ruta/archivo.ext"                  guarda la última respuesta ahí (formato por extensión)
+  /save -d "ruta/carpeta"                   crea solo un directorio
+  /save -c "src/index.js"                   guarda ÚNICAMENTE los bloques de código de la última respuesta
+  /tools                                    lista comandos y tools disponibles
+  exit | quit | salir                       termina la sesión
+
+mova budget        [project] [task]         estima tokens y costo, 100% local
+  --focus                                   compara repo completo vs. solo lo que focus selecciona
+
+mova mcp start                              inicia el servidor MCP
+  --port 3000                               como servidor HTTP (default)
+  --stdio                                   como servidor Stdio (para Claude/Cursor)
 ```
 
-## `mova run [project] [task]`
+---
 
-Ensambla agents + skills + prompt + memoria + focus, y lo imprime por stdout — listo para pegar en un chat o enviar a una API.
+## 2. Ensamblar el contexto — `mova run`
+
+Junta agents + skills + prompt + memoria + focus y lo imprime por stdout — listo para pegar en un chat o mandar a una API.
 
 ```bash
 mova run mi-proyecto revisar-auth
 ```
 
-Si la task tiene `focus` (en `project.json` o global), esa sección se agrega automáticamente al final del contexto — ver más abajo.
+Si la task tiene `focus` (en `project.json` o global), esa sección se agrega automáticamente al final — ver la sección siguiente.
 
-## `mova memory [project] "respuesta del LLM"`
+---
 
-Extrae el bloque ` ```memory ` de la respuesta de un modelo y lo agrega a `memory.md`.
+## 3. Focus — trabajar sobre una parte del proyecto
 
-```bash
-mova memory mi-proyecto "$(cat respuesta.txt)"
-```
+`focus` (en `project.json`, global o por task) le dice al motor que trabaje solo sobre ciertos archivos, carpetas o símbolos, en vez de todo el repo. Funciona igual con o sin CLI: si un modelo lee `workflow.md` directo, la sección `## FOCUS` de la especificación explica cómo resolverlo.
 
-La próxima vez que ejecutes `mova run mi-proyecto`, esa memoria aparece en el contexto automáticamente.
+**Importante:** `focus` es relativo al campo `"repo"` de `project.json`, nunca a la raíz de `mova-context`. Si `task.focus` está definido, **reemplaza por completo** el `focus` global (no se suman ambas listas).
 
-## `mova memory-read [project] [--all] [--month YYYY-MM]`
-
-```bash
-mova memory-read mi-proyecto --all
-mova memory-read mi-proyecto --month 2024-01
-```
-
-## `mova memory-archive [project] [--days N]`
-
-Mueve entradas más antiguas que `N` días (default 30) fuera de `memory.md`, agrupadas por mes.
-
-```bash
-mova memory-archive mi-proyecto --days 15
-```
-
-## `mova memory-clear [project] [flags]`
-
-Pide confirmación salvo que uses `--yes`.
-
-```bash
-mova memory-clear mi-proyecto --archived --yes
-```
-
-## `mova memory-config [project] [action] [value]`
-
-```bash
-mova memory-config mi-proyecto days 45
-```
-
-## `mova list` / `mova init [name]`
-
-```bash
-mova list
-mova init mi-proyecto
-```
-
-`init` crea `projects/mi-proyecto/project.json` (plantilla mínima) y un `memory.md` vacío.
-
-## `mova search "consulta" [dominio]`
-
-Busca en agents, skills y prompts — por palabra clave, sin necesidad de un modelo.
-
-```bash
-mova search "autenticación" software
-```
-
-## FOCUS — trabajar sobre una parte específica del proyecto
-
-`focus` (definido en `project.json`, global o por task) le dice al motor que trabaje solo sobre ciertos archivos, carpetas o símbolos — en vez de todo el repo. Funciona igual con o sin CLI: si un modelo lee `workflow.md` directamente, la sección `## FOCUS` de la especificación explica exactamente cómo resolverlo.
-
-**Importante:** `focus` es relativo al campo `"repo"` de `project.json`, no a la raíz de `mova-context`. Si `"repo": "examples/mi-repo"`, un item `"manual.md"` busca dentro de `examples/mi-repo/`, no en la raíz del proyecto Mova Context.
-
-Si `task.focus` está definido, **reemplaza** por completo el `focus` global del proyecto (no se suman ambas listas).
-
-### Cómo matchea cada item — igual que SQL LIKE
-
-Cada item de `focus` se resuelve con una cascada de resolvers (archivo → símbolo de código → sección Markdown → artículo legal → memoria → fallback). Todos usan el mismo criterio de dos pasadas, equivalente a `LIKE` de SQL:
+### Cómo matchea cada item — igual que SQL `LIKE`
 
 | Pasada | Equivalente SQL | Cuándo se usa |
 |---|---|---|
-| 1 — Exacta | `WHERE nombre = 'CreateOrder'` (por límite de palabra) | Siempre se intenta primero — prioridad más alta |
-| 2 — LIKE / contiene | `WHERE nombre ILIKE '%CreateOrder%'` | Solo si la pasada 1 no encontró nada — tolerante a mayúsculas y acentos |
+| 1 — Exacta | `WHERE nombre = 'CreateOrder'` (por límite de palabra) | Siempre se intenta primero |
+| 2 — Contiene | `WHERE nombre ILIKE '%CreateOrder%'` | Solo si la pasada 1 no encontró nada |
 
-No hace falta declarar cuál pasada usar — el motor prueba la 1 y, si no hay resultado, cae automáticamente a la 2. Insensible a mayúsculas/acentos en ambas pasadas (`articulo 6` encuentra `Artículo 6`). Nunca usa un LLM ni heurísticas de significado — es búsqueda de texto, determinista: mismo input, mismo resultado siempre.
+Insensible a mayúsculas/acentos en ambas pasadas (`articulo 6` encuentra `Artículo 6`). Nunca usa un LLM — es búsqueda de texto determinista: mismo input, mismo resultado, siempre.
 
 ### Tipos de item soportados
 
 | Item en `focus` | Qué resuelve |
 |---|---|
-| `"manual.md"` | el archivo completo, buscado por nombre en todo el repo |
-| `"src/auth"` | índice del directorio (no el contenido de cada archivo) |
-| `"CreateOrder()"` | la función/método/clase — la sintaxis `()` le indica al motor que es un símbolo de código, no un archivo |
-| `"Artículo 6"` | la sección de un documento legal/estructurado (Título, Capítulo, Sección, Artículo, Inciso) |
-| `"## Alguna sección"` o `"Alguna sección"` | un heading de Markdown |
+| `"manual.md"` | el archivo completo, por nombre en todo el repo |
+| `"src/auth"` | índice del directorio |
+| `"CreateOrder()"` | la función/método/clase (`()` le dice al motor que es código, no un archivo) |
+| `"Artículo 6"` | la sección de un documento legal (Título, Capítulo, Sección, Artículo, Inciso) |
+| `"## Alguna sección"` | un heading de Markdown |
 | `"nombre_tabla"` | la definición `CREATE TABLE ...;` en un `.sql` |
 
-### Ejemplo real
+### Ejemplo
 
 ```json
 "tasks": {
   "revisar-orden": {
     "prompt": "review-project",
-    "focus": [
-      "CreateOrder()",
-      "manual.md",
-      "Artículo 6"
-    ]
+    "focus": ["CreateOrder()", "manual.md", "Artículo 6"]
   }
 }
 ```
@@ -149,38 +131,493 @@ No hace falta declarar cuál pasada usar — el motor prueba la 1 y, si no hay r
 mova run mi-proyecto revisar-orden
 ```
 
-Contexto resultante (fragmento):
+Si un item no se encuentra en ninguna pasada, aparece como `not found: [item]` — nunca se omite en silencio.
 
-```text
+### Checklist si `focus` sale vacío
+
+1. ¿`"repo"` apunta a una carpeta que existe y contiene lo que buscás? (`focus` nunca busca fuera de `repo`)
+2. ¿El símbolo de código lleva `()` al final?
+3. ¿La `task` tiene su propio `focus`? Si sí, reemplaza al global.
+4. ¿Tu binario es anterior a este fix? Recompilá: `go build -o mova ./src/cli`.
+
 ---
-## FOCUS
-FOCUS:CreateOrder()
-  (src/orders.go)
-func CreateOrder(clientID string, amount float64) (string, error) {
-    ...
-}
 
-FOCUS:manual.md
-  (manual.md)
-# Manual de Operaciones
-...
+## 4. Memoria
 
-FOCUS:Artículo 6
-  (manual.md)
-### Artículo 6 — Cancelación de órdenes
-Una orden puede cancelarse solo si no ha sido despachada.
+```bash
+mova memory mi-proyecto "$(cat respuesta.txt)"
 ```
 
-Si un item no se encuentra en ninguna pasada, aparece como `not found: [item]` en vez de omitirse en silencio — para que sepas de inmediato si un nombre está mal escrito o el archivo no existe en el `repo` configurado.
+Extrae el bloque ` ```memory ` de la respuesta de un modelo y lo agrega a `memory.md`. La próxima vez que corras `mova run mi-proyecto`, esa memoria aparece sola en el contexto.
 
-### Si tu `focus.txt` sale vacío — checklist
+```bash
+mova memory-read mi-proyecto --all
+mova memory-read mi-proyecto --month 2024-01
 
-1. ¿`"repo"` en `project.json` apunta a una carpeta que **existe** y contiene los archivos que buscas? (`focus` nunca busca fuera de `repo`)
-2. ¿El símbolo de código lleva `()` al final (`"CreateOrder()"`) para que el motor sepa que es una función y no un archivo?
-3. ¿El `task` que ejecutaste tiene su propio `focus`? Si sí, ese reemplaza al global — revisa cuál se está usando realmente.
-4. ¿Estás usando un binario `mova` compilado **antes** de este fix? Si el contexto no muestra ninguna sección `## FOCUS` (ni siquiera un `not found:`), recompílalo: `go build -o mova ./src/cli`.
+mova memory-archive mi-proyecto --days 15     # mueve entradas viejas fuera de memory.md, por mes
 
-## `mova mcp start` — exponer Mova Context como servidor
+mova memory-clear mi-proyecto --archived --yes   # pide confirmación salvo --yes
+
+mova memory-config mi-proyecto days 45
+```
+
+---
+
+## 5. Proyectos — list, init, search
+
+```bash
+mova list                       # lista todos los proyectos
+mova init mi-proyecto           # crea project.json (plantilla mínima) + memory.md vacío
+mova search "autenticación" software   # busca en agents/skills/prompts por palabra clave
+```
+
+`search` no usa ningún modelo — es búsqueda por palabra clave sobre el conocimiento del repositorio.
+
+---
+
+## 6. Modelos y proveedores
+
+`llm_profile` (en `project.json`) es lo único que cambia cuando pasás de un modelo/proveedor a otro. Agents, skills, prompts, memoria y focus **nunca** cambian — el mismo `mova run` genera el mismo contexto sin importar qué modelo lo va a leer.
+
+```json
+"llm_profile": { "type": "local", "provider": "ollama", "config": "llama3.2.3b" }
+```
+
+| Campo | Valores | Para qué sirve |
+|---|---|---|
+| `type` | `"powerful"` (default) \| `"local"` | Con `"local"` el motor adapta el formato (listas numeradas, `INSTRUCTIONS:`) para que modelos chicos sigan mejor instrucciones secuenciales. Con `"powerful"` el contenido se entrega sin tocar. |
+| `provider` | `"ollama"` \| `"google"` \| `"anthropic"` \| `"openai"` \| `"lmstudio"` \| lo que quieras | Un subdirectorio de `config/models/` — de ahí sale toda la configuración de este modelo. |
+| `config` | nombre de archivo, sin `.json` | Apunta a `config/models/<provider>/<config>.json` — el ÚNICO archivo con conexión (`base_url`, `api_key`, `timeout_seconds`) **y** parámetros de inferencia (`temperature`, `num_predict`, el tag real del modelo) juntos. |
+
+**Una sola fuente de verdad.** `llm_profile.config` y el nombre del archivo son el mismo string, por construcción — no hay dos identificadores que puedan desincronizarse (el bug clásico era nombrar el archivo distinto al tag real de Ollama, por ejemplo por la restricción de `:` en nombres de archivo de Windows).
+
+```json
+// config/models/ollama/llama3.2.3b.json — TODO en un solo archivo
+{
+  "provider": "ollama", "type": "ollama",
+  "base_url": "http://localhost:11434", "timeout_seconds": 300,
+  "model": "llama3.2:3b",
+  "top_k": 40, "top_p": 0.9, "num_ctx": 4096,
+  "temperature": 0, "num_predict": 512,
+  "context_window": 131072, "repeat_penalty": 1.1
+}
+```
+
+### Cambiar de proveedor sin tocar nada más
+
+```json
+// Claude — Cloud, vía API
+"llm_profile": { "type": "powerful", "provider": "anthropic", "config": "claude-sonnet-4-6" }
+
+// Gemini Flash — Cloud, vía API
+"llm_profile": { "type": "powerful", "provider": "google", "config": "gemini-2.5-flash" }
+
+// Ollama local
+"llm_profile": { "type": "local", "provider": "ollama", "config": "llama3.2.3b" }
+```
+
+```bash
+mova run mi-proyecto mi-task > contexto.txt
+ollama run llama3.2:3b < contexto.txt
+```
+
+### Estructura de `config/models/`
+
+```text
+config/models/
+├── active.json              ← puntero: {"provider", "config"} elegidos ahora (nunca copia datos)
+├── ollama/
+│   ├── llama3.2.3b.json     ← conexión + parámetros de ESTE modelo, todo junto
+│   └── mistral.json
+├── google/gemini-2.5-flash.json
+├── anthropic/claude-sonnet-4-6.json
+└── lmstudio/                ← proveedor elegido, todavía sin modelo
+```
+
+Editar cualquier `<modelo>.json` a mano se recarga **en caliente**: el próximo mensaje de chat (o la próxima llamada MCP/HTTP) ya usa los valores nuevos, sin reiniciar nada.
+
+```bash
+mova config ollama                    # elige el proveedor activo
+mova show config                      # ¿qué proveedor/modelo estoy usando?
+mova show config llama3.1             # config completa de un modelo puntual
+mova install llama3.1,mistral,phi3    # descarga modelos de Ollama (con progreso)
+mova model-list                       # modelos instalados en el proveedor activo
+mova remove mistral                   # elimina un modelo instalado
+```
+
+`install`/`model-list`/`remove` usan la API nativa de Ollama. Con LM Studio/vLLM/Cloud, instalás o contratás el modelo desde su propia herramienta y solo creás su `.json`. `mova install` de un modelo nuevo copia la conexión de cualquier modelo hermano existente para ese proveedor.
+
+### Proveedores Cloud reales (OpenAI, Anthropic, Google)
+
+`config/models/<provider>/<config>.json` es el único lugar que hay que tocar. **OpenAI y Google Gemini** exponen un endpoint compatible con `"openai-compatible"` (el mismo formato que ya usaba Mova para LM Studio/vLLM):
+
+```json
+// config/models/openai/gpt-5.json
+{
+  "provider": "openai", "type": "openai-compatible",
+  "base_url": "https://api.openai.com", "api_key": "sk-...",
+  "model": "gpt-5", "temperature": 0.2, "num_predict": 1024
+}
+```
+
+```json
+// config/models/google/gemini-2.5-flash.json
+{
+  "provider": "google", "type": "openai-compatible",
+  "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+  "api_key": "AIza...", "model": "gemini-2.5-flash",
+  "temperature": 0.2, "num_predict": 1024
+}
+```
+
+**Anthropic (Claude)** tiene headers y forma de respuesta distintos, así que usa su propio tipo nativo:
+
+```json
+// config/models/anthropic/claude-sonnet-4-6.json
+{
+  "provider": "anthropic", "type": "anthropic",
+  "base_url": "https://api.anthropic.com", "api_key": "sk-ant-...",
+  "model": "claude-sonnet-4-6", "temperature": 0.2, "num_predict": 1024
+}
+```
+
+Agregar un proveedor Cloud nuevo en el futuro es exactamente esto: un `.json` nuevo, y si su API no es compatible con el formato OpenAI, una implementación nueva de la interfaz `Provider` (`models/provider.go`) — nunca tocar `core`, `budget`, `cli` ni `mcp`. Mova llama a estos proveedores directo por HTTP, sin depender de Claude Desktop, Claude Console, Codex ni Gemini CLI.
+
+---
+
+## 7. Chat con un modelo local o Cloud
+
+```bash
+mova chat
+> set -model llama3.1
+✓ modelo cambiado a: llama3.1 (proveedor: ollama)
+> hola, revisá el módulo de auth
+[llama3.1] ...
+> set -model mistral
+✓ modelo cambiado a: mistral (proveedor: ollama)
+> sigue con lo mismo
+[mistral] ...          # el historial se conserva al cambiar de modelo
+> exit
+```
+
+Si pasás `[project]` (y opcionalmente `[task]`), el chat carga el **mismo contexto completo** que arma `mova run` (agents+skills+prompt+memoria+focus) como mensaje de sistema. Comandos disponibles dentro del chat, siempre:
+
+| Comando | Qué hace |
+|---|---|
+| `/memory` | guarda el último intercambio en `memory.md` |
+| `/budget` | genera `mova-budget-report.md` para el proyecto activo |
+| `/save "ruta/archivo.ext"` | guarda la última respuesta ahí — formato por extensión (ver [§9](#9-save--crear-o-editar-cualquier-archivo-o-directorio)) |
+| `/save -d "ruta/carpeta"` | crea solo un directorio |
+| `/tools` | lista comandos + las tools que el modelo puede invocar (si el proyecto las habilitó) |
+
+### Vía MCP / HTTP — tool `chat_completion`
+
+La misma sesión de chat es una tool MCP, y por lo tanto también HTTP:
+
+```bash
+mova mcp start --port 3000
+```
+
+```bash
+curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
+  "jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"chat_completion","arguments":{
+    "model":"llama3.1","project":"mi-proyecto","task":"revisar-auth",
+    "message":"¿qué revisarías primero?"
+  }}
+}'
+```
+
+`model`, `project` y `task` son opcionales — sin `project` es un chat "vacío" con ese modelo; sin `model` usa el activo en `active.json`.
+
+### Cómo encaja todo
+
+```text
+config/models/<provider>/<config>.json ──► ConfigCache (recarga en caliente)
+      (conexión + parámetros, un solo archivo)
+        ┌───────────────────────────────────┬───────────────────────────────┐
+        ▼                                   ▼                               ▼
+   mova chat (REPL)               tool MCP chat_completion            (mismo tool)
+        │                                   │                          vía HTTP /mcp
+        └──────────────────────► models.Session.Send() ◄────────────────────┘
+                                            │
+                                  models.Provider (interfaz)
+                                    ├─ ollamaProvider   → POST /api/chat
+                                    ├─ openAIProvider   → POST /v1/chat/completions (LM Studio, vLLM, OpenAI, Gemini)
+                                    └─ anthropicProvider → POST /v1/messages (Claude)
+```
+
+Un único cliente HTTP compartido (keep-alive + pool de conexiones) atiende todas las llamadas, pensado para alto volumen.
+
+---
+
+## 8. Crear archivos hablando: lenguaje natural en el chat
+
+Además de `/save`, podés simplemente **pedirlo con tus palabras**, en el mismo mensaje del chat — sin memorizar ningún comando.
+
+```text
+> Genera el informe de auditoría en docs/auditoria.pdf
+[el modelo escribe el informe, y la respuesta se guarda sola en docs/auditoria.pdf]
+
+> Crea el directorio informes/2026 y genera el resumen en informes/2026/resumen.docx
+[se crea la carpeta, y después se guarda el .docx con la respuesta]
+
+> Guarda el análisis en salida/analisis.txt
+[se guarda tal cual, sin pasar por el modelo si ya tenés el texto — ver detalle abajo]
+```
+
+### Cómo funciona por dentro
+
+Es un detector **heurístico por regex**, no un modelo de lenguaje ni una IA aparte — vive en `documents/nl_intent.go` y lo comparten `mova chat` y `chat_completion` (MCP/HTTP). No hay nada misterioso: el mensaje se separa en cláusulas por la palabra **y** / **and**, y en cada cláusula se busca un verbo de creación:
+
+| Español | Inglés |
+|---|---|
+| genera, generar, generame/generáme | generate |
+| crea, crear, creame/creáme | create |
+| guarda, guardar | save |
+| — | make |
+
+Podés usarlos tantas veces como quieras en un mensaje, mezclando español e inglés en la misma sesión.
+
+Si encuentra el verbo, busca **o bien** (a) una palabra clave de directorio + una ruta, **o bien** (b) un token con forma de ruta terminado en extensión (`.pdf`, `.md`, `.docx`, etc.):
+
+- **Solo directorio** ("Crea el directorio X") → se crea al instante, sin llamar al modelo.
+- **Solo archivo** ("Genera reporte.pdf") → el mensaje sí va al modelo (necesita generar el contenido), y la respuesta se guarda sola en esa ruta.
+- **Ambos en un mensaje** ("Crea el directorio X y genera Y") → primero el directorio, después el archivo.
+
+### Límites reales (para no esperar más de lo que hay)
+
+- Necesita el verbo **y** (palabra clave de carpeta o una ruta con extensión) en la **misma cláusula** — *"Genera algo interesante sobre X"* no dispara nada, porque no hay ruta ni extensión reconocible.
+- Solo entiende **y**/**and** como conector entre dos pedidos — no maneja construcciones más complejas ("primero... después...", comas, etc.).
+- Es determinístico: mismo texto, mismo resultado, siempre — no interpreta intención más allá del patrón.
+
+`/save` sigue funcionando exactamente igual que siempre, para cuando esta heurística no alcance o quieras control exacto sobre la ruta.
+
+---
+
+## 9. `save` — crear o editar cualquier archivo o directorio
+
+Antes existían tools distintas para cada formato (`generate_word_contract`, `generate_pdf_document`, `generate_excel_report`, `write_file`...), cada una con su propio nombre de argumento para el contenido — fácil de confundir, y causa real de errores como un `.docx` vacío. `save` reemplaza todo eso con un único punto de entrada: das `path` (o `directory`) + `content`, y Mova elige internamente qué generador usar según la extensión.
+
+**Desde el chat:**
+
+```text
+> Auditá el checkout y armá el informe de correcciones
+[llama3.1] (la respuesta con el informe completo)
+
+> /save "informes/checkout-corregido.md"
+[Save] ✓ archivo guardado: examples/ejemplo-ley21719-repo/informes/checkout-corregido.md
+
+> /save -d "informes/2026"
+[Save] ✓ directorio creado: examples/ejemplo-ley21719-repo/informes/2026
+
+> /save "informes/checkout-corregido.docx"
+[Save] ✓ documento Word generado: examples/ejemplo-ley21719-repo/informes/checkout-corregido.docx
+```
+
+`/save` siempre usa la ÚLTIMA respuesta del modelo como contenido — igual que `/memory`. El formato (`.md`, `.txt`, `.docx`, `.pdf`, `.xlsx`, `.svg`, `.py`, `.json`, y ~20 extensiones más — ver [SUPPORTED_FORMATS.md](SUPPORTED_FORMATS.md)) se elige **solo** por la extensión. Si el archivo ya existe, por default se sobreescribe.
+
+**Vía MCP / HTTP** — la misma tool, alcanzable por stdio, HTTP, o `chat_completion`:
+
+```bash
+mova mcp start --port 3000
+```
+
+```bash
+curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
+  "jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"save","arguments":{
+    "project":"mi-proyecto",
+    "path":"informes/checkout-corregido.pdf",
+    "content":"Hallazgo 1: ...\nHallazgo 2: ..."
+  }}
+}'
+```
+
+```json
+{"name":"save","arguments":{"project":"mi-proyecto","directory":"informes/2026"}}
+```
+
+**Vía HTTP directo** — un endpoint `POST /save` dedicado, mismo cuerpo JSON, misma lógica interna sin duplicación:
+
+```bash
+curl -X POST http://localhost:3000/save -H "content-type: application/json" -d '{
+  "path":"informes/checkout-corregido.xlsx",
+  "content":"item,riesgo\nconsentimiento agrupado,alto"
+}'
+```
+
+### Argumentos de `save`
+
+| Argumento | Para qué |
+|---|---|
+| `path` | archivo a crear/editar — su extensión elige el formato. Se resuelve con la misma lógica de siempre: ruta absoluta tal cual, ruta relativa bajo el `repo` del proyecto, o nombre suelto (busca coincidencias, pregunta si hay más de una) |
+| `directory` | en vez de `path` — solo crea la carpeta (y padres faltantes); no interviene ningún Writer |
+| `content` | texto/Markdown/HTML/CSV — el Writer interno decide cómo convertirlo (ver tabla abajo) |
+| `overwrite` | `false` explícito → `save` rechaza el pedido en vez de pisar el archivo. Sin este argumento, sigue sobreescribiendo como siempre |
+| `append` | `true` → suma el contenido al final del archivo existente (formatos de texto) |
+| `project` | resuelve rutas relativas contra el `repo` de ese proyecto |
+
+### Cómo `save` interpreta `content` según la extensión
+
+| Extensión | Qué hace `save` |
+|---|---|
+| `.md`, `.txt`, `.json`, `.yml`/`.yaml`, `.xml`, `.csv`, y ~20 lenguajes de código más | se escribe tal cual |
+| `.docx` | se interpreta como Markdown (`#`/`##`/`###`, **negrita**, párrafos) |
+| `.pdf` | si ya parece HTML se manda tal cual; si es texto plano o Markdown, se envuelve en `<p>` antes de generar el PDF |
+| `.xlsx` | acepta el JSON tipado de `sheets_data`, **o** texto CSV/TSV plano (una hoja "Sheet1", cada celda se tipa sola) |
+| `.svg` | se espera código SVG válido |
+
+
+---
+
+## 10. Tool-calling autónomo desde el chat
+
+Agregá esto a `project.json` para que el propio modelo (Ollama local, Gemini, Claude, GPT — cualquiera) pueda pedirle a Mova que ejecute una acción real durante la conversación, en vez de solo describir en texto lo que haría:
+
+```json
+{ "tools": { "enabled": true } }
+```
+
+Con eso, `mova chat` y `chat_completion` agregan al mensaje de sistema un protocolo simple en texto plano, que funciona igual para cualquier proveedor (no depende de "function calling" nativo, que un modelo chico como `llama3.2:3b` suele manejar mal): el modelo responde con `<<<MOVA_TOOL_CALL>>> {"name":"save", "arguments":{...}} <<<END_MOVA_TOOL_CALL>>>`, Mova lo ejecuta de verdad, y le devuelve el resultado real para que termine su respuesta.
+
+```json
+{ "tools": { "enabled": true, "allow": ["save", "read_file"] } }
+```
+
+`allow` es opcional — restringe a un subconjunto (`save`, `read_file`, `patch_file`, `read_document_layer`); si se omite, las cuatro están habilitadas. Esto es **además** de `/save`: `/save` siempre funciona sin depender de `tools.enabled` ni de que el modelo coopere (es la vía determinística); `tools.enabled` es para cuando querés que el modelo mismo decida cuándo crear o editar algo, de forma autónoma.
+
+---
+
+## 11. Documentos de oficina y medios (PDF, Word, Excel, SVG, imágenes)
+
+Con `save` no hace falta acordarse de qué tool genera qué formato — alcanza con la extensión de `path`. No requieren ningún paquete adicional: `.docx`, `.xlsx` y `.pdf` se escriben a mano con la librería estándar de Go. Solo `trigger_diffusion_image` necesita un servidor de difusión aparte.
+
+### Ejemplos simples, en lenguaje natural
+
+```text
+> Genera un contrato simple de arriendo en salida/contrato.docx
+[Save] ✓ documento Word generado: salida/contrato.docx
+
+> Arma una tabla con los gastos del mes en salida/gastos.xlsx
+[Save] ✓ hoja de cálculo generada: salida/gastos.xlsx
+
+> Escribe un resumen ejecutivo de una página en informes/resumen.pdf
+[Save] ✓ PDF generado: informes/resumen.pdf
+
+> Guarda las notas de la reunión en notas/reunion-23-julio.txt
+[Save] ✓ archivo guardado: notas/reunion-23-julio.txt
+```
+
+### Ejemplos vía MCP/HTTP
+
+Generar un Word con `save` y volver a leerlo:
+
+```bash
+mova mcp start --port 3000
+```
+
+```bash
+curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
+  "jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"save","arguments":{
+    "path":"salida/contrato.docx",
+    "content":"# Contrato\n\nEste es un **párrafo** de prueba."
+  }}
+}'
+```
+
+```bash
+curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
+  "jsonrpc":"2.0","id":2,"method":"tools/call",
+  "params":{"name":"read_document_layer","arguments":{"filename":"salida/contrato.docx"}}
+}'
+```
+
+Una hoja de Excel desde CSV plano (no hace falta JSON tipado si no lo necesitás):
+
+```json
+{"name":"save","arguments":{"path":"salida/reporte.xlsx","content":"Item,Monto\nCafé,4.5\nTe,3.2"}}
+```
+
+O con el `sheets_data` tipado de siempre (evita ambigüedades de tipo):
+
+```json
+{"name":"generate_excel_report","arguments":{
+  "filename":"salida/reporte.xlsx",
+  "sheets_data":{"Gastos":[
+    [{"type":"string","value":"Item"},{"type":"string","value":"Monto"}],
+    [{"type":"string","value":"Café"},{"type":"number","value":4.5}]
+  ]}
+}}
+```
+
+Todas las tools resuelven `path`/`filename` relativo al `repo` del proyecto (si se pasa `project`).
+
+### Instalación de paquetes necesarios
+
+```bash
+# .docx, .xlsx, .pdf y .svg: ninguna dependencia adicional —
+# se generan con la librería estándar de Go.
+go build -o mova ./src/cli
+```
+
+`read_document_layer` sobre `.pdf` es de mejor esfuerzo (extrae texto de streams FlateDecode); PDFs escaneados o con codificaciones exóticas pueden no devolver texto.
+
+### Modelo local para imágenes (`trigger_diffusion_image`)
+
+Esta tool no genera imágenes por sí misma: enruta el prompt a un servidor de difusión local compatible con la API de **AUTOMATIC1111** (`/sdapi/v1/txt2img`), configurado en `config/models/diffusion/config.json` — un archivo aparte porque un servidor de difusión no tiene parámetros de inferencia tipo `temperature`/`num_predict` que fusionar. Necesitás ese servidor corriendo aparte, con un modelo de difusión instalado (Stable Diffusion 1.5, SDXL, vía AUTOMATIC1111 o ComfyUI en modo API). Mova solo hace la llamada HTTP y guarda el PNG resultante.
+
+---
+
+## 12. Archivos de texto y código
+
+Tres tools cubren texto plano, config y código fuente — `.js`, `.ts`, `.py`, `.go`, `.cs`, `.java`, `.php`, `.rb`, `.rs`, `.c`, `.cpp`, `.h`, `.kt`, `.swift`, `.sh`, `.html`, `.css`, `.sql`, `.csv`, `.toml`, `.ini`, `.env`, `.log`, y más (lista completa en [SUPPORTED_FORMATS.md](SUPPORTED_FORMATS.md)):
+
+| Tool | Para qué 
+|---|---|---|
+| `read_file` | leer un archivo 
+| `write_file` | escribir un archivo 
+| `patch_file` | reemplazar una única aparición exacta de `search` por `replace` 
+
+Pedir una extensión no soportada (`.exe`, `.bin`) devuelve:
+
+```
+Unsupported file type: .exe. Supported extensions: .c, .cpp, .cs, .css, .csv, ...
+```
+
+`write_file`/`save` validan `.json`/`.xml` (bien formados), `.go` (sintaxis real vía `go/parser`) y `.csv` (columnas consistentes) antes de escribir. `patch_file` rechaza el cambio si `search` no aparece, o aparece más de una vez — nunca arriesga una edición ambigua.
+
+### Ejemplo — "crea un archivo con tal cosa" desde el chat
+
+Si pedís *"crea un NOTAS.md en mi proyecto con el estado actual"*, el asistente resuelve la ruta contra el `repo` del proyecto y llama a `save` — el archivo aparece en el directorio real, no en un chat efímero:
+
+```bash
+curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
+  "jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"save","arguments":{
+    "project":"mi-proyecto","path":"NOTAS.md",
+    "content":"# Notas del proyecto\n\nEstado: en progreso"
+  }}
+}'
+```
+
+```json
+{"name":"patch_file","arguments":{
+  "project":"mi-proyecto","filename":"NOTAS.md",
+  "search":"Estado: en progreso","replace":"Estado: completado"
+}}
+```
+
+```json
+{"name":"read_file","arguments":{"project":"mi-proyecto","filename":"NOTAS.md"}}
+```
+
+Mismo patrón para `.json`, `.yml`, `.xml`, `.docx`, `.pdf` o `.xlsx` — solo cambia `path`/`filename` y `content`. Si el chat te da una ruta absoluta (ej. `E:/otros-proyectos/README.md`), todas estas tools la usan directo, sin pasar por `repo`.
+
+---
+
+## 13. Servidor MCP — `mova mcp start`
 
 Mismo motor que `mova run`, expuesto por el protocolo MCP (JSON-RPC 2.0) — para que un cliente (Claude Desktop, Cursor) pida el contexto solo, sin que copies y pegues nada.
 
@@ -189,8 +626,6 @@ Mismo motor que `mova run`, expuesto por el protocolo MCP (JSON-RPC 2.0) — par
 ```bash
 mova mcp start --stdio
 ```
-
-Configuración típica del cliente MCP:
 
 ```json
 {
@@ -204,16 +639,17 @@ Configuración típica del cliente MCP:
 }
 ```
 
-**Modo HTTP** (para probar con curl/Postman o integrarlo a tu propio backend):
+**Modo HTTP** (para curl/Postman o tu propio backend):
 
 ```bash
 mova mcp start --port 3000
 ```
 
 ```bash
-curl -X POST http://localhost:3000/rpc \
-  -H "content-type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_full_context","arguments":{"project":"mi-proyecto","task":"revisar-auth"}}}'
+curl -X POST http://localhost:3000/rpc -H "content-type: application/json" -d '{
+  "jsonrpc":"2.0","id":1,"method":"tools/call",
+  "params":{"name":"get_full_context","arguments":{"project":"mi-proyecto","task":"revisar-auth"}}
+}'
 ```
 
 ### Tools disponibles vía MCP
@@ -226,8 +662,17 @@ curl -X POST http://localhost:3000/rpc \
 | `get_memory_all` | `mova memory-read [project] --all` |
 | `get_workflow` | leer `workflow.md` |
 | `search_context` | `mova search "consulta" [dominio]` |
+| `chat_completion` | `mova chat [project] [task]` |
+| `save` | crear/editar cualquier archivo o directorio (ver [§9](#9-save--crear-o-editar-cualquier-archivo-o-directorio)) |
+| `estimate_budget` | `mova budget [project] [task]` |
 
-## Variables de entorno
+### Resolución de raíz para clientes MCP
+
+Los clientes MCP (Claude Desktop, Cursor) lanzan `mova` desde un directorio que normalmente no es tu proyecto — por eso el ejemplo de arriba fija `MOVA_PROJECT_ROOT`. Orden: `MOVA_PROJECT_PATH` (directo) → `MOVA_PROJECT_ROOT` (búsqueda hacia arriba desde ahí) → directorio de trabajo actual → directorio del binario.
+
+---
+
+## 14. Variables de entorno
 
 ```bash
 MOVA_ADAPTER=db MOVA_DSN=postgres://user:pass@host/db mova run mi-proyecto
@@ -240,65 +685,166 @@ MOVA_ADAPTER=db MOVA_DSN=postgres://user:pass@host/db mova run mi-proyecto
 | `MOVA_PROJECT_ROOT` | Punto de partida extra para la búsqueda de `workflow.md` hacia arriba |
 | `MOVA_PROJECT_PATH` | Usa esta ruta como raíz directamente, sin búsqueda |
 
-### Resolución de raíz y clientes MCP
+---
 
-Los clientes MCP (Claude Desktop, Cursor) lanzan `mova` desde un directorio que normalmente no es tu proyecto — por eso el ejemplo de configuración de arriba fija `MOVA_PROJECT_ROOT`. Orden de resolución: `MOVA_PROJECT_PATH` (directo) → `MOVA_PROJECT_ROOT` (búsqueda hacia arriba desde ahí) → directorio de trabajo actual → directorio del binario.
+## 15. Tokenomics — `mova budget`
 
-## `llm_profile` — a qué modelo se le entrega el contexto
+Estima cuántos tokens usaría el contexto real de un proyecto (agents + skills + prompt + focus + memory — lo mismo que arma `mova run`) y cuánto costaría en cada proveedor de `config/prices.json`. **Todo el cálculo es local**: no llama a ningún LLM ni API externa, no manda una sola línea del proyecto fuera de tu máquina, no usa base de datos, y no guarda prompts ni contenido en ningún lado.
 
-`llm_profile` (en `project.json`) es lo único que cambia cuando pasas de un modelo/proveedor a otro. Agents, skills, prompts, memoria y `focus` nunca cambian — el mismo `mova run` genera el mismo contexto sin importar qué modelo lo va a leer.
+```bash
+mova budget mi-proyecto
+mova budget mi-proyecto mi-task --focus
+```
+
+Genera `mova-budget-report.md` (ruta configurable vía `report_path` en `config/prices.json`) — siempre en inglés simple, para que quien paga la factura lo entienda sin depender del idioma del resto de Mova Context. Alcanzable idéntico desde CLI, MCP (`estimate_budget`) y el chat REPL (`/budget`):
 
 ```json
-"llm_profile": {
-  "type": "local",
-  "provider": "ollama",
-  "model": "llama3.2:3b",
-  "base_url": "http://localhost:11434"
+{"name":"estimate_budget","arguments":{"project":"mi-proyecto","task":"mi-task","focus":"true"}}
+```
+
+El reporte incluye, en este orden:
+
+- **Tokenization** — qué encoding de tiktoken-go se usó.
+- **Deduplication** — cuántos párrafos idénticos se quitaron y cuántos tokens ahorraron.
+- **Token & Cost Breakdown** — una fila por Agents/Skills/Prompt/Focus/Memory/Overhead, en tokens y USD por proveedor, más el total.
+- **Context Optimization** — solo con `--focus`: repo completo sin filtrar vs. solo lo que `focus` selecciona.
+- **Budget Limit** — solo si `project.json` define `"budget"`.
+- **Historical Token Accuracy** — el feedback loop (ver abajo).
+- **Important** — el recordatorio de que esto es una estimación, no una factura.
+
+### Deduplicación automática
+
+Mova deduplica párrafos idénticos en **todo** el contexto ensamblado — no solo dentro de `focus`, sino cruzando Agents+Skills+Prompt+Focus+Memory entre sí. Nunca es una reformulación ni un resumen — solo texto idéntico (normalizado por espacios), nunca código/SQL/JSON:
+
+```text
+[Dedup] Removed 3 duplicated paragraphs (~450 tokens saved).
+```
+
+Aparece igual en `mova chat`, en `chat_completion`, y en la sección "Deduplication" del reporte — corre en cada ensamblado, sin configurar nada.
+
+### Dos límites que suenan parecido pero no son lo mismo
+
+| | `budget.max_tokens` (`project.json`) | `num_predict` (`config/models/<provider>/<config>.json`) |
+|---|---|---|
+| Limita | el **contexto ensamblado** — lo que se manda AL modelo | la **respuesta** del modelo — lo que genera de vuelta |
+| Quién lo aplica | Mova, ANTES de mandar nada | el proveedor mismo, como parámetro de la request |
+| Si se pasa | Mova corta la ejecución con un error, cero tokens gastados | el proveedor simplemente corta la respuesta ahí |
+
+```json
+// project.json
+{ "budget": { "max_tokens": 6000 } }
+```
+
+```json
+// config/models/google/gemini-2.5-flash.json
+{ "num_predict": 1024 }
+```
+
+### Presupuesto como regla, no como sugerencia
+
+Un límite en `project.json` (o por task, que sobreescribe al del proyecto) se valida **antes de enviar cualquier contexto** a un modelo — desde `mova chat`, `chat_completion`, y por lo tanto HTTP, siempre igual:
+
+```json
+{ "budget": { "max_tokens": 8000 } }
+```
+
+```text
+ERROR
+Current context (14,250 tokens) exceeds the configured limit (8,000).
+Suggestion: Use --focus to reduce the included files.
+```
+
+`mova budget` (el reporte, que nunca envía nada a ningún modelo) solo lo muestra como informativo en "Budget Limit" — la ejecución real se corta en `mova chat`/`chat_completion`, antes de gastar un solo token de verdad.
+
+### Feedback loop — cerrar el ciclo con la realidad
+
+Cada vez que `mova chat` o `chat_completion` mandan el contexto a un proveedor **Cloud real** (OpenAI, Anthropic, Google) y ese proveedor devuelve cuántos tokens contó, Mova acumula esa diferencia en `mova-token-history.json` (junto al `project.json`, o en la ruta de `"token_history_path"`). El archivo **solo** guarda dos números por proveedor — nunca prompts, respuestas ni contenido:
+
+```json
+{
+  "anthropic": { "total_local_tokens": 120000, "total_api_tokens": 122760 },
+  "google": { "total_local_tokens": 85000, "total_api_tokens": 85150 }
 }
 ```
 
-| Campo | Valores | Para qué sirve |
-|---|---|---|
-| `type` | `"powerful"` (default) \| `"local"` | Con `"local"` el motor adapta el formato: listas con guión pasan a numeradas, se antepone `INSTRUCTIONS:` — modelos locales pequeños siguen mejor instrucciones secuenciales explícitas. Con `"powerful"` el contenido se entrega sin tocar. |
-| `provider` | `"claude"` \| `"gpt"` \| `"gemini"` \| `"ollama"` \| cualquier string | Informativo — aparece en el encabezado del contexto (`Profile: local/ollama:llama3.2:3b`). No cambia qué se genera, salvo a través de `type`. |
-| `model` | nombre exacto del modelo | Igual que `provider`: informativo, útil para saber con qué modelo se generó un `contexto.txt` dado. |
-| `base_url` | URL del servidor | Necesario para `ollama` u otro servidor compatible con OpenAI corriendo localmente — no lo usa el motor de ensamblado, es para que tu propio script sepa dónde mandar el contexto. |
+`mova budget` lee este archivo y calcula `(API - Local) / Local * 100` por proveedor, mostrando la desviación promedio en "Historical Token Accuracy" — un proveedor sin datos muestra `No historical data`, nunca un error. Cuantas más llamadas reales, más preciso el número para **ese proyecto específico** — una calibración propia, no un benchmark genérico.
 
-### Forma simple (legacy)
+### Herramienta de conteo
 
-Si no necesitas `base_url` ni ser explícito con `model`, el campo `llm` (string) sigue funcionando y se traduce automáticamente a un `llm_profile`:
+Todo el conteo se hace con **[tiktoken-go](https://github.com/tiktoken-go/tokenizer)**, embebida (sin llamadas de red), el mismo tokenizador que OpenAI publica y usa en su API. Para modelos OpenAI el conteo suele ser exacto. Para Claude y Gemini no existe un tokenizador local oficial público, así que se reutiliza el mismo encoding como aproximación — la diferencia real suele ser chica, y el feedback loop la va acotando con el tiempo por proyecto.
+
+### Configurar precios (`config/prices.json`)
 
 ```json
-"llm": "ollama"
+{
+  "report_path": "./mova-budget-report.md",
+  "currency": "USD",
+  "exchange_rate_clp": 950,
+  "unit": "per_1k_tokens",
+  "providers": {
+    "google": { "models": { "gemini-2.5-flash": { "input": 0.0003, "output": 0.0025 } } }
+  }
+}
 ```
 
-equivale a:
+Se recarga en caliente (mismo mecanismo que `config/models/`). Agregar un proveedor o modelo nuevo es solo JSON, nunca código. Los valores de ejemplo hay que actualizarlos con los precios reales y vigentes de cada proveedor.
+
+### Ejemplo completo — Gemini Flash + budget + tools + archivos reales
+
+`projects/ejemplo-gemini-flash/` junta todo esto en un único `project.json`:
 
 ```json
-"llm_profile": { "type": "local", "provider": "ollama" }
-```
-
-Reconocidos como locales automáticamente: `ollama`, `llama`, `mistral`, `deepseek`, `qwen`, `gemma`, `phi`. Cualquier otro valor (`claude`, `gpt`, `gemini`, o algo custom) se trata como `"powerful"`.
-
-### Cambiar de proveedor sin tocar nada más
-
-```json
-// Claude / GPT / Gemini — vía API o pegado en un chat web
-"llm_profile": { "type": "powerful", "provider": "claude", "model": "claude-sonnet-4-6" }
-
-// Ollama local
-"llm_profile": { "type": "local", "provider": "ollama", "model": "llama3.2:3b", "base_url": "http://localhost:11434" }
+{
+  "project": "ejemplo-gemini-flash",
+  "repo": "examples/ejemplo-gemini-flash-repo",
+  "default_task": "revisar-backend",
+  "agents": { "domain": "base", "use": ["backend-dev", "security-architect"] },
+  "skills": { "domain": "base", "use": ["api-security"] },
+  "tasks": {
+    "revisar-backend": {
+      "prompt": "review-project",
+      "variables": { "PROJECT": "backend-api", "REVIEW_TYPE": "completa" },
+      "focus": ["server.js"]
+    }
+  },
+  "llm_profile": { "type": "powerful", "provider": "google", "config": "gemini-2.5-flash" },
+  "budget": { "max_tokens": 6000 },
+  "tools": { "enabled": true }
+}
 ```
 
 ```bash
-mova run mi-proyecto mi-task > contexto.txt
-ollama run llama3.2:3b < contexto.txt
+mova config google
+mova chat ejemplo-gemini-flash revisar-backend
+> Auditá server.js y priorizá los hallazgos
+[gemini-2.5-flash] (encuentra el secreto hardcodeado, la falta de validación, el endpoint sin auth...)
+> /save -d "informes"
+[Save] ✓ directorio creado: examples/ejemplo-gemini-flash-repo/informes
+> /save "informes/auditoria-backend.md"
+[Save] ✓ archivo guardado: examples/ejemplo-gemini-flash-repo/informes/auditoria-backend.md
+> exit
 ```
 
-## Compilar el CLI
+Antes de mandar nada a Gemini, `budget.max_tokens: 6000` ya se validó contra el contexto real (`mova budget ejemplo-gemini-flash revisar-backend` lo muestra sin gastar un token: en este ejemplo da ~1.600, bien debajo del techo). Después de la primera llamada real, `mova-token-history.json` empieza a acumular la desviación de Gemini contra la estimación local, visible en la próxima corrida de `mova budget`.
+
+---
+
+## 16. Instalación global del CLI
+
+```bash
+make install
+```
+
+Compila y copia el binario a `$(go env GOPATH)/bin/mova` — la misma carpeta que usa `go install` en Linux, macOS y Windows. Con esa carpeta en el `PATH`, `mova` corre desde cualquier directorio. Nunca depende de dónde está el binario: siempre busca `workflow.md` subiendo desde el directorio actual (o desde `MOVA_PROJECT_ROOT`/`MOVA_PROJECT_PATH`), nunca guarda rutas absolutas.
+
+```text
+ERROR
+No Mova project was found (looking for workflow.md, the project root marker).
+Suggestion: Run "mova init" or move to a Mova project directory.
+```
 
 ```bash
 go build -o mova ./src/cli
 ```
 
-No hay ediciones ni flags de build especiales — un solo binario, todos los comandos de arriba.
+No hay ediciones ni flags de build especiales — un solo binario, todos los comandos de esta guía.

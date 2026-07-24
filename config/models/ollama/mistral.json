@@ -1,0 +1,15 @@
+{
+  "base_url": "http://mova_ollama:11434",
+  "timeout_seconds": 300,
+  "model": "mistral:7b",
+  "top_k": 40,
+  "top_p": 0.95,
+  "num_ctx": 8192,
+  "threads": 6, 
+  "mirostat": 0,
+  "keep_alive": "24h",
+  "num_predict": 512,
+  "temperature": 0.2,
+  "context_window": 32768,
+  "repeat_penalty": 1.1
+}

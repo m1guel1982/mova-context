@@ -5,11 +5,11 @@ package core
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
 	focusrender "mova.local/core/focus/render"
+	"mova.local/dedup"
 )
 
 // coreFiles maps each knowledge kind to its core filename.
@@ -20,12 +20,69 @@ var coreFiles = map[string]string{
 	"prompt": "ockham-core",
 }
 
-// buildContext is the core operation of Mova Context.
+// ContextSections holds the assembled context split into its individual
+// pieces — Header/Instruction are fixed engine boilerplate; Agents,
+// Skills, Prompt, Focus, and Memory each correspond to a concrete part of
+// project.json (or of the running session, for Memory). BuildContext
+// concatenates these exactly as it always has (see Full()); mova.local/budget
+// keeps them separate to report token cost per component instead of only
+// a single total — same assembly, two consumers, zero duplicated logic.
+//
+// DuplicatesRemoved counts exact-paragraph duplicates removed across the
+// WHOLE assembly (agents+skills+prompt+focus+memory share one dedup.Paragraphs
+// "seen" map, see BuildContextSections) — a paragraph pasted into two
+// agents, or repeated between a skill and the task prompt, only survives
+// once in the final context. Never a reformulation, never a "similar"
+// match: exact text only (see mova.local/dedup).
+type ContextSections struct {
+	Header                 string
+	Agents                 string
+	Skills                 string
+	Prompt                 string
+	Focus                  string // "" when the project/task has no focus configured
+	Memory                 string // "" when memory.md is empty
+	Instruction            string
+	DuplicatesRemoved      int
+	DuplicatesRemovedChars int
+}
+
+// Full concatenates every section in the exact order and format
+// BuildContext has always produced. `mova run`, the MCP get_full_context
+// tool, and the HTTP transport all go through BuildContext → Full(), so
+// none of them sees any change in output from this refactor.
+func (s *ContextSections) Full() string {
+	var out strings.Builder
+	out.WriteString(s.Header)
+	out.WriteString(s.Agents)
+	out.WriteString(s.Skills)
+	out.WriteString(s.Prompt)
+	out.WriteString(s.Focus)
+	out.WriteString(s.Memory)
+	out.WriteString(s.Instruction)
+	return out.String()
+}
+
+// BuildContext is the core operation of Mova Context.
 // Equivalent to the original cmdRun, decoupled from I/O.
 func BuildContext(adapter Adapter, root, projectName, taskName string) (string, error) {
-	proj, err := adapter.GetProject(projectName)
+	sections, err := BuildContextSections(adapter, root, projectName, taskName)
 	if err != nil {
 		return "", err
+	}
+	return sections.Full(), nil
+}
+
+// BuildContextSections does the exact same assembly as BuildContext,
+// split into its individual pieces — used by mova.local/budget to report
+// token cost per component (agents, skills, prompt, focus, memory)
+// instead of only a single opaque total. Whatever project.json/task
+// declare here is exactly what `mova run`, `mova budget`, the MCP
+// get_full_context/estimate_budget tools, and chat_completion all see —
+// one assembly, every transport.
+func BuildContextSections(adapter Adapter, root, projectName, taskName string) (*ContextSections, error) {
+	proj, err := adapter.GetProject(projectName)
+	if err != nil {
+		return nil, err
 	}
 
 	if taskName == "" {
@@ -33,7 +90,7 @@ func BuildContext(adapter Adapter, root, projectName, taskName string) (string, 
 	}
 	task, ok := proj.Tasks[taskName]
 	if !ok {
-		return "", fmt.Errorf("task %q not found — available: %s",
+		return nil, fmt.Errorf("task %q not found — available: %s",
 			taskName, availableTasks(proj))
 	}
 
@@ -50,230 +107,135 @@ func BuildContext(adapter Adapter, root, projectName, taskName string) (string, 
 
 	// Track which core files have been loaded (avoid duplicates)
 	coreLoaded := map[string]bool{}
+	// Shared across AGENTS/SKILLS/PROMPT/FOCUS/MEMORY — see doc comment above.
+	dedupSeen := map[string]bool{}
 
-	var out strings.Builder
-	out.WriteString(fmt.Sprintf("# Mova Context — %s / %s\n", proj.Project, taskName))
-	out.WriteString(fmt.Sprintf("Generated: %s | Repo: %s | Lang: %s | LLM: %s | Profile: %s\n",
+	sections := &ContextSections{}
+
+	var header strings.Builder
+	header.WriteString(fmt.Sprintf("# Mova Context — %s / %s\n", proj.Project, taskName))
+	header.WriteString(fmt.Sprintf("Generated: %s | Repo: %s | Lang: %s | LLM: %s | Profile: %s\n",
 		time.Now().Format("2006-01-02 15:04"), proj.Repo, orDefault(lang, "legacy"), orDefault(proj.LLM, "not set"), profileLabel(profile)))
+	sections.Header = header.String()
 
 	// ── AGENTS ──────────────────────────────────────────────────────────────
-	out.WriteString("\n\n---\n## AGENTS\n")
+	allAgents := dedupe(append(append(append([]string{}, proj.Agents.Use...), task.Agents...), proj.Agents.Custom...))
+	if len(allAgents) > 0 {
+		var agents strings.Builder
+		agents.WriteString("\n\n---\n## AGENTS\n")
 
-	// Load yagni-core once before any agent
-	if core := loadCore(adapter, "agent", domain, lang, coreFiles["agent"], coreLoaded); core != "" {
-		out.WriteString(fmt.Sprintf("\n<!-- core: %s -->\n%s\n", coreFiles["agent"], inject(adaptContent(core, profile), vars)))
-	}
+		if core := loadCore(adapter, "agent", domain, lang, coreFiles["agent"], coreLoaded); core != "" {
+			text := inject(adaptContent(core, profile), vars)
+			text = dedupSection(text, dedupSeen, sections)
+			agents.WriteString(fmt.Sprintf("\n<!-- core: %s -->\n%s\n", coreFiles["agent"], text))
+		}
 
-	allAgents := append(append([]string{}, proj.Agents.Use...), task.Agents...)
-	allAgents = append(allAgents, proj.Agents.Custom...)
-	for _, name := range dedupe(allAgents) {
-		if name == coreFiles["agent"] {
-			continue // already loaded above
+		for _, name := range allAgents {
+			if name == coreFiles["agent"] {
+				continue
+			}
+			c, err := adapter.GetKnowledge("agent", domain, lang, name)
+			if err != nil || c == "" {
+				continue
+			}
+			text := inject(adaptContent(c, profile), vars)
+			text = dedupSection(text, dedupSeen, sections)
+			agents.WriteString(fmt.Sprintf("\n<!-- agent: %s -->\n%s\n", name, text))
 		}
-		c, err := adapter.GetKnowledge("agent", domain, lang, name)
-		if err != nil || c == "" {
-			continue
-		}
-		out.WriteString(fmt.Sprintf("\n<!-- agent: %s -->\n%s\n", name, inject(adaptContent(c, profile), vars)))
+		sections.Agents = agents.String()
 	}
 
 	// ── SKILLS ──────────────────────────────────────────────────────────────
-	out.WriteString("\n\n---\n## SKILLS\n")
+	allSkills := dedupe(append(append(append([]string{}, proj.Skills.Use...), task.Skills...), proj.Skills.Custom...))
+	if len(allSkills) > 0 {
+		var skills strings.Builder
+		skills.WriteString("\n\n---\n## SKILLS\n")
 
-	// Load kiss-dry-core once before any skill
-	if core := loadCore(adapter, "skill", proj.Skills.Domain, lang, coreFiles["skill"], coreLoaded); core != "" {
-		out.WriteString(fmt.Sprintf("\n<!-- core: %s -->\n%s\n", coreFiles["skill"], inject(adaptContent(core, profile), vars)))
-	}
+		if core := loadCore(adapter, "skill", proj.Skills.Domain, lang, coreFiles["skill"], coreLoaded); core != "" {
+			text := inject(adaptContent(core, profile), vars)
+			text = dedupSection(text, dedupSeen, sections)
+			skills.WriteString(fmt.Sprintf("\n<!-- core: %s -->\n%s\n", coreFiles["skill"], text))
+		}
 
-	allSkills := append(append([]string{}, proj.Skills.Use...), task.Skills...)
-	allSkills = append(allSkills, proj.Skills.Custom...)
-	for _, name := range dedupe(allSkills) {
-		if name == coreFiles["skill"] {
-			continue // already loaded above
+		for _, name := range allSkills {
+			if name == coreFiles["skill"] {
+				continue
+			}
+			c, err := adapter.GetKnowledge("skill", proj.Skills.Domain, lang, name)
+			if err != nil || c == "" {
+				continue
+			}
+			text := inject(adaptContent(c, profile), vars)
+			text = dedupSection(text, dedupSeen, sections)
+			skills.WriteString(fmt.Sprintf("\n<!-- skill: %s -->\n%s\n", name, text))
 		}
-		c, err := adapter.GetKnowledge("skill", proj.Skills.Domain, lang, name)
-		if err != nil || c == "" {
-			continue
-		}
-		out.WriteString(fmt.Sprintf("\n<!-- skill: %s -->\n%s\n", name, inject(adaptContent(c, profile), vars)))
+		sections.Skills = skills.String()
 	}
 
 	// ── PROMPT ──────────────────────────────────────────────────────────────
-	out.WriteString("\n\n---\n## PROMPT\n")
-
-	// Load ockham-core once before the prompt
-	if core := loadCore(adapter, "prompt", domain, lang, coreFiles["prompt"], coreLoaded); core != "" {
-		out.WriteString(fmt.Sprintf("\n<!-- core: %s -->\n%s\n", coreFiles["prompt"], inject(adaptContent(core, profile), vars)))
-	}
-
 	if task.Prompt != "" {
+		var prompt strings.Builder
+		prompt.WriteString("\n\n---\n## PROMPT\n")
+
+		if core := loadCore(adapter, "prompt", domain, lang, coreFiles["prompt"], coreLoaded); core != "" {
+			text := inject(adaptContent(core, profile), vars)
+			text = dedupSection(text, dedupSeen, sections)
+			prompt.WriteString(fmt.Sprintf("\n<!-- core: %s -->\n%s\n", coreFiles["prompt"], text))
+		}
+
 		c, err := adapter.GetKnowledge("prompt", domain, lang, task.Prompt)
 		if err == nil && c != "" {
-			out.WriteString(fmt.Sprintf("\n<!-- prompt: %s -->\n%s\n", task.Prompt, inject(adaptContent(c, profile), vars)))
+			text := inject(adaptContent(c, profile), vars)
+			text = dedupSection(text, dedupSeen, sections)
+			prompt.WriteString(fmt.Sprintf("\n<!-- prompt: %s -->\n%s\n", task.Prompt, text))
 		}
+		sections.Prompt = prompt.String()
 	}
 
 	// ── FOCUS ───────────────────────────────────────────────────────────────
-	// Búsqueda "LIKE simple" (ver core/focus/match.go) — insensible a
-	// mayúsculas/acentos, determinista, sin LLM. Siempre disponible.
-	// Task focus SOBREESCRIBE el focus global del proyecto (no se suman).
-	if items := resolveTaskFocus(proj, &task); len(items) > 0 {
-		text, _ := focusrender.RenderFocusContext(root, proj.Repo, items, nil)
-		if strings.TrimSpace(text) != "" {
-			out.WriteString("\n\n---\n## FOCUS\n")
-			out.WriteString(text)
-		}
-	}
+ 
+if items := resolveTaskFocus(proj, &task); len(items) > 0 {
+    text, stats := focusrender.RenderFocusContextWithSeen(root, proj.Repo, items, nil, dedupSeen)
+    sections.DuplicatesRemoved += stats.DuplicatesRemoved
+    sections.DuplicatesRemovedChars += stats.DuplicatesRemovedChars // ✅ Ahora sí recibirá el valor real
+    if strings.TrimSpace(text) != "" {
+        sections.Focus = "\n\n---\n## FOCUS\n" + text
+    }
+}
 
 	// ── MEMORY ──────────────────────────────────────────────────────────────
 	if mem, _ := adapter.GetMemory(projectName); mem != "" {
-		out.WriteString("\n\n---\n## MEMORY\n")
-		out.WriteString(mem)
+		mem = dedupSection(mem, dedupSeen, sections)
+		if strings.TrimSpace(mem) != "" {
+			sections.Memory = "\n\n---\n## MEMORY\n" + mem
+		}
 	}
 
 	// ── INSTRUCTION ─────────────────────────────────────────────────────────
-	out.WriteString("\n\n---\n## INSTRUCTION\n")
-	out.WriteString(fmt.Sprintf("Project: **%s** | Repo: `%s`\n", proj.Project, proj.Repo))
-	out.WriteString("Apply agents, skills and prompt above. When done, reply with:\n\n")
-	out.WriteString("```memory\n## YYYY-MM-DD — session\n**Done:**\n**Resolved:**\n**Pending:**\n**Decisions:**\n**LLM Errors:**\n```\n")
+// ── INSTRUCTION ─────────────────────────────────────────────────────────
+	var instruction strings.Builder
+	instruction.WriteString("\n\n---\n## INSTRUCTION\n")
+	instruction.WriteString(fmt.Sprintf("Project: **%s** | Repo: `%s`\n", proj.Project, proj.Repo))
 
-	return out.String(), nil
+	if lang == "es" {
+		instruction.WriteString("Aplica los prompts y contexto anterior. Entrega tu informe técnico y finaliza ÚNICAMENTE con el siguiente bloque de síntesis (no guardes el chat completo en memoria):\n\n")
+		instruction.WriteString("```memory\n## YYYY-MM-DD — session\n**Realizado:** <resumen corto de 1 línea>\n**Resuelto:** <hallazgos resueltos>\n**Pendiente:** <deuda técnica o tareas futuras>\n**Decisiones:** <decisiones de diseño/stack>\n**Errores del LLM:** <ninguno u observaciones>\n```\n")
+	} else {
+		instruction.WriteString("Apply the prompt and context above. Deliver your technical report and conclude EXCLUSIVELY with the following summary block (do not store the full chat in memory):\n\n")
+		instruction.WriteString("```memory\n## YYYY-MM-DD — session\n**Done:** <1-line summary>\n**Resolved:** <key findings fixed>\n**Pending:** <tech debt or future tasks>\n**Decisions:** <architecture/stack choices>\n**LLM Errors:** <none or notes>\n```\n")
+	}
+	sections.Instruction = instruction.String()
+
+	return sections, nil
 }
 
-func loadCore(adapter Adapter, kind, domain, lang, name string, loaded map[string]bool) string {
-	if loaded[name] {
-		return ""
-	}
-	c, err := adapter.GetKnowledge(kind, domain, lang, name)
-	if err != nil || c == "" {
-		return ""
-	}
-	loaded[name] = true
-	return c
-}
-
-// extractMemoryBlock pulls the ```memory block from an LLM response.
-func ExtractMemoryBlock(response string) (string, error) {
-	start := strings.Index(response, "```memory")
-	end := strings.LastIndex(response, "```")
-	if start == -1 || end <= start {
-		return "", fmt.Errorf("no ```memory block found")
-	}
-	return strings.TrimSpace(response[start+len("```memory") : end]), nil
-}
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-func mergeVars(global, task map[string]string) map[string]string {
-	out := make(map[string]string, len(global)+len(task))
-	for k, v := range global {
-		out[k] = v
-	}
-	for k, v := range task {
-		out[k] = v
-	}
-	return out
-}
-
-func inject(text string, vars map[string]string) string {
-	for k, v := range vars {
-		text = strings.ReplaceAll(text, "{{"+strings.ToUpper(k)+"}}", v)
-	}
-	return text
-}
-
-func availableTasks(p *Project) string {
-	names := make([]string, 0, len(p.Tasks))
-	for k := range p.Tasks {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	return strings.Join(names, ", ")
-}
-
-// resolveTaskFocus decides which `focus` list applies to this run: the
-// task's own `focus` (if set) always wins and REPLACES the project's
-// global focus — it never merges the two lists. If the task has no
-// `focus`, the project-level `focus` (if any) is used instead.
-func resolveTaskFocus(proj *Project, task *Task) []string {
-	if len(task.Focus) > 0 {
-		return task.Focus
-	}
-	return proj.Focus
-}
-
-func dedupe(items []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	for _, s := range items {
-		if s != "" && !seen[s] {
-			seen[s] = true
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
-func orDefault(s, def string) string {
-	if s == "" {
-		return def
-	}
-	return s
-}
-
-// resolveProfile returns the effective LLM profile for a project.
-// Priority: llm_profile block > llm string field > default (powerful).
-func resolveProfile(proj *Project) *LLMProfile {
-	if proj.LLMProfile != nil {
-		return proj.LLMProfile
-	}
-	switch proj.LLM {
-	case "ollama", "llama", "mistral", "deepseek", "qwen", "gemma", "phi":
-		return &LLMProfile{Type: "local", Provider: proj.LLM}
-	default:
-		return &LLMProfile{Type: "powerful", Provider: proj.LLM}
-	}
-}
-
-// adaptContent applies light formatting normalization for local models.
-// For powerful models it returns the content unchanged.
-// The original files are NEVER modified.
-func adaptContent(content string, profile *LLMProfile) string {
-	if !profile.IsLocal() {
-		return content
-	}
-	lines := strings.Split(content, "\n")
-	var out []string
-	stepNum := 0
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "- ") {
-			stepNum++
-			line = fmt.Sprintf("%d. %s", stepNum, trimmed[2:])
-		} else if trimmed == "" {
-			stepNum = 0
-		}
-		out = append(out, line)
-	}
-	adapted := strings.Join(out, "\n")
-	if !strings.HasPrefix(strings.TrimSpace(adapted), "INSTRUCTIONS:") &&
-		!strings.HasPrefix(strings.TrimSpace(adapted), "#") {
-		adapted = "INSTRUCTIONS:\n" + adapted
-	}
-	return adapted
-}
-
-// profileLabel returns a short label for context header display.
-func profileLabel(profile *LLMProfile) string {
-	if profile == nil {
-		return "powerful"
-	}
-	label := profile.Type
-	if profile.Provider != "" {
-		label += "/" + profile.Provider
-	}
-	if profile.Model != "" {
-		label += ":" + profile.Model
-	}
-	return label
+// dedupSection applies dedup.Paragraphs to one prose chunk and accumulates
+// its removed-count/removed-chars into sections — a small helper so every
+// call site above stays a single readable line instead of repeating the
+// same statements six times.
+func dedupSection(text string, seen map[string]bool, sections *ContextSections) string {
+	deduped, removed, chars := dedup.Paragraphs(text, seen)
+	sections.DuplicatesRemoved += removed
+	sections.DuplicatesRemovedChars += chars
+	return deduped
 }

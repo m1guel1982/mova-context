@@ -34,6 +34,7 @@ type ScanStats struct {
 	// Aplica solo a contenido de prosa (Markdown/legal/texto), nunca a
 	// bloques de código, SQL o JSON — esos nunca se tocan.
 	DuplicatesRemoved int
+	DuplicatesRemovedChars int
 }
 
 // FilesScanned es la cuenta final, deduplicada por ruta real.

@@ -1,23 +1,17 @@
-// render.go — capa de presentación del Focus Resolution Engine (edición
-// Community, gratis). Antes vivía exclusivamente en el módulo comercial
-// (mova.local/compiler/focus/render); ahora vive acá para que `focus`
-// funcione sin -tags premium. La edición Premium (mova.local/compiler/focus)
-// reutiliza DefaultResolvers()/NewEngineWithResolvers de este mismo
-// paquete y antepone su propio SemanticResolver — nunca duplica esta
-// lógica.
-package render
+// render.go — capa de presentación del Focus Resolution Engine.
+package resolvers
 
 import (
 	"fmt"
 	"path/filepath"
-	"regexp" 
 	"strings"
 
 	"mova.local/core/focus"
 	"mova.local/core/focus/resolvers"
+	"mova.local/dedup"
 )
 
-// resolveRepoPath applies the workflow.md "repo" resolution rules.
+// resolveRepoPath aplica las reglas de resolución de ruta del repositorio.
 func resolveRepoPath(root, repo string) string {
 	if repo == "" || repo == "." {
 		return root
@@ -28,11 +22,7 @@ func resolveRepoPath(root, repo string) string {
 	return filepath.Join(root, repo)
 }
 
-// DefaultResolvers construye la lista de resolvers Community en el orden
-// de prioridad por defecto: File → Directory → JSON → SQL → CodeSymbol →
-// Markdown → Legal → Memory → Fallback. Expuesta (mayúscula) para que la
-// edición Premium pueda anteponer su SemanticResolver sin reimplementar
-// ni reordenar esta lista.
+// DefaultResolvers construye la lista de resolvers Community en orden de prioridad.
 func DefaultResolvers() []focus.Resolver {
 	return []focus.Resolver{
 		resolvers.NewFileResolver(),
@@ -43,14 +33,12 @@ func DefaultResolvers() []focus.Resolver {
 		resolvers.NewMarkdownResolver(),
 		resolvers.NewLegalResolver(),
 		resolvers.NewMemoryResolver(),
+		resolvers.NewGlobResolver(),
 		resolvers.NewFallbackResolver(),
 	}
 }
 
-// NewEngineWithResolvers arma un *focus.Engine registrando primero extra
-// (por ejemplo, el SemanticResolver de la edición Premium) y luego los
-// resolvers Community de DefaultResolvers() — la cascada siempre termina
-// en la misma red de seguridad "LIKE simple", en cualquier edición.
+// NewEngineWithResolvers arma un *focus.Engine registrando primero extra resolvers y luego los Community.
 func NewEngineWithResolvers(extra ...focus.Resolver) *focus.Engine {
 	e := focus.New()
 	for _, r := range extra {
@@ -66,37 +54,27 @@ func defaultEngine() *focus.Engine {
 	return NewEngineWithResolvers()
 }
 
-// RenderFocusContext resuelve cada item de focus y devuelve el bloque de
-// texto "FOCUS:item\n<contenido>\n" concatenado, junto con ScanStats:
-// evidencia real de cuántos archivos tocó el escaneo del repo, por qué el
-// resto no entró, y cuántos párrafos duplicados se quitaron. extraExclude
-// son carpetas adicionales a ignorar, si el llamador quiere pasar alguna
-// — se SUMAN a las que ya se ignoran siempre, nunca las reemplazan.
+// RenderFocusContext resuelve cada item de focus y devuelve el bloque de texto compilado.
 func RenderFocusContext(root, repo string, items []string, extraExclude []string) (string, focus.ScanStats) {
-	return renderFocusContext(root, repo, items, extraExclude, defaultEngine())
+	return renderFocusContext(root, repo, items, extraExclude, defaultEngine(), nil)
 }
 
-// RenderFocusContextWithEngine es igual que RenderFocusContext pero recibe
-// un *focus.Engine ya armado — usado por la edición Premium para pasar un
-// engine con el SemanticResolver antepuesto (ver NewEngineWithResolvers).
+// RenderFocusContextWithEngine permite pasar un Engine personalizado.
 func RenderFocusContextWithEngine(root, repo string, items []string, extraExclude []string, engine *focus.Engine) (string, focus.ScanStats) {
-	return renderFocusContext(root, repo, items, extraExclude, engine)
+	return renderFocusContext(root, repo, items, extraExclude, engine, nil)
 }
 
-// proseKinds son los tipos de ContextBlock que contienen prosa/documentación
-// — únicos candidatos a la deduplicación de párrafos exactos (ver
-// dedupParagraphs). Código, SQL y nodos JSON NUNCA se tocan: un bloque de
-// código idéntico repetido a propósito (ej. dos funciones que comparten
-// una misma línea de import) no es un "duplicado de contenido", es
-// estructura del lenguaje.
+// RenderFocusContextWithSeen (REQUERIDO POR engine.go)
+// Recibe un mapa externo de párrafos ya procesados para deduplicar contra AGENTS, PROMPT, etc.
+func RenderFocusContextWithSeen(root, repo string, items []string, extraExclude []string, seen map[string]bool) (string, focus.ScanStats) {
+	return renderFocusContext(root, repo, items, extraExclude, defaultEngine(), seen)
+}
+
 var proseKinds = map[string]bool{
 	"doc-section": true, "legal-article": true, "chronological": true,
 	"bounded-excerpt": true,
 }
 
-// proseFileExt — extensiones de archivo que, cuando el Kind es "file"
-// (entrega de archivo completo), se consideran prosa para efectos de
-// deduplicación. Código fuente (.go, .py, .js, ...) nunca entra acá.
 var proseFileExt = map[string]bool{
 	".md": true, ".markdown": true, ".txt": true, ".rst": true,
 }
@@ -111,49 +89,7 @@ func isProse(source, kind string) bool {
 	return false
 }
 
-var multiBlank = regexp.MustCompile(`\n{2,}`)
-
-// normalizeParagraph colapsa espacios/saltos de línea para comparar
-// "¿es el mismo texto?" sin que un espacio extra al final de línea cuente
-// como una diferencia real — pero SIN cambiar ni una palabra del
-// contenido que efectivamente se emite (la normalización es solo para la
-// comparación, ver dedupParagraphs).
-func normalizeParagraph(p string) string {
-	return strings.Join(strings.Fields(p), " ")
-}
-
-// dedupParagraphs quita, de un bloque de prosa, cualquier párrafo
-// (separado por línea en blanco) cuyo texto normalizado sea IDÉNTICO a
-// uno que YA se emitió antes en este mismo render — nunca una
-// reformulación, nunca un "parecido": exactamente lo que
-// compiler/dedup hace para AGENT/SKILL/PROMPT, aplicado ahora también a
-// FOCUS (que antes quedaba completamente afuera de cualquier
-// deduplicación — ver docs/i18n/{es,en}/focus-engine.md, sección
-// "Duplicados"). seen se comparte entre TODOS los items de `focus` de una
-// misma compilación: si "manual.md" completo y luego "Artículo 3" por
-// separado repiten el mismo párrafo, la segunda aparición se quita y se
-// cuenta en removed.
-func dedupParagraphs(content string, seen map[string]bool) (string, int) {
-	paragraphs := multiBlank.Split(content, -1)
-	var kept []string
-	removed := 0
-	for _, p := range paragraphs {
-		if strings.TrimSpace(p) == "" {
-			kept = append(kept, p)
-			continue
-		}
-		key := normalizeParagraph(p)
-		if seen[key] {
-			removed++
-			continue
-		}
-		seen[key] = true
-		kept = append(kept, p)
-	}
-	return strings.Join(kept, "\n\n"), removed
-}
-
-func renderFocusContext(root, repo string, items []string, extraExclude []string, engine *focus.Engine) (string, focus.ScanStats) {
+func renderFocusContext(root, repo string, items []string, extraExclude []string, engine *focus.Engine, seenParagraphs map[string]bool) (string, focus.ScanStats) {
 	if len(items) == 0 {
 		return "", focus.ScanStats{}
 	}
@@ -161,8 +97,10 @@ func renderFocusContext(root, repo string, items []string, extraExclude []string
 	stats := &focus.ScanStats{}
 	ctx := focus.Context{RepoPath: repoPath, ExcludeDirs: extraExclude, Stats: stats}
 
-	included := map[string]bool{}       // dedup: un mismo archivo referenciado por 2 focus items cuenta una vez
-	seenParagraphs := map[string]bool{} // dedup: mismo párrafo de prosa ya emitido antes en este render
+	included := map[string]bool{}
+	if seenParagraphs == nil {
+		seenParagraphs = map[string]bool{}
+	}
 	var sb strings.Builder
 	for _, item := range items {
 		sb.WriteString("FOCUS:" + item + "\n")
@@ -181,18 +119,6 @@ func renderFocusContext(root, repo string, items []string, extraExclude []string
 	return sb.String(), *stats
 }
 
-// renderResult traduce []ContextBlock al formato de texto que arma
-// contexto.txt/BuildContext. Aplica dedupParagraphs SOLO a bloques de
-// prosa (ver isProse) — código, SQL, JSON e índices de directorio se
-// devuelven intactos, byte a byte, siempre.
-// renderResult traduce []ContextBlock al formato de texto que arma
-// contexto.txt/BuildContext. Un mismo item de `focus` puede devolver MÁS
-// DE UN bloque (ver MarkdownResolver/LegalResolver: "Órdenes" puede
-// matchear tres headings distintos) — todos se renderizan, en el mismo
-// orden en que el resolver los devolvió, separados por una línea en
-// blanco. Aplica dedupParagraphs SOLO a bloques de prosa (ver isProse) —
-// código, SQL, JSON e índices de directorio se devuelven intactos, byte a
-// byte, siempre.
 func renderResult(item string, blocks []focus.ContextBlock, err error, seenParagraphs map[string]bool, stats *focus.ScanStats) string {
 	if err != nil || len(blocks) == 0 {
 		return "  not found: " + item
@@ -204,15 +130,14 @@ func renderResult(item string, blocks []focus.ContextBlock, err error, seenParag
 	return strings.Join(rendered, "\n\n")
 }
 
-// renderBlock renderiza UN ContextBlock — la lógica que antes vivía
-// directamente en renderResult, ahora factorizada para poder aplicarse a
-// cada bloque de una lista con más de un resultado.
 func renderBlock(b focus.ContextBlock, seenParagraphs map[string]bool, stats *focus.ScanStats) string {
 	switch b.Kind {
 	case "file":
 		if isProse(b.Source, b.Kind) {
-			deduped, removed := dedupParagraphs(b.Content, seenParagraphs)
+			deduped, removed, chars := dedup.Paragraphs(b.Content, seenParagraphs)
 			stats.DuplicatesRemoved += removed
+			stats.DuplicatesRemovedChars += chars
+
 			if strings.TrimSpace(deduped) == "" && removed > 0 {
 				return fmt.Sprintf("  [duplicado — %s ya se incluyó antes en este contexto, ver contexto.report]", b.Source)
 			}
@@ -224,15 +149,12 @@ func renderBlock(b focus.ContextBlock, seenParagraphs map[string]bool, stats *fo
 	default:
 		content := b.Content
 		if isProse(b.Source, b.Kind) {
-			deduped, removed := dedupParagraphs(content, seenParagraphs)
+			deduped, removed, chars := dedup.Paragraphs(content, seenParagraphs)
 			stats.DuplicatesRemoved += removed
+			stats.DuplicatesRemovedChars += chars
+
 			content = deduped
 			if strings.TrimSpace(content) == "" && removed > 0 {
-				// Todo el contenido de este target ya se había incluido
-				// antes (por otro item de `focus`, o repetido de forma
-				// literal dentro del propio archivo fuente) — se dice
-				// explícitamente en vez de dejar un bloque vacío sin
-				// explicación.
 				return fmt.Sprintf("  (%s)\n  [duplicado — ya incluido antes en este contexto, ver contexto.report]", b.Source)
 			}
 		}

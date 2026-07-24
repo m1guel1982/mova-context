@@ -1,0 +1,31 @@
+{
+  "project": "ejemplo-gemini-flash",
+  "description": "audita un backend chico con Gemini Flash (Cloud), aplica un techo de presupuesto de contexto (budget.max_tokens), limita la respuesta del modelo (num_predict, en config/models/google/gemini-2.5-flash.json), deja que el propio chat cree un directorio y guarde el informe real en disco (\"tools\": {\"enabled\": true} + /save), y registra la estimación real de tokens en mova-token-history.json para ir afinando la precisión del comando `mova budget` en este proyecto.",
+  "repo": "examples/ejemplo-gemini-flash-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "revisar-backend",
+
+ 
+  "tasks": {
+    "revisar-backend": {
+      "prompt": "review-project",
+      "variables": { "PROJECT": "backend-api", "REVIEW_TYPE": "completa" } ,
+      "focus": ["server.js"]
+    }
+  },
+
+  "llm_profile": {
+    "config": "gemini-3.5-flash"
+  },
+
+  "budget": {
+    "max_tokens": 5000
+  },
+
+  "token_history_path": "/projects/ejemplo-gemini-flash/mova-token-history.json",
+
+  "tools": {
+    "enabled": false
+  }
+}

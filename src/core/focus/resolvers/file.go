@@ -1,27 +1,99 @@
-// file.go — File Resolver y Directory Resolver.
 package resolvers
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 
 	"mova.local/core/focus"
 )
 
-// FileResolver resuelve un target que apunta a un archivo concreto — por
-// ruta exacta o, si no existe esa ruta, por nombre de archivo en cualquier
-// parte del repo. Cuando el usuario nombra un archivo explícitamente, se
-// entrega completo: no es "contenido no relacionado" que el compilador
-// decidió incluir, fue pedido por nombre.
+// -----------------------------------------------------------------------------
+// Glob Resolver
+// -----------------------------------------------------------------------------
+
+type GlobResolver struct{}
+
+func NewGlobResolver() focus.Resolver { return &GlobResolver{} }
+
+func isGlobPattern(target string) bool {
+	return strings.ContainsAny(target, "*?[")
+}
+
+func (r *GlobResolver) Match(ctx focus.Context, target string) bool {
+	return isGlobPattern(target)
+}
+
+func (r *GlobResolver) Resolve(ctx focus.Context, target string) ([]focus.ContextBlock, error) {
+	if !isGlobPattern(target) {
+		return nil, focus.ErrNotFound
+	}
+
+	target = focus.StripExact(target)
+
+	cleanTarget := filepath.Clean(target)
+	isRecursive := strings.Contains(target, "**")
+
+	var blocks []focus.ContextBlock
+
+	err := filepath.WalkDir(ctx.RepoPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(ctx.RepoPath, path)
+		if err != nil {
+			return nil
+		}
+
+		matched := false
+		if cleanTarget == "**/*" || cleanTarget == "**" || target == "**/*" {
+			matched = true
+		} else if isRecursive {
+			basePattern := strings.ReplaceAll(target, "**/", "")
+			basePattern = strings.ReplaceAll(basePattern, "**", "*")
+			matched, _ = filepath.Match(basePattern, filepath.Base(path))
+		} else {
+			matched, _ = filepath.Match(cleanTarget, relPath)
+			if !matched {
+				matched, _ = filepath.Match(cleanTarget, filepath.Base(path))
+			}
+		}
+
+		if matched {
+			content := readFile(path)
+			if content != "" {
+				blocks = append(blocks, focus.ContextBlock{
+					Source:  relOrBase(ctx.RepoPath, path),
+					Kind:    "file",
+					Content: content,
+				})
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil || len(blocks) == 0 {
+		return nil, focus.ErrNotFound
+	}
+
+	return blocks, nil
+}
+
+// -----------------------------------------------------------------------------
+// File Resolver
+// -----------------------------------------------------------------------------
+
 type FileResolver struct{}
 
-func NewFileResolver() *FileResolver { return &FileResolver{} }
+func NewFileResolver() focus.Resolver { return &FileResolver{} }
 
 func (r *FileResolver) candidatePath(ctx focus.Context, target string) string {
 	if isSymbolNotation(target) {
 		return ""
 	}
-	target = focus.StripExact(target) // "=" no aplica a rutas: ya son exactas por nombre
+	target = focus.StripExact(target)
 	path := target
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(ctx.RepoPath, target)
@@ -53,11 +125,13 @@ func (r *FileResolver) Resolve(ctx focus.Context, target string) ([]focus.Contex
 	}}, nil
 }
 
-// DirectoryResolver resuelve un target que apunta a un directorio. Nunca
-// vuelca el contenido de los archivos — solo un índice compacto y ordenado.
+// -----------------------------------------------------------------------------
+// Directory Resolver
+// -----------------------------------------------------------------------------
+
 type DirectoryResolver struct{}
 
-func NewDirectoryResolver() *DirectoryResolver { return &DirectoryResolver{} }
+func NewDirectoryResolver() focus.Resolver { return &DirectoryResolver{} }
 
 func (r *DirectoryResolver) resolvePath(ctx focus.Context, target string) string {
 	if isSymbolNotation(target) {
@@ -90,13 +164,14 @@ func (r *DirectoryResolver) Resolve(ctx focus.Context, target string) ([]focus.C
 	}}, nil
 }
 
-// isSymbolNotation reconoce la notación "()" que workflow.md usa para pedir
-// explícitamente un símbolo (función/método) en vez de un archivo.
-func isSymbolNotation(target string) bool {
-	return strings.HasSuffix(target, "()")
-}
+// -----------------------------------------------------------------------------
+// Helpers del paquete
+// -----------------------------------------------------------------------------
 
-// stripSymbolNotation quita el sufijo "()" si está presente.
 func stripSymbolNotation(target string) string {
 	return strings.TrimSuffix(target, "()")
+}
+
+func isSymbolNotation(target string) bool {
+	return strings.HasSuffix(target, "()")
 }
