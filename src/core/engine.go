@@ -72,6 +72,34 @@ func BuildContext(adapter Adapter, root, projectName, taskName string) (string, 
 	return sections.Full(), nil
 }
 
+// ResolveTaskName decides which task applies when the caller may not
+// have named one: the explicit taskName, or proj.DefaultTask, or — if
+// the project only declares a SINGLE task — that one task, since there's
+// nothing ambiguous to resolve. Returns "" when none of those apply
+// (multiple tasks exist and none was specified or set as default).
+//
+// This is the ONE place that decision is made — BuildContextSections
+// uses it to pick which task's prompt/agents/skills to assemble, and
+// every Budget-gate call site (cli/run_cmd.go, cli/chat_cmd.go,
+// mcp/context_tool.go, mcp/chat_tool.go) uses it too, via
+// budget.ResolveTask(proj, core.ResolveTaskName(proj, taskName)), so the
+// task the Budget check validates against is ALWAYS the same one the
+// context was actually built from — never a mismatch between the two.
+func ResolveTaskName(proj *Project, taskName string) string {
+	if taskName != "" {
+		return taskName
+	}
+	if proj.DefaultTask != "" {
+		return proj.DefaultTask
+	}
+	if len(proj.Tasks) == 1 {
+		for name := range proj.Tasks {
+			return name
+		}
+	}
+	return ""
+}
+
 // BuildContextSections does the exact same assembly as BuildContext,
 // split into its individual pieces — used by mova.local/budget to report
 // token cost per component (agents, skills, prompt, focus, memory)
@@ -85,9 +113,7 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 		return nil, err
 	}
 
-	if taskName == "" {
-		taskName = proj.DefaultTask
-	}
+	taskName = ResolveTaskName(proj, taskName)
 	task, ok := proj.Tasks[taskName]
 	if !ok {
 		return nil, fmt.Errorf("task %q not found — available: %s",

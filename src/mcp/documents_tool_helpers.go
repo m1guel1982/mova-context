@@ -102,11 +102,61 @@ func ambiguousDirLabel(requested string) string {
 func repoFor(adapter core.Adapter, args map[string]any) string {
 	repo := "."
 	if project := str(args, "project"); project != "" {
-		if proj, err := adapter.GetProject(project); err == nil {
+		if proj, err := adapter.GetProject(project); err == nil && proj.Repo != "" {
 			repo = proj.Repo
 		}
 	}
 	return repo
+}
+
+// chatTurnsArg parses a "history" argument (a JSON array of
+// {"role": "...", "content": "..."} objects — the same shape
+// chat_completion's own "history" argument already uses) into
+// []documents.ChatTurn, so the "save" tool's mode/range selection (see
+// documents/save_selection.go) works from an ordinary JSON body exactly
+// the way cli/chat_save.go's chatTurns adapts Session.History.
+func chatTurnsArg(raw any) []documents.ChatTurn {
+	list, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	turns := make([]documents.ChatTurn, 0, len(list))
+	for _, item := range list {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		role, _ := m["role"].(string)
+		content, _ := m["content"].(string)
+		if role == "" {
+			continue
+		}
+		turns = append(turns, documents.ChatTurn{Role: role, Content: content})
+	}
+	return turns
+}
+
+// pathsArg reads "paths" (comma- or newline-separated) and/or the
+// singular "path" argument and returns every non-empty entry, in order.
+// This is unrelated to project.json's config fields (repo/workflow_path/
+// budget_path/token_history_path are single values, see core/types.go) —
+// it's specifically /delete's own "one or more files to remove in the
+// same call" list (see documents/delete_service.go).
+// Used by delete_path so a person, an MCP client, or an HTTP caller can
+// pass either one path or several without three different argument
+// shapes to support.
+func pathsArg(args map[string]any) []string {
+	var out []string
+	if p := str(args, "path"); p != "" {
+		out = append(out, p)
+	}
+	raw := str(args, "paths")
+	for _, line := range strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == '\n' }) {
+		if t := strings.TrimSpace(line); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // formatAmbiguousMessage builds the "which one did you mean?" question

@@ -22,6 +22,7 @@ import (
 
 	"mova.local/budget"
 	"mova.local/core"
+	"mova.local/documents"
 	"mova.local/models"
 )
 
@@ -82,13 +83,13 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		}
 		writeContextSummary(&statusLog, sections)
 
-		if taskName == "" {
-			taskName = proj.DefaultTask
-		}
-		if t, ok := proj.Tasks[taskName]; ok {
-			if gateErr := budget.EnforceLimit(proj, &t, tokensOfText(sections.Full(), proj)); gateErr != nil {
-				return "", gateErr
-			}
+		resolvedTask := core.ResolveTaskName(proj, taskName)
+		// Budget gate: always runs, even with no task at all (falls back
+		// to the project-level "budget" via budget.ResolveTask) — nothing
+		// ever reaches the model without this check first.
+		t := budget.ResolveTask(proj, resolvedTask)
+		if gateErr := budget.EnforceLimit(proj, t, tokensOfText(sections.Full(), proj)); gateErr != nil {
+			return "", gateErr
 		}
 		sess.SetSystem(sections.Full() + ToolsSystemPrompt(proj.Tools))
 		if core.ToolsEnabled(proj.Tools) {
@@ -112,7 +113,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		if project != "" && proj != nil {
 			recordRealUsageMCP(root, project, proj, sess)
 		}
-		return statusLog.String() + editReply, nil
+		return statusLog.String() + documents.AutoTagCodeFences(editReply), nil
 	}
 
 	nlIntent := applyNaturalLanguageDirectories(&statusLog, root, proj, message)
@@ -130,7 +131,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		recordRealUsageMCP(root, project, proj, sess)
 	}
 
-	return statusLog.String() + reply, nil
+	return statusLog.String() + documents.AutoTagCodeFences(reply), nil
 }
 
 // writeTokenUsage mirrors cli/chat_cmd.go's printTokenUsage for the

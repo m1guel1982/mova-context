@@ -2,28 +2,65 @@
 // Single source of truth. No duplication.
 package core
 
+import "path/filepath"
+
 // Project maps project.json exactly.
 type Project struct {
-	Project         string            `json:"project"`
-	Description     string            `json:"description"`
-	Repo            string            `json:"repo"`
-	Lang            string            `json:"lang"`        // "es", "en", "fr", "" (legacy)
-	Adapter         string            `json:"adapter"`     // "file" | "db"
-	DSN             string            `json:"dsn"`         // database connection string
-	LLM             string            `json:"llm"`         // legacy: "claude" | "gpt" | "ollama" (still works)
-	LLMProfile      *LLMProfile       `json:"llm_profile"` // optional: full LLM configuration
-	Embedding       *EmbeddingProfile `json:"embedding"`   // optional: embedding model for semantic search
-	Reranker        *RerankerProfile  `json:"reranker"`    // optional: reranker model for precision boost
-	DefaultTask     string            `json:"default_task"`
-	Variables       map[string]string `json:"variables"`
-	Agents          KnowledgeRef      `json:"agents"`
-	Skills          KnowledgeRef      `json:"skills"`
-	Tasks           map[string]Task   `json:"tasks"`
-	Archive         *ArchiveConfig    `json:"archive"`         // optional memory management config
-	Focus           []string          `json:"focus"`           // optional: files/dirs/symbols to work on (see workflow.md#FOCUS)
-	Budget          *BudgetConfig     `json:"budget"`          // optional: token ceiling for `mova budget` (see BudgetConfig)
-	TokenHistoryPath string           `json:"token_history_path"` // optional: custom location for mova-token-history.json (default: alongside project.json)
-	Tools           *ToolsConfig      `json:"tools"`           // optional: lets mova chat / chat_completion call MCP file/document tools mid-conversation (see ToolsConfig)
+	Project     string            `json:"project"`
+	Description string            `json:"description"`
+	Repo        string            `json:"repo"` // the project's single repository — for more than one directory inside it, use "focus" (see ResolveFocus), not a second repo
+	Lang        string            `json:"lang"` // "es", "en", "fr", "" (legacy)
+	Adapter     string            `json:"adapter"`     // "file" | "db"
+	DSN         string            `json:"dsn"`         // database connection string
+	LLM         string            `json:"llm"`         // legacy: "claude" | "gpt" | "ollama" (still works)
+	LLMProfile  *LLMProfile       `json:"llm_profile"` // optional: full LLM configuration
+	Embedding   *EmbeddingProfile `json:"embedding"`   // optional: embedding model for semantic search
+	Reranker    *RerankerProfile  `json:"reranker"`    // optional: reranker model for precision boost
+	DefaultTask string            `json:"default_task"`
+	Variables   map[string]string `json:"variables"`
+	Agents      KnowledgeRef      `json:"agents"`
+	Skills      KnowledgeRef      `json:"skills"`
+	Tasks       map[string]Task   `json:"tasks"`
+	Archive     *ArchiveConfig    `json:"archive"` // optional memory management config
+	Focus       []string          `json:"focus"`   // files/dirs/symbols to work on — the way to scope to part of "repo", instead of a second repo (see "5. `save` and 9. `save` — Focus" in COMMANDS.md)
+	Budget      *BudgetConfig     `json:"budget"`  // optional: token ceiling for `mova budget` (see BudgetConfig)
+	// WorkflowPath: where workflow.md lives for this project (see "5./6.
+	// workflow.md" in the spec). A single path — once configured, that
+	// file is always used: Mova never searches for another workflow.md.
+	// See mova.local/budget.LoadWorkflow for the full resolution + Budget
+	// gate pipeline.
+	WorkflowPath string `json:"workflow_path,omitempty"`
+	// BudgetPath: where mova-budget-report.md is written (see "11.
+	// budget_path"). Replaces config/prices.json's old "report_path" —
+	// see mova.local/budget.BudgetReportPath.
+	BudgetPath string `json:"budget_path,omitempty"`
+	// TokenHistoryPath: where mova-token-history.json is written (see
+	// "10. token_history_path") — see mova.local/budget.HistoryPath.
+	TokenHistoryPath string       `json:"token_history_path,omitempty"`
+	Tools            *ToolsConfig `json:"tools"` // optional: lets mova chat / chat_completion call MCP file/document tools mid-conversation (see ToolsConfig)
+}
+
+// ResolveWorkflowPath decides which workflow.md file applies to a run of
+// this project: an explicit path (typed by the person, e.g.
+// "workflow.md <project> <task>" naming a file, or --workflow) always
+// wins; otherwise proj.WorkflowPath ("workflow_path" in project.json) is
+// used; otherwise a plain "workflow.md" at the Mova root is the default,
+// same as today. Once a path is configured, Mova never searches for a
+// different file.
+func ResolveWorkflowPath(root string, proj *Project, explicit string) string {
+	resolve := func(p string) string {
+		if filepath.IsAbs(p) {
+			return p
+		}
+		return filepath.Join(root, p)
+	}
+	if explicit != "" {
+		return resolve(explicit)
+	}
+	if proj != nil && proj.WorkflowPath != "" {
+		return resolve(proj.WorkflowPath)
+	}
+	return filepath.Join(root, "workflow.md")
 }
 
 // ToolsConfig turns "mova chat" (and the MCP "chat_completion" tool) into
