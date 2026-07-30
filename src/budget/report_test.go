@@ -160,11 +160,11 @@ func TestWriteReport_WritesToConfiguredPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildReport: %v", err)
 	}
-	prices, err := LoadPrices(root)
+	proj, err := adapter.GetProject(projectName)
 	if err != nil {
-		t.Fatalf("LoadPrices: %v", err)
+		t.Fatalf("GetProject: %v", err)
 	}
-	path, err := WriteReport(root, prices, report)
+	path, err := WriteReport(root, projectName, proj, report)
 	if err != nil {
 		t.Fatalf("WriteReport: %v", err)
 	}

@@ -13,6 +13,24 @@ import (
 	"mova.local/core"
 )
 
+// ResolveTask looks up taskName in proj.Tasks and returns a pointer to
+// it — or a pointer to a zero-value Task (never nil) when taskName is
+// empty or doesn't match any task. This exists so every caller of
+// EnforceLimit/CheckLimit ALWAYS has a *Task to pass, even for "read the
+// whole project, no specific task" (e.g. "mova run my-project" or "lee
+// my-project" with no task named): a zero-value Task has no Task.Budget
+// of its own, so core.ResolveBudget correctly falls back to the
+// project-level "budget" — the Budget gate must run in that case too,
+// not be skipped because no task happened to match.
+func ResolveTask(proj *core.Project, taskName string) *core.Task {
+	if proj != nil && taskName != "" {
+		if t, ok := proj.Tasks[taskName]; ok {
+			return &t
+		}
+	}
+	return &core.Task{}
+}
+
 // CheckLimit resolves the effective BudgetConfig (task wins over project,
 // see core.ResolveBudget) and returns (maxTokens, overBudget). maxTokens=0
 // means "no limit configured" — overBudget is always false in that case,

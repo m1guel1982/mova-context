@@ -113,9 +113,24 @@ With or without the CLI, the source of truth never changes: `workflow.md`, `agen
 
 ---
 
-## 5. Tokenomics — the main course
+## 5. Tokenomics 
 
-Every token you send to a model costs something: money if it's Cloud, or accuracy if it's local and the context doesn't fit its window. Mova Context doesn't promise magic — it gives you **real control, before you spend anything**.
+### The analogy: the airport scale
+
+Before a flight, you weigh your suitcase at home on a bathroom scale. It gives you a rough idea, but it isn't the official scale. At the airport, the suitcase gets weighed for real — and that's when the gap between your guess and the actual weight shows up. If you knew in advance how far off your home scale usually is (say, "it always reads 3% under the real weight"), you could adjust your packing next time and stop getting surprised at the counter.
+
+**Mova Tokenomics does exactly that, but with tokens instead of kilos:**
+
+| In the analogy | In Mova |
+|---|---|
+| Bathroom scale at home | Local estimate computed with `tiktoken-go`, before anything is sent to any provider |
+| Official scale at the airport | Real token count returned by the provider (Anthropic, OpenAI, Google) when the API is actually called |
+| Airline's weight limit | `budget.max_tokens` in your `project.json` |
+| The notebook where you write "home said X, airport said Y" | The `mova-token-history.json` file that lives in your project |
+
+And because that notebook is yours — not a generic average from thousands of other people's suitcases — the calibration Mova learns is specific to **your project**: its language mix, its code, its documents.
+
+**Why this matters for your wallet (and your sanity):** every token you send to a Cloud model costs money; if the model is local, a context that doesn't fit the window silently truncates or degrades. Mova attacks both problems with the same mechanism: **measure before spending, stop if it's over, and learn from every real call.**
 
 ### The gate: `budget.max_tokens` stops the run, not just warns
 
@@ -145,15 +160,57 @@ mova budget my-project my-task --focus
 
 **To be clear:** this is an estimate computed with [tiktoken-go](https://github.com/tiktoken-go/tokenizer) (OpenAI's tokenizer), cross-referenced against manual prices. It doesn't replace the real invoice — it's a compass for deciding what to optimize, and the report itself says so three times.
 
+#### The report, explained simply
+
+When you run the command above, you get a `mova-budget-report.md` file. In plain terms, it tells you three things:
+
+| Report section | What it tells you |
+|---|---|
+| **Token & Cost Breakdown** | How much each piece of your context (agents, skills, prompt, focus, memory) weighs, in tokens and in dollars — so you know what to trim first. |
+| **Budget Limit** | Your configured limit vs. what you're actually using, in tokens and as a percentage. |
+| **Historical Token Accuracy** | How close your local estimator gets to reality, measured against your own past real calls to each provider. |
+
+Real example (trimmed from an actual case): a project with a 5,000-token limit uses 1,207 tokens (24.1% of the limit) and would cost between USD 0.0015 and USD 0.0060 depending on the provider — a fraction of a cent. With that, you already know, **before spending anything**, whether to send it to OpenAI, Anthropic, or Google, and how much headroom you have before hitting the limit.
+
 ### The learning loop: every real call sharpens the estimate
 
-When `mova chat` or `chat_completion` call a real Cloud provider, that provider reports back how many tokens it actually counted. Mova stores those two numbers — local estimate vs. real — in `mova-token-history.json`, never the content or the prompts:
+This is likely the single most important feature in Tokenomics — and the one most worth understanding in depth.
+
+**What gets saved, and where.** Every time `mova chat` or the `chat_completion` MCP tool makes a real call to a Cloud provider (Anthropic, OpenAI, or Google), the API response comes back with a usage field indicating how many tokens the provider actually counted — not an estimate, the exact number you get billed for. Mova takes that real number, together with the local estimate it had computed with `tiktoken-go` *before* the request was sent, and adds both to two running totals stored in a local file inside your project: `mova-token-history.json`. **It never stores the content, the prompts, or the responses** — only two numbers per provider:
 
 ```json
 { "anthropic": { "total_local_tokens": 120000, "total_api_tokens": 122760 } }
 ```
 
-Over time, `mova budget` shows you how accurate your estimator is for **that specific project** — your own calibration, not a generic benchmark.
+**How the deviation is calculated.** With those two running totals, the formula is simple and fully transparent — no black box:
+
+```text
+deviation % = (total_api_tokens − total_local_tokens) / total_local_tokens × 100
+```
+
+With the numbers above: `(122,760 − 120,000) / 120,000 × 100 = +2.3%`. In other words: for *this specific project*, Mova's local estimator underestimates real Anthropic usage by 2.3%, on average.
+
+**Why it's a running total instead of a call-by-call log.** Every real call you make adds to those two totals, so the deviation shown isn't based on the last request alone (which can be noisy: a very short prompt, an unusual case), but is a weighted average across all your accumulated real usage. The more real calls you make, the sharper — and more reliable — the number becomes for that specific project, with its own language mix, code, and context density.
+
+**Example with Google (taken straight from this project's own report):**
+
+```json
+{ "google": { "total_local_tokens": 1205, "total_api_tokens": 1201 } }
+```
+
+`(1,201 − 1,205) / 1,205 × 100 = −0.33%` → that's exactly how `mova budget` arrives at the **"−0.3%"** shown in the *Historical Token Accuracy* section of the report. It's not a made-up figure or a generic benchmark pulled from the internet: it's direct math on your own calls.
+
+**How the file evolves over time.** As more real calls accumulate, the deviation stops jumping around and settles into a reliable number:
+
+| After... | `total_local_tokens` | `total_api_tokens` | Accumulated deviation |
+|---|---|---|---|
+| 1st real call | 1,000 | 1,030 | +3.0% |
+| 5 real calls | 5,400 | 5,505 | +1.9% |
+| 20 real calls | 21,800 | 22,190 | +1.8% |
+
+**What Mova does with that number.** `mova budget` uses this accumulated deviation to show you, alongside every new estimate, how far off it might be from reality — and over time it tells you, for that specific project, whether your estimator tends to run low or high with each provider, so you can set `budget.max_tokens` with a real margin instead of guessing blind.
+
+**What happens if you've never called a real provider.** If `total_local_tokens` is 0 (you've never made a real call with `mova chat` to that provider), the report shows `No historical data` — Mova doesn't invent a deviation without real data behind it.
 
 ### The automatic cleanup: deduplication across the whole context
 

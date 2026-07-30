@@ -48,18 +48,16 @@ func runProject(root string, adapter core.Adapter, project, task string) {
 	must(err)
 	printContextSummary(sections)
 
-	resolvedTask := task
-	if resolvedTask == "" {
-		resolvedTask = proj.DefaultTask
-	}
+	resolvedTask := core.ResolveTaskName(proj, task)
 	ctxText := sections.Full()
 
-	// ── Budget gate: always runs first, before anything is printed. ────
-	if t, ok := proj.Tasks[resolvedTask]; ok {
-		if gateErr := budget.EnforceLimit(proj, &t, tokensOf(ctxText, proj)); gateErr != nil {
-			consolePrint("\n" + gateErr.Error() + "\n")
-			return
-		}
+	// ── Budget gate: always runs first, before anything is printed —
+	// even for "mova run <project>" with no task at all, which falls
+	// back to the project-level "budget" via budget.ResolveTask. ──────
+	t := budget.ResolveTask(proj, resolvedTask)
+	if gateErr := budget.EnforceLimit(proj, t, tokensOf(ctxText, proj)); gateErr != nil {
+		consolePrint("\n" + gateErr.Error() + "\n")
+		return
 	}
 
 	consolePrint(ctxText)

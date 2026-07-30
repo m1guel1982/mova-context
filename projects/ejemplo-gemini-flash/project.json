@@ -24,6 +24,7 @@
   },
 
   "token_history_path": "/projects/ejemplo-gemini-flash/mova-token-history.json",
+  "budget_path": "/projects/ejemplo-gemini-flash/mova-budget-example-report.md",
 
   "tools": {
     "enabled": false

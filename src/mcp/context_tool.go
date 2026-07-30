@@ -29,24 +29,24 @@ func fullContextTool(adapter core.Adapter, root, project, task string) (string, 
 		return "", err
 	}
 
-	resolvedTask := task
-	if resolvedTask == "" {
-		resolvedTask = proj.DefaultTask
-	}
+	resolvedTask := core.ResolveTaskName(proj, task)
 	ctxText := sections.Full()
 
-	if t, ok := proj.Tasks[resolvedTask]; ok {
-		modelHint := ""
-		if proj.LLMProfile != nil {
-			modelHint = proj.LLMProfile.Config
-		}
-		tokens, _, cerr := budget.CountTokens(ctxText, modelHint)
-		if cerr != nil {
-			return "", fmt.Errorf("could not count tokens for Budget check: %w", cerr)
-		}
-		if gateErr := budget.EnforceLimit(proj, &t, tokens); gateErr != nil {
-			return "", gateErr
-		}
+	modelHint := ""
+	if proj.LLMProfile != nil {
+		modelHint = proj.LLMProfile.Config
+	}
+	tokens, _, cerr := budget.CountTokens(ctxText, modelHint)
+	if cerr != nil {
+		return "", fmt.Errorf("could not count tokens for Budget check: %w", cerr)
+	}
+	// Budget gate: always runs, even with no task at all (falls back to
+	// the project-level "budget" via budget.ResolveTask) — nothing ever
+	// reaches the caller (Claude Console, Codex, Gemini, a script...)
+	// without this check first.
+	t := budget.ResolveTask(proj, resolvedTask)
+	if gateErr := budget.EnforceLimit(proj, t, tokens); gateErr != nil {
+		return "", gateErr
 	}
 
 	return ctxText, nil
