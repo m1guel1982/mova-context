@@ -59,6 +59,62 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 		w.Write(responseBytes)
 	})
 
+	mux.HandleFunc("/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			mcpErrorHTTP(w, -32700, "parse error", nil)
+			return
+		}
+		// Same convenience-shape convention as /save above: reexpressed as
+		// tools/call so it runs through mcp.Process → executeTool →
+		// documentTool → documents.Delete — the exact same unified delete
+		// used by the "delete_path" MCP tool and chat's /delete command.
+		// Without {"confirm": true} in the body, nothing is deleted; the
+		// response is the confirmation prompt to show and re-send with
+		// confirm:true once agreed. See mova.local/documents/delete_service.go.
+		req := mcp.Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage("1"),
+			Method:  "tools/call",
+			Params:  map[string]any{"name": "delete_path", "arguments": args},
+		}
+		responseBytes := mcp.Process(adapter, root, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseBytes)
+	})
+
+	mux.HandleFunc("/workflow", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			mcpErrorHTTP(w, -32700, "parse error", nil)
+			return
+		}
+		// Body: {"project": "...", "task": "...", "workflow": "..."} (task
+		// and workflow optional). Same convenience shape as /save and
+		// /delete — runs through mcp.Process → executeTool → "get_workflow"
+		// → budget.LoadWorkflow, so workflow.md is only ever loaded AFTER
+		// the project is resolved and its Budget validated, identically to
+		// "lee workflow.md" in chat and the "get_workflow" MCP tool. See
+		// mova.local/budget/workflow.go.
+		req := mcp.Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage("1"),
+			Method:  "tools/call",
+			Params:  map[string]any{"name": "get_workflow", "arguments": args},
+		}
+		responseBytes := mcp.Process(adapter, root, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseBytes)
+	})
+
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3"})

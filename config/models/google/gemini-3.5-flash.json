@@ -1,7 +1,7 @@
 {
   "type": "google",
   "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-  "api_key": "xxxxxxx",
+  "api_key": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "timeout_seconds": 120,
   "model": "gemini-3-flash-preview",
   "temperature": 0.2,

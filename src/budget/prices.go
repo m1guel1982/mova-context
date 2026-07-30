@@ -28,9 +28,15 @@ type ProviderPrices struct {
 	Models map[string]PriceEntry `json:"models"`
 }
 
-// PricesConfig mapea config/prices.json exactamente.
+// PricesConfig mapea config/prices.json exactamente. Solo precios de
+// modelos — la ubicación de mova-budget-report.md vive exclusivamente en
+// project.json ("budget_path", ver BudgetReportPath en report.go), nunca
+// acá: config/prices.json es configuración GLOBAL compartida por todos
+// los proyectos, y "dónde escribir el reporte de ESTE proyecto" es
+// configuración POR proyecto — mezclar ambas repartía la configuración
+// entre dos archivos sin necesidad (ver "12./13." en el spec de esta
+// migración).
 type PricesConfig struct {
-	ReportPath      string                    `json:"report_path"`
 	Currency        string                    `json:"currency"`
 	ExchangeRateCLP float64                   `json:"exchange_rate_clp"`
 	Unit            string                    `json:"unit"` // "per_1k_tokens" (default) | "per_1m_tokens"
@@ -102,21 +108,6 @@ func LoadPrices(root string) (*PricesConfig, error) {
 	priceMu.Unlock()
 
 	return &cfg, nil
-}
-
-// ReportPath resuelve dónde escribir mova-budget-report.md: cfg.ReportPath
-// relativo a root si no es absoluto (mismo criterio que el resto de la
-// configuración global en config/), con "./mova-budget-report.md" como
-// default si el campo viene vacío.
-func ReportPath(root string, cfg *PricesConfig) string {
-	p := cfg.ReportPath
-	if p == "" {
-		p = "./mova-budget-report.md"
-	}
-	if filepath.IsAbs(p) {
-		return p
-	}
-	return filepath.Join(root, p)
 }
 
 // SortedProviderNames — nombres de proveedor en orden determinista (para

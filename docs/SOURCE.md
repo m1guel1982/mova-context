@@ -8,7 +8,7 @@ One binary (`mova`), no build tags, no editions. This document explains how the 
 src/
 ├── core/                  the engine — zero external dependencies
 │   ├── types.go            Project, Task, Adapter-shared structs (mirrors project.json)
-│   ├── engine.go           BuildContext()/BuildContextSections() — assembles agents+skills+prompt+memory+focus
+│   ├── engine.go           BuildContext()/BuildContextSections() — assembles agents+skills+prompt+memory+focus; ResolveTaskName() picks the task (explicit → default_task → the project's one task if it only has one) — the single place that decision is made
 │   ├── engine_helpers.go   loadCore, variable injection, focus resolution, LLM profile helpers
 │   ├── adapter.go          the Adapter interface (storage abstraction)
 │   ├── file_adapter.go     default Adapter: reads agents/skills/prompts/projects from disk
@@ -30,6 +30,9 @@ src/
 │   ├── types.go             ResolvePath() — resolves filenames against a project's repo
 │   ├── pathresolve.go       ResolveDirectoryPath / ResolveFilePath — cross-platform absolute paths, bare-name disk search with disambiguation, repo default
 │   ├── save_service.go      Save() / SaveRequest / IFileWriter / WriterFactory — THE unified entry point behind `/save`, chat, and MCP's `save` tool (see below)
+│   ├── save_selection.go    ChatTurn/Exchange/SelectContent/TranscriptText/ExtractCodeBlocks/StripCodeBlocks/ParseRangeToken — the single implementation behind `/save`'s current/`-all`/`-range N-M`/`-c`/`-text` modes, shared by cli/chat_save.go and MCP's `save` tool (`history`/`mode`/`range`/`code_only`/`text_only` args)
+│   ├── delete_service.go    Delete()/DeleteRequest/DeleteResult/FormatDeletePrompt — THE unified entry point behind `/delete`, MCP's `delete_path` tool, and `POST /delete`; resolves file-vs-directory via pathresolve.go, never deletes without Confirm:true
+│   ├── highlight.go         DetectLanguage()/AutoTagCodeFences() — the single language-detection/auto-tagging implementation shared by chat's renderMarkdown, MCP's chat_completion reply, and therefore HTTP
 │   ├── nl_intent.go         DetectSaveIntent() — natural-language "create a file/directory" detector (long, open-ended verb list), shared by cli/nl_save.go and mcp/nl_save.go
 │   ├── edit_intent.go       DetectEditIntent() — natural-language "modify an EXISTING file" detector, counterpart to nl_intent.go
 │   ├── edit_apply.go        ReadEditableContent/BuildEditPrompt/ExtractEditedContent/ResolveExistingFile — shared plumbing for cli/nl_edit.go and mcp/nl_edit.go
@@ -48,9 +51,10 @@ src/
 │   ├── prices.go            PricesConfig — reads config/prices.json, hot-reload cache (same mtime pattern as models/config.go)
 │   ├── tokencount.go        CountTokens() — wraps github.com/tiktoken-go/tokenizer (embedded, no network)
 │   ├── estimate.go          BuildReport() — per-component (agents/skills/prompt/focus/memory) token+cost breakdown, focus comparison
-│   ├── limit.go             CheckLimit()/EnforceLimit() — hard "budget": {"max_tokens": N} gate, stops execution before sending to a model or returning a project's context (mova run, mova chat, get_full_context, chat_completion)
-│   ├── history.go           mova-token-history.json — per-provider {local,api} token accumulators only, no prompts/content ever stored
-│   └── report.go            RenderMarkdown()/WriteReport() — mova-budget-report.md (English only, see SUPPORTED_FORMATS.md); budgetLimitSection/budgetRecommendations/providerComparisonNote — the enriched percent-used/diff/cross-provider explanation
+│   ├── limit.go             CheckLimit()/EnforceLimit() — hard "budget": {"max_tokens": N} gate, stops execution before sending to a model or returning a project's context (mova run, mova chat, get_full_context, chat_completion); ResolveTask() always returns a non-nil *Task (a real one, or a zero-value Task{}) so the gate never gets skipped for "no task named"
+│   ├── history.go           mova-token-history.json — per-provider {local,api} token accumulators only, no prompts/content ever stored; HistoryPath() resolves the path from project.json's "token_history_path" (a single string)
+│   ├── report.go            RenderMarkdown()/WriteReport() — mova-budget-report.md (English only, see SUPPORTED_FORMATS.md); BudgetReportPath() resolves the destination from project.json's "budget_path" (config/prices.json no longer has "report_path" — see Recent changes); budgetLimitSection/budgetRecommendations/providerComparisonNote — the enriched percent-used/diff/cross-provider explanation
+│   └── workflow.go          LoadWorkflow() — the Budget-gated pipeline behind "lee/ejecuta workflow.md": resolve project → core.ResolveWorkflowPath → core.BuildContextSections (Dedup+Focus already inside it) → CountTokens → EnforceLimit; only on success is workflow.md's content returned. Shared by cli/workflow_cmd.go, mcp/server.go's `get_workflow`, and http's `/workflow`
 │
 ├── models/                local + Cloud LLM providers (Ollama, LM Studio, vLLM, OpenAI, Anthropic, Google...)
 │   ├── types.go             ModelConfig — ONE struct, ONE file per model (config/models/<provider>/<config>.json): connection (base_url/api_key/timeout) AND inference params (temperature/num_predict/...) together, no separate provider-level config.json anymore
@@ -314,3 +318,100 @@ Confirmation is the one place the two doors genuinely differ, because one has an
 ## What's deliberately not here
 
 There is no compiler, no token-optimization pipeline, no licensing tier, and no `-tags premium` build variant. One binary, one behavior. `focus` above is the complete, permanent implementation — not a "free tier" of something bigger.
+
+## Recent changes — unified delete, extended `/save`, syntax highlighting, Budget-gated `workflow.md`, project.json path config
+
+This section documents one specific change set, on top of everything above, which is still the accurate description of the rest of the architecture.
+
+### Why
+
+Five requirements arrived together, all sharing one constraint: **Chat, MCP, and HTTP must behave identically**, with no per-door logic and no duplicated implementations. That constraint is exactly the architecture this project already had for `save`/`chat_completion`/`estimate_budget` — so the work was to extend that same pattern, not invent a new one.
+
+### New files
+
+| File | What it is |
+|---|---|
+| `documents/delete_service.go` | `Delete()`/`DeleteRequest`/`DeleteResult`/`FormatDeletePrompt` — the single implementation behind `/delete`, MCP's `delete_path`, and `POST /delete` |
+| `documents/save_selection.go` | `SelectContent()`/`GroupExchanges()`/`TranscriptText()`/`ExtractCodeBlocks()`/`StripCodeBlocks()`/`ParseRangeToken()` — the single implementation behind `/save`'s current/`-all`/`-range`/`-c`/`-text` modes |
+| `documents/highlight.go` | `DetectLanguage()`/`AutoTagCodeFences()` — the single language-detection implementation behind "code always comes back highlighted" |
+| `documents/highlight_test.go`, additions to `budget/*_test.go` | unit coverage for the above |
+| `budget/workflow.go` | `LoadWorkflow()` — the Budget-gated pipeline behind "lee/ejecuta workflow.md" |
+| `cli/delete_cmd.go` | `/delete`'s interactive Y/N loop — the only door-specific code delete needed (MCP/HTTP use `confirm:true` instead, same convention `apply_edits` already established) |
+| `cli/workflow_cmd.go` | recognizes every workflow.md phrasing the spec lists and calls `budget.LoadWorkflow` |
+| `docs/i18n/{en,es}/PROJECT_JSON.md` | new project.json field reference, both languages |
+
+### Modified files (non-doc)
+
+- **`core/types.go`** — added `Project.WorkflowPath`/`Project.BudgetPath`/`Project.TokenHistoryPath` (all plain `string`, new JSON keys `workflow_path`/`budget_path`/`token_history_path`) and `ResolveWorkflowPath`. `Project.Repo` is unchanged — still the project's one repository; there is no `repos` array (see **Follow-up simplification** below for why).
+- **`budget/history.go`** — added `HistoryPath` (resolves `token_history_path`, or `projects/<project>/mova-token-history.json` by default); `RecordUsage`'s call sites unchanged otherwise.
+- **`budget/prices.go`** — removed `ReportPath` field and function. `config/prices.json` is model prices only now.
+- **`budget/report.go`** — `WriteReport`'s signature changed from `(root string, prices *PricesConfig, report *Report)` to `(root, project string, proj *core.Project, report *Report)`; added `BudgetReportPath` (resolves `budget_path`, or `projects/<project>/mova-budget-report.md` by default). Every existing caller (`cli/budget_cmd.go`, `mcp/budget_tool.go`, `cli/chat_save.go`) updated.
+- **`mcp/server.go`** — `get_workflow`'s tool schema and case now require `project` and route through `budget.LoadWorkflow`; `delete_path` registered (schema + dispatch).
+- **`mcp/documents_tool.go`**, **`mcp/documents_tool_helpers.go`** — `delete_path` case added; `save` case accepts `history`/`mode`/`range`/`code_only`/`text_only`; added `pathsArg` (for `delete_path`'s own "one or more files to remove in one call" — unrelated to project.json config) and `chatTurnsArg`.
+- **`mcp/chat_tool.go`** — `chat_completion`'s reply now passes through `documents.AutoTagCodeFences` before returning.
+- **`http/server.go`** — added `/delete` and `/workflow`, both thin wrappers over the matching MCP tool call (same pattern `/save` already used) — no HTTP-specific logic.
+- **`cli/chat_cmd.go`** — dispatches `/delete` and, before natural-language edit/save detection, `handleWorkflowCommand`.
+- **`cli/chat_save.go`** — `-all`/`-range N-M`/`-text` flags added; the file's own code/text/range logic was removed and replaced with calls into `documents/save_selection.go` (see "Removed" below); `renderMarkdown` now calls `documents.AutoTagCodeFences` first.
+- **`config/prices.json`** — `"report_path"` key removed.
+
+### Follow-up simplification: single paths, no multi-repo
+
+An earlier iteration of this work made `repo` (via a new `repos` array + `RepoConfig`), `workflow_path`, `budget_path`, and `token_history_path` all accept EITHER a single string or an array (a `core.StringList` type that decoded both shapes), so more than one repository or more than one report destination could be configured per project. That was deliberately reverted, on request, in favor of what's actually shipped: every one of those fields is a **plain single string**, full stop.
+
+Why the simpler version won: a project genuinely only ever needs ONE `workflow.md`, ONE Budget report destination, and ONE token-history file — the "more than one" cases that seemed to justify an array turned out, in every real example, to be "more than one DIRECTORY inside the same repo", which `focus` already solves (see [PROJECT_JSON.md](PROJECT_JSON.md)'s "Working on part of `repo`" section) without adding a second config shape to every `*_path` field. `StringList`/`RepoConfig`/`Project.Repos`/`Project.Repositories()`/`HistoryPaths`/`RecordUsageAll`/`BudgetReportPaths` (the array-returning plural forms) existed briefly and were removed — `core/types.go`, `budget/history.go`, and `budget/report.go` now only expose the single-value `HistoryPath`/`BudgetReportPath` functions described above. If a genuine need for more than one repository per project shows up later, re-introducing `RepoConfig` is straightforward (it's preserved in this document's history), but it should wait for that real need rather than being spec'd in ahead of it.
+
+### Removed
+
+- `budget.ReportPath` (function) and `PricesConfig.ReportPath` (field) — superseded by `budget.BudgetReportPath`, driven by `project.json`'s `budget_path` instead of `config/prices.json`.
+- `cli/chat_save.go`'s private `exchangePairs`/`transcriptText`/`stripCodeBlocks`/`extractCodeBlocks`/`buildSaveContent`/`parseRangeToken`/`splitFirstToken`(range parsing part) — moved into `documents/save_selection.go` as the shared implementation; `cli/chat_save.go` now only adapts `models.ChatMessage` into `documents.ChatTurn` and calls the shared functions.
+- `core.StringList`/`core.RepoConfig`/`Project.Repos`/`Project.Repositories()`, and `budget.HistoryPaths`/`RecordUsageAll`/`BudgetReportPaths` — the array-based multi-repo/multi-path support described in **Follow-up simplification** above, shipped briefly and then removed in favor of single-value fields.
+
+Nothing else was removed. `mcp/server.go`'s legacy per-format tools (`write_file`, `generate_word_contract`, `generate_pdf_document`, `generate_excel_report`, `generate_vector_graphic`, `trigger_diffusion_image`) are untouched — they were already superseded by `save` before this change set, and removing them wasn't asked for and isn't required by anything above.
+
+### Compatibility
+
+Every change here is additive at the `project.json` level: a project that never set `workflow_path`/`budget_path`/`token_history_path` behaves exactly as before — the default output paths (`projects/<project>/mova-budget-report.md`, `projects/<project>/mova-token-history.json`) match what `HistoryPath`/the old `ReportPath` already defaulted to for the one example project that had a custom `report_path` configured. `/save` with no flags still saves just the last response, unchanged; `/save -c`/`-d`/`-append`/`-overwrite`/`-no-overwrite` are unchanged in behavior, only refactored to share their filtering logic with the new modes.
+
+### Execution flow (workflow.md)
+
+```
+"lee workflow.md" / "workflow.md <project> [task]"
+        │
+        ▼
+budget.LoadWorkflow(adapter, root, project, task, explicitPath, modelHint)
+        │
+        ├─ 1. adapter.GetProject(project)            — resolve project.json
+        ├─ 2. resolveTask(proj, task)                 — resolve the task, if named
+        ├─ 3. core.ResolveWorkflowPath(root, proj, …)  — which workflow.md file
+        ├─ 4. core.BuildContextSections(...)           — agents+skills+prompt+focus+memory
+        │      (Dedup and Focus already run INSIDE this call — nothing extra to invoke)
+        ├─ 5. os.ReadFile(path)                        — read workflow.md's bytes
+        ├─ 6. CountTokens(context + workflow.md)        — estimate
+        ├─ 7. CheckLimit / EnforceLimit                 — the Budget gate
+        │      ├─ over limit  → return {Log, no Content}, err = the ERROR/Suggestion block
+        │      └─ within limit → return {Log, Content = workflow.md's text}
+        ▼
+Chat prints Log + Content and folds Content into sess.System (available to later turns)
+MCP/HTTP return Log + Content (or Log + the error) as the tool result text
+```
+
+### Bug fixed in this session: the Budget gate was silently skipped with no task
+
+`cli/run_cmd.go`, `cli/chat_cmd.go`, `mcp/context_tool.go` (`get_full_context`), and `mcp/chat_tool.go` (`chat_completion`) all had the same shape of bug: `if t, ok := proj.Tasks[resolvedTask]; ok { EnforceLimit(...) }` — the Budget check only ran when `resolvedTask` matched a real entry in `proj.Tasks`. A project with no `default_task` (or a task name that didn't match), asked to just "read the whole project" with no task named, skipped the Budget gate entirely — the exact scenario a person means by "lee `<project>`" (no task) reaching Claude Console, Codex, Gemini, or any other MCP client.
+
+Fixed by centralizing task resolution in two small, exported functions instead of four ad-hoc copies:
+
+- **`core.ResolveTaskName(proj, taskName)`** — explicit `taskName`, else `proj.DefaultTask`, else the project's one task if it only declares a single one, else `""`. Used by `core.BuildContextSections` itself (so the auto-pick behavior lives in one place) and by every Budget-gate call site, so the task the Budget check validates is always exactly the task the context was actually built from.
+- **`budget.ResolveTask(proj, taskName)`** — looks up that name in `proj.Tasks`, or returns a pointer to a zero-value `Task{}` (never `nil`) so `EnforceLimit` always has something to call, even for "no task at all" (which correctly falls back to the project-level `budget`).
+
+All four call sites now do `t := budget.ResolveTask(proj, core.ResolveTaskName(proj, taskName)); if err := budget.EnforceLimit(proj, t, tokens); err != nil { ... }` unconditionally — the gate can no longer be skipped. Verified end-to-end with a real compiled binary and a project with `budget.max_tokens: 5` and no `default_task`: `mova run`, `mova chat`'s "workflow.md `<project>`", the `get_workflow`/`get_full_context` MCP tools (over real stdio JSON-RPC), and `POST /workflow` (over a real HTTP server) all correctly returned the ERROR/Suggestion block instead of the content.
+
+Also fixed in the same pass: `mcp/server.go`'s generic tool-error wrapper used to append "Please use 'list_projects' to see valid projects." to EVERY tool error, including Budget errors — misleading, since a Budget-exceeded error has nothing to do with the project name being wrong. It now only appends that suggestion to errors that don't already carry their own explanation (i.e. anything without a `"\nSuggestion:"` block).
+
+### How to extend this further
+
+- **A new `/save` selection mode**: add a case to `documents.SelectionMode`/`SelectContent` in `save_selection.go` — every door picks it up automatically through `flags.mode()` (CLI) or the `mode` JSON argument (MCP/HTTP); no per-door change needed.
+- **A new workflow.md trigger phrase**: add it to `cli/workflow_cmd.go`'s regexes — MCP/HTTP already accept any `project`/`task`/`workflow` argument combination, so no change needed there.
+- **A genuine need for more than one repository per project**: don't reach for an array field on `Project` directly — model it explicitly (a `RepoConfig`-shaped type, scoped tasks/focus per repo) once there's a real multi-repo use case driving the design, rather than speculatively supporting it now (see **Follow-up simplification** above).
+
+

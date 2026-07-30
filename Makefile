@@ -1,41 +1,84 @@
 # Mova Context — Build
 
 ifeq ($(OS),Windows_NT)
-	MKDIR_DIST = if not exist dist mkdir dist
-	RM_RF = rmdir /s /q dist
-	GO_BUILD = go build
+    MKDIR_DIST = if not exist dist mkdir dist
+    RM_RF = rmdir /s /q dist
+    GO_BUILD = go build
+    
+    # Detectar arquitectura en Windows (AMD64 o ARM64)
+    ARCH = amd64
+    ifeq ($(PROCESSOR_ARCHITECTURE),ARM64)
+        ARCH = arm64
+    endif
+    
+    BINARY_NAME = mova-windows-$(ARCH).exe
+    TARGET_NAME = mova.exe
 
 build-all:
 	$(MKDIR_DIST)
-#	set GOOS=linux&& set GOARCH=amd64&& $(GO_BUILD) -ldflags="-s -w" -o dist/mova-linux-amd64 ./src/cli
-#	set GOOS=darwin&& set GOARCH=amd64&& $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-amd64 ./src/cli
-#	set GOOS=darwin&& set GOARCH=arm64&& $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-arm64 ./src/cli
 	set GOOS=windows&& set GOARCH=amd64&& $(GO_BUILD) -ldflags="-s -w" -o dist/mova-windows-amd64.exe ./src/cli
 
-install: build
-	@for /f "delims=" %%g in ('go env GOPATH') do copy /Y dist\mova.exe "%%g\bin\mova.exe"
-	@echo Installed to %GOPATH%\bin\mova.exe — make sure that folder is in your PATH.
+# Copia el binario y agrega %GOPATH%\bin al PATH de usuario en el Registro de Windows si no está presente
+install:
+	@for /f "delims=" %%g in ('go env GOPATH') do ( \
+		if not exist "%%g\bin" mkdir "%%g\bin" && \
+		copy /Y "dist\$(BINARY_NAME)" "%%g\bin\$(TARGET_NAME)" && \
+		powershell -NoProfile -ExecutionPolicy Bypass -Command \
+			"$$gopathBin = '%%g\bin'; \
+			 $$oldPath = [Environment]::GetEnvironmentVariable('Path', 'User'); \
+			 if (-not $$oldPath.Split(';').Contains($$gopathBin)) { \
+				 [Environment]::SetEnvironmentVariable('Path', $$oldPath + ';' + $$gopathBin, 'User'); \
+				 Write-Host 'Agregado %%g\bin al PATH de usuario en Windows.'; \
+			 }" \
+	)
+	@echo Installed successfully as $(TARGET_NAME).
 
 else
-	MKDIR_DIST = mkdir -p dist
-	RM_RF = rm -rf dist
-	GO_BUILD = go build
+    MKDIR_DIST = mkdir -p dist
+    RM_RF = rm -rf dist
+    GO_BUILD = go build
+    
+    # 1. Obtener el GOPATH directamente en Make
+    GOPATH_DIR := $(shell go env GOPATH)
+    
+    # 2. Detectar Sistema Operativo (darwin -> macos, linux -> linux)
+    UNAME_S := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+    ifeq ($(UNAME_S),darwin)
+        OS_NAME = macos
+        SHELL_PROFILE = $(HOME)/.zshrc
+    else
+        OS_NAME = linux
+        SHELL_PROFILE = $(HOME)/.bashrc
+    endif
+
+    # 3. Detectar Arquitectura (x86_64 -> amd64, arm64/aarch64 -> arm64)
+    UNAME_M := $(shell uname -m)
+    ifeq ($(UNAME_M),x86_64)
+        ARCH_NAME = amd64
+    else ifeq ($(UNAME_M),arm64)
+        ARCH_NAME = arm64
+    else ifeq ($(UNAME_M),aarch64)
+        ARCH_NAME = arm64
+    endif
+
+    BINARY_NAME = mova-$(OS_NAME)-$(ARCH_NAME)
+    TARGET_NAME = mova
 
 build-all:
 	$(MKDIR_DIST)
-#	GOOS=linux GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-linux-amd64 ./src/cli
-#	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-amd64 ./src/cli
-#	GOOS=darwin GOARCH=arm64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-arm64 ./src/cli
+	GOOS=linux GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-linux-amd64 ./src/cli
+	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-amd64 ./src/cli
+	GOOS=darwin GOARCH=arm64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-arm64 ./src/cli
 	GOOS=windows GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-windows-amd64.exe ./src/cli
 
-# install builds and copies the binary into `go env GOPATH`/bin — the same
-# folder `go install` itself always uses, on Linux and macOS alike. We
-# don't use `go install ./src/cli` directly because Go would name the
-# binary after the last path element ("cli"), not "mova".
-install: build
-	@mkdir -p "$$(go env GOPATH)/bin"
-	@cp dist/mova "$$(go env GOPATH)/bin/mova"
-	@echo "Installed to $$(go env GOPATH)/bin/mova — make sure that folder is in your PATH."
+# Copia el binario y escribe export PATH=... en ~/.zshrc o ~/.bashrc si no existe
+install:
+	@mkdir -p "$(GOPATH_DIR)/bin"
+	@cp "dist/$(BINARY_NAME)" "$(GOPATH_DIR)/bin/$(TARGET_NAME)"
+	@grep -qF '$(GOPATH_DIR)/bin' $(SHELL_PROFILE) 2>/dev/null || \
+		(echo 'export PATH="$(GOPATH_DIR)/bin:$$PATH"' >> $(SHELL_PROFILE) && \
+		 echo "Agregado $(GOPATH_DIR)/bin a $(SHELL_PROFILE)"); \
+	echo "Installed successfully to $(GOPATH_DIR)/bin/$(TARGET_NAME)."
 
 endif
 

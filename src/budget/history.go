@@ -31,10 +31,11 @@ type ProviderAccumulator struct {
 // agregue), cada una con sus dos acumuladores.
 type TokenHistory map[string]ProviderAccumulator
 
-// HistoryPath resuelve dónde vive mova-token-history.json: el directorio
-// del propio project.json por default, o proj.TokenHistoryPath si el
-// proyecto define uno — resuelto con filepath.Join, así que funciona
-// igual en Windows, Linux y macOS sin ningún caso especial por SO.
+// HistoryPath resuelve dónde vive mova-token-history.json:
+// proj.TokenHistoryPath (un único string) si el proyecto lo configura, o
+// el directorio del propio project.json por default — resuelto con
+// filepath.Join, así que funciona igual en Windows, Linux y macOS sin
+// ningún caso especial por SO.
 func HistoryPath(root, project string, proj *core.Project) string {
 	if proj != nil && proj.TokenHistoryPath != "" {
 		if filepath.IsAbs(proj.TokenHistoryPath) {

@@ -7,8 +7,10 @@ package budget
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
+	"mova.local/core"
 	"mova.local/documents"
 )
 
@@ -211,14 +213,31 @@ func componentTable(r *Report) string {
 	return b.String()
 }
 
-// WriteReport renders the report and writes it to the path configured in
-// config/prices.json ("report_path"), reusing documents.WriteFile — the
-// same writer every other create/edit tool in Mova Context uses, so the
-// report gets the same directory-creation and validation behavior as any
-// other generated file. Returns the resolved path it wrote to.
-func WriteReport(root string, prices *PricesConfig, report *Report) (string, error) {
-	path := ReportPath(root, prices)
+// BudgetReportPath resolves where mova-budget-report.md is written for
+// this project — project.json's "budget_path" (see "11. budget_path" in
+// the spec this implements), or projects/<project>/mova-budget-report.md
+// by default — the same location config/prices.json's old "report_path"
+// pointed existing example projects at, so removing "report_path" from
+// config/prices.json (see prices.go) changes no project that didn't
+// already rely on a custom path.
+func BudgetReportPath(root, project string, proj *core.Project) string {
+	if proj != nil && proj.BudgetPath != "" {
+		if filepath.IsAbs(proj.BudgetPath) {
+			return proj.BudgetPath
+		}
+		return filepath.Join(root, proj.BudgetPath)
+	}
+	return filepath.Join(root, "projects", project, "mova-budget-report.md")
+}
+
+// WriteReport renders the report and writes it to BudgetReportPath,
+// reusing documents.WriteFile — the same writer every other create/edit
+// tool in Mova Context uses, so the report gets the same directory-
+// creation behavior as any other generated file. Returns the resolved
+// path it wrote to.
+func WriteReport(root, project string, proj *core.Project, report *Report) (string, error) {
 	content := RenderMarkdown(report)
+	path := BudgetReportPath(root, project, proj)
 	if err := documents.WriteFile(path, content); err != nil {
 		return "", err
 	}

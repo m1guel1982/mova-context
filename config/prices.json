@@ -1,5 +1,4 @@
 {
-  "report_path": "/projects/ejemplo-gemini-flash/mova-budget-report.md",
   "currency": "USD",
   "exchange_rate_clp": 950,
   "unit": "per_1k_tokens",

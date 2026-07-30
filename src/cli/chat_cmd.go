@@ -23,9 +23,19 @@
 //	/save -append "path"     appends the model's last reply to an existing file instead of overwriting it
 //	/save -overwrite "path"  forces overwriting an existing file
 //	/save -no-overwrite "path" fails instead of overwriting an existing file
+//	/delete "path" ["path2" ...]  deletes files/directories, confirming each one (Y/N) — see delete_cmd.go
 //	/tools                   lists every file/directory capability available in this chat
 //	/clear                   clears the terminal screen
 //	exit | quit              ends the session
+//
+// workflow.md: "lee workflow.md", "leer workflow.md", "ejecuta
+// workflow.md", "run workflow.md", "execute workflow.md",
+// "workflow.md <project>", "workflow.md <project> <task>" all resolve
+// the project and validate its Budget BEFORE ever reading workflow.md —
+// see workflow_cmd.go and mova.local/budget.LoadWorkflow. If the
+// resulting context exceeds the configured limit, workflow.md is never
+// loaded and the same ERROR/Suggestion block `mova budget` shows is
+// printed instead.
 //
 // Natural-language file/directory creation (no /save needed): plain
 // messages like "Genera reporte.pdf" or "Crea el directorio docs/out"
@@ -74,15 +84,11 @@ func runChat(root, project, task string) {
 			ctxText := sections.Full()
 			printContextSummary(sections)
 
-			resolvedTask := task
-			if resolvedTask == "" {
-				resolvedTask = proj.DefaultTask
-			}
-			if t, ok := proj.Tasks[resolvedTask]; ok {
-				if gateErr := budget.EnforceLimit(proj, &t, tokensOf(ctxText, proj)); gateErr != nil {
-					consolePrint("\n" + gateErr.Error() + "\n\n")
-					return
-				}
+			resolvedTask := core.ResolveTaskName(proj, task)
+			t := budget.ResolveTask(proj, resolvedTask)
+			if gateErr := budget.EnforceLimit(proj, t, tokensOf(ctxText, proj)); gateErr != nil {
+				consolePrint("\n" + gateErr.Error() + "\n\n")
+				return
 			}
 			sess.SetSystem(ctxText + mcp.ToolsSystemPrompt(proj.Tools))
 			if core.ToolsEnabled(proj.Tools) {
@@ -139,12 +145,20 @@ func runChat(root, project, task string) {
 		case strings.HasPrefix(line, "/save"):
 			runChatSave(adapter, root, proj, sess, strings.TrimSpace(strings.TrimPrefix(line, "/save")), fileState)
 
-		// No explicit command matched: try natural-language EDIT intent
-		// first (modify an EXISTING file — see nl_edit.go), then
+		case strings.HasPrefix(line, "/delete"):
+			runChatDelete(root, proj, strings.TrimSpace(strings.TrimPrefix(line, "/delete")), scanner)
+
+		// No explicit command matched: try workflow.md first ("lee
+		// workflow.md", "ejecuta workflow.md", "workflow.md <project>
+		// [task]" — see workflow_cmd.go), then natural-language EDIT
+		// intent (modify an EXISTING file — see nl_edit.go), then
 		// natural-language CREATE intent (a NEW file/directory — see
-		// nl_save.go). Only falls through to an ordinary chat turn if the
-		// message carries neither.
+		// nl_save.go). Only falls through to an ordinary chat turn if
+		// the message carries none of these.
 		default:
+			if handleWorkflowCommand(project, task, sess, root, line) {
+				continue
+			}
 			if handleNaturalLanguageEdit(adapter, root, proj, sess, line, fileState, scanner) {
 				continue
 			}

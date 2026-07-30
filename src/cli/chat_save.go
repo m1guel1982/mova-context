@@ -107,12 +107,12 @@ func runChatBudget(root string, adapter core.Adapter, project, task string) {
 		consolePrint(fmt.Sprintf("[Budget] Estimated cost: %s %.4f (%s %s).\n",
 			report.Currency, report.TotalCosts[0].USD, report.TotalCosts[0].Provider, report.TotalCosts[0].Model))
 	}
-	prices, err := budget.LoadPrices(root)
+	proj, err := adapter.GetProject(project)
 	if err != nil {
 		consolePrint("Error: " + err.Error() + "\n")
 		return
 	}
-	path, err := budget.WriteReport(root, prices, report)
+	path, err := budget.WriteReport(root, project, proj, report)
 	if err != nil {
 		consolePrint("Error: " + err.Error() + "\n")
 		return
@@ -130,9 +130,12 @@ func runChatSave(adapter core.Adapter, root string, proj *core.Project, sess *mo
 	if flags.path == "" {
 		consolePrint("Usage:\n" +
 			"  /save \"docs/readme.md\"                saves the LAST model response there\n" +
-			"  /save -c \"src/app.js\"               saves ONLY source code blocks from the LAST response\n" +
+			"  /save -c \"src/app.js\"               saves ONLY source code blocks from the selected response(s)\n" +
+			"  /save -text \"notes.md\"               saves ONLY prose, code blocks excluded\n" +
+			"  /save -all \"transcript.md\"           saves the FULL conversation so far\n" +
+			"  /save -range 2-4 \"excerpt.md\"        saves exchanges 2 through 4 (1-indexed)\n" +
 			"  /save -d \"docs/backend\"             creates only the directory\n" +
-			"  /save -append \"notes.md\"           appends the LAST response to the end of an existing file\n" +
+			"  /save -append \"notes.md\"           appends the selected content to the end of an existing file\n" +
 			"  /save -overwrite \"report.pdf\"      forces overwrite if the file already exists\n" +
 			"  /save -no-overwrite \"report.pdf\"   fails instead of overwriting if the file already exists\n")
 		return
@@ -147,22 +150,12 @@ func runChatSave(adapter core.Adapter, root string, proj *core.Project, sess *mo
 		req.Directory = flags.path
 	} else {
 		req.Path = flags.path
-		_, assistant, ok := sess.LastExchange()
-		if !ok {
-			consolePrint("There is no model response to save yet.\n")
+		content, cErr := documents.SelectContent(chatTurns(sess.History), flags.mode(), flags.rangeStart, flags.rangeEnd, flags.onlyCode, flags.textOnly)
+		if cErr != nil {
+			consolePrint("[Save] Error: " + cErr.Error() + "\n")
 			return
 		}
-
-		if flags.onlyCode {
-			codeBlocks := extractCodeBlocks(assistant)
-			if len(codeBlocks) == 0 {
-				consolePrint("[Save] Error: No code blocks (```) found in the last response to extract.\n")
-				return
-			}
-			req.Content = strings.Join(codeBlocks, "\n\n")
-		} else {
-			req.Content = assistant
-		}
+		req.Content = content
 	}
 
 	result, err := documents.Save(root, req)
@@ -176,17 +169,49 @@ func runChatSave(adapter core.Adapter, root string, proj *core.Project, sess *mo
 	}
 }
 
+// chatTurns adapts Session.History (models.ChatMessage) into
+// []documents.ChatTurn — the transport-agnostic shape SelectContent
+// works on, so documents (which models never imports) has no dependency
+// on the CLI's session type. MCP/HTTP build the same []documents.ChatTurn
+// directly from a "history" argument in the request body — see
+// mcp/documents_tool.go's "save" case.
+func chatTurns(history []models.ChatMessage) []documents.ChatTurn {
+	turns := make([]documents.ChatTurn, len(history))
+	for i, m := range history {
+		turns[i] = documents.ChatTurn{Role: m.Role, Content: m.Content}
+	}
+	return turns
+}
+
 // saveFlags is what parseSaveArgs extracts from the text after `/save`.
 type saveFlags struct {
 	isDir          bool
 	onlyCode       bool
+	textOnly       bool // -text: only prose, code blocks stripped out (complement of onlyCode)
 	appendMode     bool
 	overwriteSet   bool // true if -overwrite or -no-overwrite was given at all
 	overwriteValue bool // only meaningful when overwriteSet is true
+	all            bool // -all: the full conversation, not just the last response
+	rangeSet       bool // -range N-M: a range of exchanges (1-indexed, inclusive)
+	rangeStart     int
+	rangeEnd       int
 	path           string
 }
 
-// parseSaveArgs parses /save's flags (-d, -c, -append, -overwrite, -no-overwrite).
+// mode maps saveFlags' -all/-range booleans onto documents.SelectionMode.
+func (f saveFlags) mode() documents.SelectionMode {
+	switch {
+	case f.all:
+		return documents.ModeAll
+	case f.rangeSet:
+		return documents.ModeRange
+	default:
+		return documents.ModeCurrent
+	}
+}
+
+// parseSaveArgs parses /save's flags (-d, -c, -text, -all, -range,
+// -append, -overwrite, -no-overwrite).
 func parseSaveArgs(rest string) saveFlags {
 	var f saveFlags
 	rest = strings.TrimSpace(rest)
@@ -199,6 +224,18 @@ loop:
 		case rest == "-c" || strings.HasPrefix(rest, "-c ") || strings.HasPrefix(rest, "-c\t"):
 			f.onlyCode = true
 			rest = strings.TrimSpace(strings.TrimPrefix(rest, "-c"))
+		case rest == "-text" || strings.HasPrefix(rest, "-text ") || strings.HasPrefix(rest, "-text\t"):
+			f.textOnly = true
+			rest = strings.TrimSpace(strings.TrimPrefix(rest, "-text"))
+		case rest == "-all" || strings.HasPrefix(rest, "-all ") || strings.HasPrefix(rest, "-all\t"):
+			f.all = true
+			rest = strings.TrimSpace(strings.TrimPrefix(rest, "-all"))
+		case rest == "-range" || strings.HasPrefix(rest, "-range ") || strings.HasPrefix(rest, "-range\t"):
+			remainder := strings.TrimSpace(strings.TrimPrefix(rest, "-range"))
+			token, after := splitFirstToken(remainder)
+			f.rangeSet = true
+			f.rangeStart, f.rangeEnd = documents.ParseRangeToken(token)
+			rest = after
 		case rest == "-append" || strings.HasPrefix(rest, "-append ") || strings.HasPrefix(rest, "-append\t"):
 			f.appendMode = true
 			rest = strings.TrimSpace(strings.TrimPrefix(rest, "-append"))
@@ -216,34 +253,25 @@ loop:
 	return f
 }
 
-// extractCodeBlocks filters out prose/markdown text and returns strictly code contents inside ``` blocks.
-func extractCodeBlocks(text string) []string {
-	var blocks []string
-	lines := strings.Split(text, "\n")
-	inBlock := false
-	var currentBlock strings.Builder
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") {
-			if inBlock {
-				blocks = append(blocks, strings.TrimRight(currentBlock.String(), "\n"))
-				currentBlock.Reset()
-				inBlock = false
-			} else {
-				inBlock = true
-			}
-			continue
-		}
-		if inBlock {
-			currentBlock.WriteString(line + "\n")
-		}
+// splitFirstToken splits s into its first whitespace-delimited token and
+// everything after it — used by -range to take exactly "N-M" (or "N")
+// and leave the rest (the path) for the normal parsing loop above.
+func splitFirstToken(s string) (token, rest string) {
+	s = strings.TrimSpace(s)
+	idx := strings.IndexAny(s, " \t")
+	if idx == -1 {
+		return s, ""
 	}
-	return blocks
+	return s[:idx], strings.TrimSpace(s[idx+1:])
 }
 
-// renderMarkdown uses glamour to render syntax-highlighted output in the terminal.
+// renderMarkdown uses glamour to render syntax-highlighted output in the
+// terminal — code fences without an explicit language tag are first
+// auto-tagged by documents.AutoTagCodeFences (see highlight.go), the same
+// shared language-detection MCP/HTTP responses use, so highlighting
+// behaves identically regardless of which door produced the text.
 func renderMarkdown(text string) string {
+	text = documents.AutoTagCodeFences(text)
 	r, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
 		glamour.WithWordWrap(100),

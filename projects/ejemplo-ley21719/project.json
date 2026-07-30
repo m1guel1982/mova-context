@@ -25,12 +25,14 @@
   },
 
   "llm_profile": {
-    "provider": "ollama",
     "config": "llama3.2.3b"
   },
     "budget": {
-    "max_tokens": 5
+    "max_tokens": 10000
   },
+  "token_history_path": "/projects/ejemplo-ley21719/mova-token-history.json",
+  "budget_path": "/projects/ejemplo-ley21719/mova-budget-report.md",
+
 
   "tools": {
     "enabled": false

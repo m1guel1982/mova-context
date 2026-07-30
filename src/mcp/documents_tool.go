@@ -18,6 +18,24 @@ import (
 
 func documentTool(adapter core.Adapter, root, tool string, args map[string]any) (string, error) {
 	switch tool {
+	// delete_path — the SINGLE unified entry point for removing files and
+	// directories (see documents/delete_service.go), reachable
+	// identically from chat's "/delete", this MCP tool, and HTTP's
+	// POST /delete. Without confirm:true, nothing is deleted — the exact
+	// "Delete \"x\"? (Y/N)" prompt text is returned instead, same
+	// convention chat_completion's apply_edits already uses for
+	// natural-language edits on non-interactive doors.
+	case "delete_path":
+		result, err := documents.Delete(root, documents.DeleteRequest{
+			Paths:   pathsArg(args),
+			Repo:    repoFor(adapter, args),
+			Confirm: boolArg(args, "confirm"),
+		})
+		if err != nil {
+			return "", err
+		}
+		return result.Message, nil
+
 	case "create_directory":
 		path, ambiguousMsg, err := resolveSmartDir(adapter, root, args, "path")
 		if err != nil {
@@ -39,10 +57,30 @@ func documentTool(adapter core.Adapter, root, tool string, args map[string]any) 
 	// Those legacy tools are kept below, unchanged, for backward
 	// compatibility with existing MCP clients/scripts.
 	case "save":
+		content := str(args, "content")
+		if content == "" && args["history"] != nil {
+			// "history": [{"role":"user","content":"..."}, ...] — the same
+			// shape chat_completion's own "history" argument uses. "mode":
+			// "all" | "range" (default: the last exchange, unchanged),
+			// "range": "N-M" (1-indexed, only with mode:"range"),
+			// "code_only"/"text_only": booleans — same selection logic
+			// `/save -all`/`-range`/`-c`/`-text` use in chat (see
+			// documents/save_selection.go), so Chat/MCP/HTTP behave
+			// identically for "which text to save", not just for how the
+			// resulting file gets written.
+			turns := chatTurnsArg(args["history"])
+			mode := documents.SelectionMode(str(args, "mode"))
+			rangeStart, rangeEnd := documents.ParseRangeToken(str(args, "range"))
+			selected, err := documents.SelectContent(turns, mode, rangeStart, rangeEnd, boolArg(args, "code_only"), boolArg(args, "text_only"))
+			if err != nil {
+				return "", err
+			}
+			content = selected
+		}
 		result, err := documents.Save(root, documents.SaveRequest{
 			Path:              str(args, "path"),
 			Directory:         str(args, "directory"),
-			Content:           str(args, "content"),
+			Content:           content,
 			Append:            boolArg(args, "append"),
 			Overwrite:         boolArg(args, "overwrite"),
 			OverwriteExplicit: hasArg(args, "overwrite"),

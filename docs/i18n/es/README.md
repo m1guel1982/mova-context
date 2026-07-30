@@ -21,7 +21,7 @@ Docs: **[Español](README.md)** · **[English](README.en.md)**
 
 ## 1. La convención
 
-**Mova Context es una convención de archivos, no una herramienta.** Todo lo que necesitás cabe en esta estructura, y funciona sin instalar absolutamente nada:
+**Mova Context es una convención de archivos, no una herramienta.** Todo lo que se necesita cabe en esta estructura, y funciona sin instalar absolutamente nada:
 
 ```text
 workflow.md                       ← especificación: cómo se construye el contexto
@@ -41,7 +41,7 @@ Con un agente que pueda leer tu repositorio (Claude Code, Cursor, Gemini CLI, Cl
 Lee workflow.md, resuelve el proyecto [nombre], ejecuta la task [task] y construye el contexto.
 ```
 
-El agente sigue `workflow.md`, resuelve el `project.json`, carga `agents`/`skills`/`prompts`, inyecta variables, suma la `memory.md` y arma el contexto final. Si trabajás desde un chat web que no puede tocar tu repo (ChatGPT, Claude.ai, Gemini), **`mova run`** genera exactamente ese mismo contexto, listo para copiar y pegar.
+El agente sigue `workflow.md`, resuelve el `project.json`, carga `agents`/`skills`/`prompts`, inyecta variables, suma la `memory.md` y arma el contexto final. Si se trabaja desde un chat web que no puede tocar tu repo (ChatGPT, Claude.ai, Gemini), **`mova run`** genera exactamente ese mismo contexto, listo para copiar y pegar.
 
 **Si el binario `mova` desapareciera mañana, el proyecto seguiría funcionando igual** — porque el conocimiento vive en el repositorio, nunca en la herramienta. El CLI solo automatiza tareas: ensamblar contexto, administrar memoria, o exponerlo por HTTP/MCP.
 
@@ -101,20 +101,35 @@ tu repositorio           opcional)
 
 | Situación | ¿CLI? |
 |---|---|
-| Ya usás Claude Code, Cursor u otro agente que lee el repo | **No.** El agente sigue `workflow.md` directo. |
-| Querés pegar el contexto en un chat web (Claude.ai, ChatGPT, Gemini) | **Sí.** `mova run` te lo da listo para copiar. |
-| Querés llamar la API de un modelo desde un script | **Sí.** Más rápido que hacer que el modelo lea todos los archivos. |
-| Querés correr un modelo local (Ollama) | **Sí.** `mova run ... \| ollama run modelo` en una línea. |
-| Querés guardar memoria de sesión sin tocar `memory.md` a mano | **Sí.** `mova memory` lo hace por vos. |
-| Querés exponer el contexto por HTTP o como servidor MCP | **Sí.** `mova http` o `mova mcp start`. |
+| Ya se usa Claude Code, Cursor u otro agente que lee el repo | **No.** El agente sigue `workflow.md` directo. |
+| ¿Quieres pegar el contexto en un chat web (Claude.ai, ChatGPT, Gemini)? | **Sí.** `mova run` lo entrega listo para copiar. |
+| ¿Quieres llamar la API de un modelo desde un script? | **Sí.** Más rápido que hacer que el modelo lea todos los archivos. |
+| ¿Quieres correr un modelo local (Ollama)? | **Sí.** `mova run ... \| ollama run modelo` en una línea. |
+| Se quiere guardar memoria de sesión sin tocar `memory.md` a mano | **Sí.** `mova memory` lo hace automáticamente. |
+| ¿Quieres exponer el contexto por HTTP o como servidor MCP? | **Sí.** `mova http` o `mova mcp start`. |
 
-Con o sin CLI, la fuente de verdad nunca cambia: `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, `memory.md`. Sin CLI perdés comodidad; con CLI ganás velocidad y automatización — nunca al revés.
+Con o sin CLI, la fuente de verdad nunca cambia: `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, `memory.md`. Sin CLI se pierde comodidad; con CLI se gana velocidad y automatización — nunca al revés.
 
 ---
 
-## 5. Tokenomics — el plato fuerte
+## 5. Tokenomics  
 
-Cada token que le mandás a un modelo cuesta algo: plata si es Cloud, o precisión si es local y el contexto no entra en su ventana. Mova Context no te promete magia — te da **control real, antes de gastar nada**.
+### La analogía: la balanza del aeropuerto
+
+Antes de viajar, pesás la valija en tu casa con una balanza de baño. Te da una idea aproximada, pero no es la balanza oficial. En el aeropuerto, la valija se pesa de verdad — y ahí aparece la diferencia entre lo que calculaste y lo que realmente pesa. Si supieras de antemano cuánto se equivoca tu balanza casera (por ejemplo, "siempre marca 3% menos de lo real"), podrías ajustar el cálculo la próxima vez y dejar de llevarte sorpresas en el mostrador.
+
+**Mova Tokenomics hace exactamente eso, pero con tokens en vez de kilos:**
+
+| En la analogía | En Mova |
+|---|---|
+| Balanza de baño en casa | Estimación local con `tiktoken-go`, antes de mandar nada a ningún proveedor |
+| Balanza oficial del aeropuerto | Conteo real de tokens que devuelve el proveedor (Anthropic, OpenAI, Google) cuando la API se llama de verdad |
+| Límite de equipaje de la aerolínea | `budget.max_tokens` en tu `project.json` |
+| La libreta donde anotás "en casa dio X, en el aeropuerto dio Y" | El archivo `mova-token-history.json` que vive en tu proyecto |
+
+Y como esa libreta es tuya —no un promedio genérico de miles de valijas ajenas— la calibración que aprende Mova es específica de **tu proyecto**: su mezcla de idioma, su código, sus documentos.
+
+**Por qué esto importa para el bolsillo (y la cordura):** cada token que le mandás a un modelo Cloud cuesta dinero; si el modelo es local, un contexto que no entra en la ventana se trunca o degrada en silencio, sin avisar. Mova ataca los dos problemas con el mismo mecanismo: **medir antes de gastar, cortar si se pasa, y aprender de cada llamada real.**
 
 ### El gate: `budget.max_tokens` corta la ejecución, no solo avisa
 
@@ -135,7 +150,7 @@ Esto convierte el control de costo en una regla de arquitectura, no en un hábit
 
 ### El reporte: `mova budget`, cero llamadas a ningún proveedor
 
-`mova budget mi-proyecto` calcula, **100% en tu máquina**, cuántos tokens usaría el contexto real (agents + skills + prompt + focus + memory) y cuánto costaría en OpenAI, Anthropic y Google, según los precios que vos mismo cargás en `config/prices.json`. El reporte desglosa el gasto pieza por pieza para que sepas exactamente qué recortar primero:
+`mova budget mi-proyecto` calcula, **100% en tu máquina**, cuántos tokens usaría el contexto real (agents + skills + prompt + focus + memory) y cuánto costaría en OpenAI, Anthropic y Google, según los precios que se cargan en `config/prices.json`. El reporte desglosa el gasto pieza por pieza para que sepas exactamente qué recortar primero:
 
 ```text
 mova budget mi-proyecto mi-task --focus
@@ -144,15 +159,57 @@ mova budget mi-proyecto mi-task --focus
 
 **Que quede claro:** esto es una estimación calculada con [tiktoken-go](https://github.com/tiktoken-go/tokenizer) (el tokenizador de OpenAI), cruzada contra precios manuales. No reemplaza la factura real — es una brújula para decidir qué optimizar, y el propio reporte lo advierte tres veces.
 
+#### El reporte, explicado en simple
+
+Cuando corrés el comando de arriba, obtenés un archivo `mova-budget-report.md`. En criollo, dice tres cosas:
+
+| Sección del reporte | Qué te dice |
+|---|---|
+| **Token & Cost Breakdown** | Cuánto pesa, en tokens y en dólares, cada pedazo de tu contexto (agents, skills, prompt, focus, memory) — para saber qué recortar primero. |
+| **Budget Limit** | Tu límite configurado vs. lo que realmente estás usando, en tokens y en porcentaje. |
+| **Historical Token Accuracy** | Qué tan bien le achunta tu estimador local a la realidad, medido con tus propias llamadas pasadas a cada proveedor. |
+
+Ejemplo real (recortado de un caso concreto): un proyecto con límite de 5.000 tokens usa 1.207 tokens (24.1% del límite) y costaría entre USD 0.0015 y USD 0.0060 según el proveedor — menos de 3 pesos chilenos. Con eso ya sabés, **antes de gastar un centavo**, si te conviene mandarlo a OpenAI, Anthropic o Google, y cuánto margen te queda antes de chocar con el límite.
+
 ### El aprendizaje: cada llamada real afina la estimación
 
-Cuando `mova chat` o `chat_completion` llaman a un proveedor Cloud de verdad, ese proveedor devuelve cuántos tokens contó él. Mova guarda esos dos números —estimado local vs. real— en `mova-token-history.json`, nunca el contenido ni los prompts:
+Esta es, probablemente, la función más importante de Tokenomics — y la que más vale la pena entender a fondo.
+
+**Qué se guarda, y dónde.** Cada vez que `mova chat` o la tool MCP `chat_completion` hacen una llamada real a un proveedor Cloud (Anthropic, OpenAI o Google), la respuesta de la API viene acompañada de un campo de uso (`usage`) que indica cuántos tokens contó el proveedor de verdad — no una estimación: el número exacto por el que se te factura. Mova toma ese número real, junto con la estimación local que había calculado con `tiktoken-go` *antes* de mandar el pedido, y los suma a dos contadores acumulados guardados en un archivo local de tu proyecto: `mova-token-history.json`. **Nunca se guarda el contenido, ni los prompts, ni las respuestas** — solo dos números por proveedor:
 
 ```json
 { "anthropic": { "total_local_tokens": 120000, "total_api_tokens": 122760 } }
 ```
 
-Con el tiempo, `mova budget` te muestra qué tan preciso es tu estimador para **ese proyecto específico** — una calibración propia, no un benchmark genérico.
+**Cómo se calcula la desviación.** Con esos dos acumulados, la fórmula es simple y transparente — nada de caja negra:
+
+```text
+desviación % = (total_api_tokens − total_local_tokens) / total_local_tokens × 100
+```
+
+Con los números de arriba: `(122.760 − 120.000) / 120.000 × 100 = +2.3%`. Es decir: para *este proyecto en particular*, el estimador local de Mova subestima el gasto real en Anthropic por un 2.3%, en promedio.
+
+**Por qué se acumula en vez de guardar un historial llamada por llamada.** Cada llamada real que hacés suma a esos dos totales, así que la desviación mostrada no depende del último request (que puede traer ruido: un prompt muy corto, un caso raro), sino que es un promedio ponderado por todo tu uso real acumulado. Cuantas más llamadas reales hagas, más se afina el número — y más confiable se vuelve — para ese proyecto puntual, con su propia mezcla de idioma, código y densidad de contexto.
+
+**Ejemplo con Google (tomado del propio reporte de este repo):**
+
+```json
+{ "google": { "total_local_tokens": 1205, "total_api_tokens": 1201 } }
+```
+
+`(1.201 − 1.205) / 1.205 × 100 = −0.33%` → así es exactamente como `mova budget` llega al **"−0.3%"** que se ve en la sección *Historical Token Accuracy* del reporte. No es una cifra inventada ni un promedio bajado de internet: es matemática directa sobre tus propias llamadas.
+
+**Cómo evoluciona el archivo con el tiempo.** A medida que se acumulan más llamadas reales, la desviación deja de dar saltos bruscos y se estabiliza en un número confiable:
+
+| Después de... | `total_local_tokens` | `total_api_tokens` | Desviación acumulada |
+|---|---|---|---|
+| 1ª llamada real | 1.000 | 1.030 | +3.0% |
+| 5ª llamadas reales | 5.400 | 5.505 | +1.9% |
+| 20ª llamadas reales | 21.800 | 22.190 | +1.8% |
+
+**Qué hace Mova con ese número.** `mova budget` usa esa desviación acumulada para mostrarte, junto a cada estimación nueva, qué tan lejos podría estar de la realidad — y con el tiempo te deja saber, para ese proyecto puntual, si tu estimador tiende a quedarse corto o largo con cada proveedor, para que ajustes `budget.max_tokens` con margen real en vez de a ciegas.
+
+**Qué pasa si nunca llamaste a un proveedor real.** Si `total_local_tokens` es 0 (nunca hiciste una llamada real con `mova chat` a ese proveedor), el reporte muestra `No historical data` — Mova no inventa una desviación sin datos reales que la respalden.
 
 ### La limpieza automática: deduplicación en todo el contexto
 

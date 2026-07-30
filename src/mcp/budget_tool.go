@@ -22,11 +22,11 @@ func budgetTool(adapter core.Adapter, root string, args map[string]any) (string,
 	if err != nil {
 		return "", err
 	}
-	prices, err := budget.LoadPrices(root)
+	proj, err := adapter.GetProject(project)
 	if err != nil {
 		return "", err
 	}
-	path, err := budget.WriteReport(root, prices, report)
+	path, err := budget.WriteReport(root, project, proj, report)
 	if err != nil {
 		return "", err
 	}

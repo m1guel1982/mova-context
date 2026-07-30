@@ -26,9 +26,7 @@ func runBudget(root, project, task string, withFocus bool) {
 	report, err := budget.BuildReport(adapter, root, project, task, withFocus)
 	must(err)
 
-	prices, err := budget.LoadPrices(root)
-	must(err)
-	path, err := budget.WriteReport(root, prices, report)
+	path, err := budget.WriteReport(root, project, proj, report)
 	must(err)
 
 	consolePrint(fmt.Sprintf("✓ mova-budget-report.md generated: %s\n\n", path))

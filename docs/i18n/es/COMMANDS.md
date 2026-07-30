@@ -2,7 +2,7 @@
 
 > Docs: [Español](COMMANDS.md) · [English](COMMANDS.en.md)
 
-El CLI (`mova`) es un complemento — todo lo que hace también podés pedírselo a un modelo leyendo `workflow.md` directamente. Ver [README.md](README.md#1-la-convención).
+El CLI (`mova`) es un complemento — todo lo que hace también se le puede pedir a un modelo leyendo `workflow.md` directamente. Ver [README.md](README.md#1-la-convención).
 
 `mova` sube directorios automáticamente hasta encontrar `workflow.md`, así que funciona desde cualquier subcarpeta del repo. Si hay un único proyecto en `projects/`, `[project]` es opcional — se detecta solo.
 
@@ -86,6 +86,22 @@ Junta agents + skills + prompt + memoria + focus y lo imprime por stdout — lis
 mova run mi-proyecto revisar-auth
 ```
 
+`task` es opcional: si el proyecto define `"default_task"`, se usa esa; si el proyecto declara exactamente UNA task y no se indica ninguna, se usa automáticamente esa única task — sin fricción para el caso común de un proyecto, una task. Con dos o más tasks y ni una explícita ni un `default_task`, Mova sigue sin poder adivinar cuál y pregunta, listando las tasks disponibles.
+
+**La validación de Budget siempre corre primero, sin importar cuál de los casos anteriores aplique** — incluso "solo el nombre del proyecto, sin ninguna task". Si el contexto ensamblado (agents+skills+prompt+focus+memoria) supera el `budget` configurado para el proyecto/task, no se imprime nada más que el mismo bloque de ERROR/Sugerencia que muestra `mova budget`:
+
+```text
+$ mova run mi-proyecto
+ERROR
+
+Current context (128,400 tokens) exceeds the configured limit (100,000).
+
+Suggestion:
+Use --focus to reduce the included files.
+```
+
+Esto es exactamente lo que hacen también el tool `get_full_context` de MCP y `chat_completion` — ver [§10](#10-mcp-model-context-protocol) — así que ya sea que el contexto lo lea `mova run`, `mova chat`, o un modelo externo por MCP (Claude Console, Codex, Gemini, o cualquier cliente MCP), la misma validación de Budget corre antes, siempre, sin ningún paso extra que recordar.
+
 Si la task tiene `focus` (en `project.json` o global), esa sección se agrega automáticamente al final — ver la sección siguiente.
 
 ---
@@ -133,9 +149,50 @@ mova run mi-proyecto revisar-orden
 
 Si un item no se encuentra en ninguna pasada, aparece como `not found: [item]` — nunca se omite en silencio.
 
+### Focus sobre todo el repositorio o directorios completos
+
+Además de archivos/símbolos/secciones individuales, `focus` también acepta patrones glob y rutas de directorio simples:
+
+**Todo el repositorio:**
+
+```json
+"focus": ["**/*"]
+```
+
+Activa el `GlobResolver`: recorre de forma recursiva todos los archivos y directorios bajo `repo`. Útil cuando una tarea realmente necesita todo el código y se prefiere ser explícito en vez de dejar `focus` sin definir:
+
+```json
+"tasks": {
+  "revisar-backend": {
+    "prompt": "review-project",
+    "focus": ["**/*"]
+  }
+}
+```
+
+**Solo la raíz del proyecto:**
+
+```json
+"focus": ["."]
+```
+o
+```json
+"focus": ["./"]
+```
+
+Activa el `DirectoryResolver` sobre la raíz de `repo` — un índice de directorio de lo que hay directamente ahí, con el mismo resolver que se usa para cualquier otro directorio.
+
+**Directorios específicos:**
+
+```json
+"focus": ["src/", "pkg/", "cmd/"]
+```
+
+Cada ruta se resuelve mediante el `DirectoryResolver`. Esta es la forma habitual de mantener fuera del contexto ensamblado directorios pesados — `node_modules`, `vendor`, `.git`, `dist`, `build` — listando solo los directorios que realmente importan en vez de `"**/*"`: lo que no se lista simplemente nunca se recorre.
+
 ### Checklist si `focus` sale vacío
 
-1. ¿`"repo"` apunta a una carpeta que existe y contiene lo que buscás? (`focus` nunca busca fuera de `repo`)
+1. ¿`"repo"` apunta a una carpeta que existe y contiene lo que se busca? (`focus` nunca busca fuera de `repo`)
 2. ¿El símbolo de código lleva `()` al final?
 3. ¿La `task` tiene su propio `focus`? Si sí, reemplaza al global.
 4. ¿Tu binario es anterior a este fix? Recompilá: `go build -o mova ./src/cli`.
@@ -177,7 +234,7 @@ mova search "autenticación" software   # busca en agents/skills/prompts por pal
 
 ## 6. Modelos y proveedores
 
-`llm_profile` (en `project.json`) es lo único que cambia cuando pasás de un modelo/proveedor a otro. Agents, skills, prompts, memoria y focus **nunca** cambian — el mismo `mova run` genera el mismo contexto sin importar qué modelo lo va a leer.
+`llm_profile` (en `project.json`) es lo único que cambia al pasar de un modelo/proveedor a otro. Agents, skills, prompts, memoria y focus **nunca** cambian — el mismo `mova run` genera el mismo contexto sin importar qué modelo lo va a leer.
 
 ```json
 "llm_profile": { "type": "local", "provider": "ollama", "config": "llama3.2.3b" }
@@ -245,7 +302,7 @@ mova model-list                       # modelos instalados en el proveedor activ
 mova remove mistral                   # elimina un modelo instalado
 ```
 
-`install`/`model-list`/`remove` usan la API nativa de Ollama. Con LM Studio/vLLM/Cloud, instalás o contratás el modelo desde su propia herramienta y solo creás su `.json`. `mova install` de un modelo nuevo copia la conexión de cualquier modelo hermano existente para ese proveedor.
+`install`/`model-list`/`remove` usan la API nativa de Ollama. Con LM Studio/vLLM/Cloud, se instala o contrata el modelo desde su propia herramienta y solo se crea su `.json`. `mova install` de un modelo nuevo copia la conexión de cualquier modelo hermano existente para ese proveedor.
 
 ### Proveedores Cloud reales (OpenAI, Anthropic, Google)
 
@@ -291,7 +348,7 @@ Agregar un proveedor Cloud nuevo en el futuro es exactamente esto: un `.json` nu
 mova chat
 > set -model llama3.1
 ✓ modelo cambiado a: llama3.1 (proveedor: ollama)
-> hola, revisá el módulo de auth
+> hola, revisa el módulo de auth
 [llama3.1] ...
 > set -model mistral
 ✓ modelo cambiado a: mistral (proveedor: ollama)
@@ -300,7 +357,7 @@ mova chat
 > exit
 ```
 
-Si pasás `[project]` (y opcionalmente `[task]`), el chat carga el **mismo contexto completo** que arma `mova run` (agents+skills+prompt+memoria+focus) como mensaje de sistema. Comandos disponibles dentro del chat, siempre:
+Si se pasa `[project]` (y opcionalmente `[task]`), el chat carga el **mismo contexto completo** que arma `mova run` (agents+skills+prompt+memoria+focus) como mensaje de sistema. Comandos disponibles dentro del chat, siempre:
 
 | Comando | Qué hace |
 |---|---|
@@ -353,7 +410,7 @@ Un único cliente HTTP compartido (keep-alive + pool de conexiones) atiende toda
 
 ## 8. Crear archivos hablando: lenguaje natural en el chat
 
-Además de `/save`, podés simplemente **pedirlo con tus palabras**, en el mismo mensaje del chat — sin memorizar ningún comando.
+Además de `/save`, es posible simplemente **pedirlo con las propias palabras**, en el mismo mensaje del chat — sin memorizar ningún comando.
 
 ```text
 > Genera el informe de auditoría en docs/auditoria.pdf
@@ -363,7 +420,7 @@ Además de `/save`, podés simplemente **pedirlo con tus palabras**, en el mismo
 [se crea la carpeta, y después se guarda el .docx con la respuesta]
 
 > Guarda el análisis en salida/analisis.txt
-[se guarda tal cual, sin pasar por el modelo si ya tenés el texto — ver detalle abajo]
+[se guarda tal cual, sin pasar por el modelo si ya se tiene el texto — ver detalle abajo]
 ```
 
 ### Cómo funciona por dentro
@@ -377,7 +434,7 @@ Es un detector **heurístico por regex**, no un modelo de lenguaje ni una IA apa
 | guarda, guardar | save |
 | — | make |
 
-Podés usarlos tantas veces como quieras en un mensaje, mezclando español e inglés en la misma sesión.
+Se pueden usar tantas veces como se quiera en un mensaje, mezclando español e inglés en la misma sesión.
 
 Si encuentra el verbo, busca **o bien** (a) una palabra clave de directorio + una ruta, **o bien** (b) un token con forma de ruta terminado en extensión (`.pdf`, `.md`, `.docx`, etc.):
 
@@ -397,25 +454,57 @@ Si encuentra el verbo, busca **o bien** (a) una palabra clave de directorio + un
 
 ## 9. `save` — crear o editar cualquier archivo o directorio
 
-Antes existían tools distintas para cada formato (`generate_word_contract`, `generate_pdf_document`, `generate_excel_report`, `write_file`...), cada una con su propio nombre de argumento para el contenido — fácil de confundir, y causa real de errores como un `.docx` vacío. `save` reemplaza todo eso con un único punto de entrada: das `path` (o `directory`) + `content`, y Mova elige internamente qué generador usar según la extensión.
+Antes existían tools distintas para cada formato (`generate_word_contract`, `generate_pdf_document`, `generate_excel_report`, `write_file`...), cada una con su propio nombre de argumento para el contenido — fácil de confundir, y causa real de errores como un `.docx` vacío. `save` reemplaza todo eso con un único punto de entrada: se indica `path` (o `directory`) + `content`, y Mova elige internamente qué generador usar según la extensión.
 
 **Desde el chat:**
 
 ```text
-> Auditá el checkout y armá el informe de correcciones
+> Audita el checkout y arma el informe de correcciones
 [llama3.1] (la respuesta con el informe completo)
 
 > /save "informes/checkout-corregido.md"
 [Save] ✓ archivo guardado: examples/ejemplo-ley21719-repo/informes/checkout-corregido.md
 
-> /save -d "informes/2026"
-[Save] ✓ directorio creado: examples/ejemplo-ley21719-repo/informes/2026
-
-> /save "informes/checkout-corregido.docx"
-[Save] ✓ documento Word generado: examples/ejemplo-ley21719-repo/informes/checkout-corregido.docx
+> /save -d "carpeta  dos"
+[Save] ✓ directorio creado: examples/ejemplo-ley21719-repo/carpeta  dos
 ```
 
-`/save` siempre usa la ÚLTIMA respuesta del modelo como contenido — igual que `/memory`. El formato (`.md`, `.txt`, `.docx`, `.pdf`, `.xlsx`, `.svg`, `.py`, `.json`, y ~20 extensiones más — ver [SUPPORTED_FORMATS.md](SUPPORTED_FORMATS.md)) se elige **solo** por la extensión. Si el archivo ya existe, por default se sobreescribe.
+`/save -d "carpeta  dos"` crea exactamente ese nombre de directorio, incluidos los espacios dobles, igual en Windows, Linux y macOS — el nombre nunca se normaliza ni se recorta.
+
+Por default, `/save` usa la ÚLTIMA respuesta del modelo como contenido. Varios flags cambian QUÉ texto se guarda y cómo:
+
+| Flag | Guarda... |
+|---|---|
+| *(ninguno)* | la última respuesta del modelo (comportamiento por default, sin cambios) |
+| `-all` | toda la conversación hasta el momento, como transcripción `### You` / `### Assistant` |
+| `-range N-M` | los intercambios N a M, 1-indexado e inclusive, con el mismo formato de transcripción |
+| `-c` | únicamente los bloques de código (` ``` `) de lo seleccionado arriba — cualquier lenguaje: Go, Python, Java, C#, Rust, JavaScript, TypeScript, Kotlin, SQL, YAML, JSON, XML, Bash, y más. No se guarda texto adicional. |
+| `-text` | lo opuesto a `-c` — únicamente el texto, sin los bloques de código |
+
+Y, por separado, cómo se maneja un archivo existente:
+
+| Flag | Efecto |
+|---|---|
+| *(ninguno)* | sobreescribe un archivo existente (comportamiento por default, sin cambios) |
+| `-overwrite "notes.txt"` | sobreescritura explícita — igual que el default, útil para scripts que siempre quieren declarar su intención |
+| `-no-overwrite "notes.txt"` | falla con un mensaje claro en vez de sobreescribir si el archivo ya existe |
+| `-append "notes.txt"` | agrega el contenido seleccionado al final del archivo existente |
+
+Estos se combinan libremente: `/save -all -c "src/todos_los_snippets.go"` guarda todos los bloques de código de toda la conversación; `/save -range 2-4 -text "resumen.md"` guarda únicamente el texto de los intercambios 2 a 4.
+
+**El lenguaje natural también funciona**, para overwrite/no-overwrite, en cualquiera de los dos idiomas:
+
+```text
+> Sobreescribe reporte.pdf
+```
+
+es exactamente `/save -overwrite "reporte.pdf"`, y
+
+```text
+> No sobreescribas reporte.pdf
+```
+
+es exactamente `/save -no-overwrite "reporte.pdf"`. Mismo detector, mismo resultado, ya sea que se escriba el flag o se diga de forma natural — ver `documents/save_modifiers.go`.
 
 **Vía MCP / HTTP** — la misma tool, alcanzable por stdio, HTTP, o `chat_completion`:
 
@@ -438,6 +527,20 @@ curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
 {"name":"save","arguments":{"project":"mi-proyecto","directory":"informes/2026"}}
 ```
 
+Un caller de MCP/HTTP que mantiene su propia conversación (una interfaz de chat, un script) puede usar exactamente las mismas selecciones de actual/rango/conversación completa/solo-código/solo-texto que `/save` soporta en el chat, pasando `history` en vez de `content`:
+
+```json
+{"name":"save","arguments":{
+  "history":[{"role":"user","content":"..."},{"role":"assistant","content":"..."}],
+  "mode":"range",
+  "range":"2-4",
+  "code_only":true,
+  "path":"src/snippets.go"
+}}
+```
+
+`mode` es `"all"`, `"range"` (con `range: "N-M"`), o se omite para tomar solo el último intercambio — misma lógica de selección que `-all`/`-range` en el chat (ver `documents/save_selection.go`; hay una única implementación, compartida por todas las puertas de entrada).
+
 **Vía HTTP directo** — un endpoint `POST /save` dedicado, mismo cuerpo JSON, misma lógica interna sin duplicación:
 
 ```bash
@@ -454,11 +557,138 @@ curl -X POST http://localhost:3000/save -H "content-type: application/json" -d '
 | `path` | archivo a crear/editar — su extensión elige el formato. Se resuelve con la misma lógica de siempre: ruta absoluta tal cual, ruta relativa bajo el `repo` del proyecto, o nombre suelto (busca coincidencias, pregunta si hay más de una) |
 | `directory` | en vez de `path` — solo crea la carpeta (y padres faltantes); no interviene ningún Writer |
 | `content` | texto/Markdown/HTML/CSV — el Writer interno decide cómo convertirlo (ver tabla abajo) |
-| `overwrite` | `false` explícito → `save` rechaza el pedido en vez de pisar el archivo. Sin este argumento, sigue sobreescribiendo como siempre |
+| `history` | en vez de `content` — un array JSON de mensajes `{"role","content"}` para seleccionar (ver arriba) |
+| `mode` | `"all"` \| `"range"` \| se omite (último intercambio) — solo se usa junto con `history` |
+| `range` | `"N-M"`, 1-indexado e inclusive — solo se usa con `mode:"range"` |
+| `code_only` / `text_only` | booleanos — igual que `-c`/`-text` en el chat |
+| `overwrite` | `false` explícito → `save` rechaza el pedido en vez de sobreescribir. Sin este argumento, sigue sobreescribiendo como siempre |
 | `append` | `true` → suma el contenido al final del archivo existente (formatos de texto) |
 | `project` | resuelve rutas relativas contra el `repo` de ese proyecto |
 
 ### Cómo `save` interpreta `content` según la extensión
+
+| Extensión | Qué hace `save` |
+|---|---|
+| `.md`, `.txt`, `.json`, `.yml`/`.yaml`, `.xml`, `.csv`, y ~20 lenguajes de código más | se escribe tal cual |
+| `.docx` | se interpreta como Markdown (`#`/`##`/`###`, **negrita**, párrafos) |
+| `.pdf` | si ya parece HTML se usa tal cual; si es texto plano o Markdown, se envuelve en tags `<p>` antes de generar el PDF |
+| `.xlsx` | acepta `sheets_data` JSON tipado, **o** texto CSV/TSV plano (una única hoja "Sheet1", cada celda tipada automáticamente) |
+| `.svg` | espera código SVG válido |
+
+### Resaltado de sintaxis
+
+Cada vez que el chat, MCP o HTTP generan código fuente, cualquier bloque de código sin tag de lenguaje recibe uno automáticamente — el mismo detector (`documents.DetectLanguage`/`AutoTagCodeFences`) corre en todos lados, así que un bloque Go, una consulta SQL o un archivo YAML se resaltan correctamente sin importar qué puerta de entrada los generó. En la terminal, `mova chat` renderiza ese Markdown (incluido el resaltado) con `glamour`; por MCP/HTTP, la respuesta vuelve como Markdown correctamente etiquetado para que lo renderice el cliente que sea.
+
+### `delete` — eliminar archivos y directorios
+
+Un único comando unificado elimina archivos y directorios, de forma idéntica desde el chat, MCP y HTTP — nunca se elimina nada sin confirmación.
+
+```text
+> /delete "informes/borrador-viejo.md"
+Delete "borrador-viejo.md"? (Y/N)
+y
+✓ deleted: examples/ejemplo-ley21719-repo/informes/borrador-viejo.md
+```
+
+```text
+> /delete "a.txt" "b.txt" "logs/"
+Delete "a.txt"?
+(Y/N)
+y
+Delete "b.txt"?
+(Y/N)
+n
+Delete "logs/"?
+(Y/N)
+y
+✓ deleted: .../a.txt
+⚠ not found, skipped: b.txt
+✓ deleted: .../logs
+```
+
+Una `/` al final (`"logs/"`) es una pista de que el destino es un directorio; sin ella, `/delete` le pregunta al sistema de archivos qué es realmente en vez de adivinar.
+
+**Vía MCP / HTTP** — como no hay una terminal donde escribir Y/N, la confirmación es explícita: se llama una vez sin `confirm` para recibir de vuelta el texto exacto del prompt, y se llama de nuevo con `confirm:true` una vez que la persona está de acuerdo — la misma convención que ya usa `apply_edits` de `chat_completion` para ediciones en lenguaje natural.
+
+```json
+{"name":"delete_path","arguments":{"paths":"a.txt,b.txt,logs/","project":"mi-proyecto"}}
+```
+```json
+{"name":"delete_path","arguments":{"paths":"a.txt,b.txt,logs/","project":"mi-proyecto","confirm":true}}
+```
+
+```bash
+curl -X POST http://localhost:3000/delete -H "content-type: application/json" -d '{
+  "path":"informes/borrador-viejo.md","confirm":true
+}'
+```
+
+### `workflow.md` — ejecución con validación de Budget
+
+`workflow.md` nunca se abre directamente. Decir cualquiera de las siguientes frases resuelve primero el proyecto, construye su contexto, y valida el resultado contra su Budget configurado — solo si esa validación pasa, `workflow.md` se carga de verdad:
+
+```text
+lee workflow.md
+leer workflow.md
+ejecuta workflow.md
+run workflow.md
+execute workflow.md
+workflow.md <project>
+workflow.md <project> <task>
+```
+
+**La forma más simple posible, una línea, igual en todos lados:**
+
+| Dónde | Qué decir/enviar |
+|---|---|
+| `mova chat` (este CLI) | escribir `workflow.md mi-proyecto` |
+| Claude Console, Codex, Gemini, o cualquier cliente MCP | pedirle que lea el workflow — el modelo llama solo al tool `get_workflow` con `{"project":"mi-proyecto"}`; no hace falta ninguna frase especial de tu lado |
+| HTTP | `curl -X POST http://localhost:3000/workflow -d '{"project":"mi-proyecto"}'` |
+
+Un solo llamado, una sola puerta de entrada, siempre validado contra el Budget primero — no hay ningún paso separado de "primero valido el budget, después cargo el archivo" que recordar en ninguno de los casos.
+
+
+```text
+> workflow.md mi-proyecto
+[Project] Loading project configuration...
+[Project] Using configured provider...
+[Context] Building context...
+[Dedup] No duplicates found.
+[Focus] No focus configured — using the full agents/skills/prompt context.
+[Workflow] Loaded /path/to/workflow.md (4,102 tokens).
+
+(el contenido de workflow.md, renderizado)
+```
+
+Si el contexto estimado (agents + skills + prompt + focus + el propio `workflow.md`) supera el Budget configurado para el proyecto/tarea, `workflow.md` **no** se carga — se imprime el mismo bloque de ERROR/Sugerencia que ya muestra `mova budget`:
+
+```text
+[Project] Loading project configuration...
+[Project] Using configured provider...
+[Context] Building context...
+[Dedup] Removed 3 duplicated paragraph(s) (512 chars).
+[Focus] No focus configured — using the full agents/skills/prompt context.
+
+ERROR
+
+Current context (128,400 tokens) exceeds the configured limit (100,000).
+
+Suggestion:
+Use --focus to reduce the included files.
+```
+
+El mismo pipeline corre desde MCP (tool `get_workflow`) y HTTP (`POST /workflow`):
+
+```json
+{"name":"get_workflow","arguments":{"project":"mi-proyecto","task":"revisar-backend"}}
+```
+```bash
+curl -X POST http://localhost:3000/workflow -H "content-type: application/json" -d '{
+  "project":"mi-proyecto"
+}'
+```
+
+Qué archivo `workflow.md` se usa depende de `workflow_path` en `project.json` (ver [PROJECT_JSON.md](PROJECT_JSON.md)); una vez configurado, Mova siempre usa exactamente ese archivo y nunca busca otro.
 
 | Extensión | Qué hace `save` |
 |---|---|
@@ -473,7 +703,7 @@ curl -X POST http://localhost:3000/save -H "content-type: application/json" -d '
 
 ## 10. Tool-calling autónomo desde el chat
 
-Agregá esto a `project.json` para que el propio modelo (Ollama local, Gemini, Claude, GPT — cualquiera) pueda pedirle a Mova que ejecute una acción real durante la conversación, en vez de solo describir en texto lo que haría:
+Agrega esto a `project.json` para que el propio modelo (Ollama local, Gemini, Claude, GPT — cualquiera) pueda pedirle a Mova que ejecute una acción real durante la conversación, en vez de solo describir en texto lo que haría:
 
 ```json
 { "tools": { "enabled": true } }
@@ -485,7 +715,7 @@ Con eso, `mova chat` y `chat_completion` agregan al mensaje de sistema un protoc
 { "tools": { "enabled": true, "allow": ["save", "read_file"] } }
 ```
 
-`allow` es opcional — restringe a un subconjunto (`save`, `read_file`, `patch_file`, `read_document_layer`); si se omite, las cuatro están habilitadas. Esto es **además** de `/save`: `/save` siempre funciona sin depender de `tools.enabled` ni de que el modelo coopere (es la vía determinística); `tools.enabled` es para cuando querés que el modelo mismo decida cuándo crear o editar algo, de forma autónoma.
+`allow` es opcional — restringe a un subconjunto (`save`, `read_file`, `patch_file`, `read_document_layer`); si se omite, las cuatro están habilitadas. Esto es **además** de `/save`: `/save` siempre funciona sin depender de `tools.enabled` ni de que el modelo coopere (es la vía determinística); `tools.enabled` es para cuando se quiere que el modelo mismo decida cuándo crear o editar algo, de forma autónoma.
 
 ---
 
@@ -534,7 +764,7 @@ curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
 }'
 ```
 
-Una hoja de Excel desde CSV plano (no hace falta JSON tipado si no lo necesitás):
+Una hoja de Excel desde CSV plano (no hace falta JSON tipado si no se necesita):
 
 ```json
 {"name":"save","arguments":{"path":"salida/reporte.xlsx","content":"Item,Monto\nCafé,4.5\nTe,3.2"}}
@@ -566,7 +796,7 @@ go build -o mova ./src/cli
 
 ### Modelo local para imágenes (`trigger_diffusion_image`)
 
-Esta tool no genera imágenes por sí misma: enruta el prompt a un servidor de difusión local compatible con la API de **AUTOMATIC1111** (`/sdapi/v1/txt2img`), configurado en `config/models/diffusion/config.json` — un archivo aparte porque un servidor de difusión no tiene parámetros de inferencia tipo `temperature`/`num_predict` que fusionar. Necesitás ese servidor corriendo aparte, con un modelo de difusión instalado (Stable Diffusion 1.5, SDXL, vía AUTOMATIC1111 o ComfyUI en modo API). Mova solo hace la llamada HTTP y guarda el PNG resultante.
+Esta tool no genera imágenes por sí misma: enruta el prompt a un servidor de difusión local compatible con la API de **AUTOMATIC1111** (`/sdapi/v1/txt2img`), configurado en `config/models/diffusion/config.json` — un archivo aparte porque un servidor de difusión no tiene parámetros de inferencia tipo `temperature`/`num_predict` que fusionar. Se necesita ese servidor corriendo aparte, con un modelo de difusión instalado (Stable Diffusion 1.5, SDXL, vía AUTOMATIC1111 o ComfyUI en modo API). Mova solo hace la llamada HTTP y guarda el PNG resultante.
 
 ---
 
@@ -590,7 +820,7 @@ Unsupported file type: .exe. Supported extensions: .c, .cpp, .cs, .css, .csv, ..
 
 ### Ejemplo — "crea un archivo con tal cosa" desde el chat
 
-Si pedís *"crea un NOTAS.md en mi proyecto con el estado actual"*, el asistente resuelve la ruta contra el `repo` del proyecto y llama a `save` — el archivo aparece en el directorio real, no en un chat efímero:
+Si se pide *"crea un NOTAS.md en mi proyecto con el estado actual"*, el asistente resuelve la ruta contra el `repo` del proyecto y llama a `save` — el archivo aparece en el directorio real, no en un chat efímero:
 
 ```bash
 curl -X POST http://localhost:3000/mcp -H "content-type: application/json" -d '{
@@ -660,10 +890,11 @@ curl -X POST http://localhost:3000/rpc -H "content-type: application/json" -d '{
 | `get_knowledge` | leer un agent/skill/prompt puntual |
 | `get_memory` | `mova memory-read [project]` |
 | `get_memory_all` | `mova memory-read [project] --all` |
-| `get_workflow` | leer `workflow.md` |
+| `get_workflow` | leer `workflow.md`, pero solo después de resolver el proyecto y validar su Budget (ver [§9](#9-save--crear-o-editar-cualquier-archivo-o-directorio)) |
 | `search_context` | `mova search "consulta" [dominio]` |
 | `chat_completion` | `mova chat [project] [task]` |
 | `save` | crear/editar cualquier archivo o directorio (ver [§9](#9-save--crear-o-editar-cualquier-archivo-o-directorio)) |
+| `delete_path` | eliminar uno o más archivos/directorios, con confirmación (ver [§9](#9-save--crear-o-editar-cualquier-archivo-o-directorio)) |
 | `estimate_budget` | `mova budget [project] [task]` |
 
 ### Resolución de raíz para clientes MCP
@@ -696,7 +927,7 @@ mova budget mi-proyecto
 mova budget mi-proyecto mi-task --focus
 ```
 
-Genera `mova-budget-report.md` (ruta configurable vía `report_path` en `config/prices.json`) — siempre en inglés simple, para que quien paga la factura lo entienda sin depender del idioma del resto de Mova Context. Alcanzable idéntico desde CLI, MCP (`estimate_budget`) y el chat REPL (`/budget`):
+Genera `mova-budget-report.md` (ruta configurable vía `"budget_path"` en `project.json` — ver [PROJECT_JSON.md](PROJECT_JSON.md); por default `projects/<project>/mova-budget-report.md`) — siempre en inglés simple, para que quien paga la factura lo entienda sin depender del idioma del resto de Mova Context. Alcanzable idéntico desde CLI, MCP (`estimate_budget`) y el chat REPL (`/budget`):
 
 ```json
 {"name":"estimate_budget","arguments":{"project":"mi-proyecto","task":"mi-task","focus":"true"}}
@@ -758,7 +989,7 @@ Suggestion: Use --focus to reduce the included files.
 
 ### Feedback loop — cerrar el ciclo con la realidad
 
-Cada vez que `mova chat` o `chat_completion` mandan el contexto a un proveedor **Cloud real** (OpenAI, Anthropic, Google) y ese proveedor devuelve cuántos tokens contó, Mova acumula esa diferencia en `mova-token-history.json` (junto al `project.json`, o en la ruta de `"token_history_path"`). El archivo **solo** guarda dos números por proveedor — nunca prompts, respuestas ni contenido:
+Cada vez que `mova chat` o `chat_completion` mandan el contexto a un proveedor **Cloud real** (OpenAI, Anthropic, Google) y ese proveedor devuelve cuántos tokens contó, Mova acumula esa diferencia en `mova-token-history.json` (junto al `project.json` por default, o en la ruta de `"token_history_path"` en `project.json`; ver [PROJECT_JSON.md](PROJECT_JSON.md)). El archivo **solo** guarda dos números por proveedor — nunca prompts, respuestas ni contenido:
 
 ```json
 {
@@ -775,9 +1006,10 @@ Todo el conteo se hace con **[tiktoken-go](https://github.com/tiktoken-go/tokeni
 
 ### Configurar precios (`config/prices.json`)
 
+`config/prices.json` guarda **únicamente** precios de modelos — configuración global, compartida por todos los proyectos. Dónde escribe cada proyecto su propio `mova-budget-report.md` o `mova-token-history.json` es configuración particular de ese proyecto, y vive exclusivamente en su `project.json` (`budget_path`, `token_history_path` — ver [PROJECT_JSON.md](PROJECT_JSON.md)), nunca acá.
+
 ```json
 {
-  "report_path": "./mova-budget-report.md",
   "currency": "USD",
   "exchange_rate_clp": 950,
   "unit": "per_1k_tokens",
@@ -816,7 +1048,7 @@ Se recarga en caliente (mismo mecanismo que `config/models/`). Agregar un provee
 ```bash
 mova config google
 mova chat ejemplo-gemini-flash revisar-backend
-> Auditá server.js y priorizá los hallazgos
+> Audita server.js y prioriza los hallazgos
 [gemini-2.5-flash] (encuentra el secreto hardcodeado, la falta de validación, el endpoint sin auth...)
 > /save -d "informes"
 [Save] ✓ directorio creado: examples/ejemplo-gemini-flash-repo/informes
