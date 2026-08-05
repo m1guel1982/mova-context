@@ -14,7 +14,7 @@ Docs: **[Español](README.md)** · **[English](README.en.md)**
 4. [¿Necesito el CLI?](#4-necesito-el-cli) — tabla de decisión
 5. [Tokenomics](#5-tokenomics--el-plato-fuerte) — por qué cada token cuenta, y cómo Mova lo controla
 6. [Lo que trae el CLI](#6-lo-que-trae-el-cli) — resumen de las novedades
-7. [Probarlo en 2 minutos](#7-probarlo-en-2-minutos)
+7. [Instalación y prueba rápida (2 minutos)](#7-instalación-y-prueba-rápida-2-minutos)
 8. [Seguir profundizando](#8-seguir-profundizando)
 9. [Job Engine, Cron y Multiagente](#9-job-engine-cron-y-multiagente)
 10. [Interfaz visual — `mova ui`](#10-interfaz-visual--mova-ui)
