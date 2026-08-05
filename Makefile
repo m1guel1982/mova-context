@@ -3,7 +3,7 @@
 ifeq ($(OS),Windows_NT)
     MKDIR_DIST = if not exist dist mkdir dist
     RM_RF = rmdir /s /q dist
-    GO_BUILD = go build
+    GO_BUILD = go build -ldflags="-s -w"
     
     # Detectar arquitectura en Windows (AMD64 o ARM64)
     ARCH = amd64
@@ -16,9 +16,11 @@ ifeq ($(OS),Windows_NT)
 
 build-all:
 	$(MKDIR_DIST)
-	set GOOS=windows&& set GOARCH=amd64&& $(GO_BUILD) -ldflags="-s -w" -o dist/mova-windows-amd64.exe ./src/cli
+	cmd /c "set GOOS=windows&& set GOARCH=amd64&& $(GO_BUILD) -o dist/mova-windows-amd64.exe ./src/cli"
+#	cmd /c "set GOOS=linux&& set GOARCH=amd64&& $(GO_BUILD) -o dist/mova-linux-amd64 ./src/cli"
+#	cmd /c "set GOOS=darwin&& set GOARCH=amd64&& $(GO_BUILD) -o dist/mova-macos-amd64 ./src/cli"
+#	cmd /c "set GOOS=darwin&& set GOARCH=arm64&& $(GO_BUILD) -o dist/mova-macos-arm64 ./src/cli"
 
-# Copia el binario y agrega %GOPATH%\bin al PATH de usuario en el Registro de Windows si no está presente
 install:
 	@for /f "delims=" %%g in ('go env GOPATH') do ( \
 		if not exist "%%g\bin" mkdir "%%g\bin" && \
@@ -36,12 +38,10 @@ install:
 else
     MKDIR_DIST = mkdir -p dist
     RM_RF = rm -rf dist
-    GO_BUILD = go build
+    GO_BUILD = go build -ldflags="-s -w"
     
-    # 1. Obtener el GOPATH directamente en Make
     GOPATH_DIR := $(shell go env GOPATH)
     
-    # 2. Detectar Sistema Operativo (darwin -> macos, linux -> linux)
     UNAME_S := $(shell uname -s | tr '[:upper:]' '[:lower:]')
     ifeq ($(UNAME_S),darwin)
         OS_NAME = macos
@@ -51,7 +51,6 @@ else
         SHELL_PROFILE = $(HOME)/.bashrc
     endif
 
-    # 3. Detectar Arquitectura (x86_64 -> amd64, arm64/aarch64 -> arm64)
     UNAME_M := $(shell uname -m)
     ifeq ($(UNAME_M),x86_64)
         ARCH_NAME = amd64
@@ -66,12 +65,11 @@ else
 
 build-all:
 	$(MKDIR_DIST)
-	GOOS=linux GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-linux-amd64 ./src/cli
-	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-amd64 ./src/cli
-	GOOS=darwin GOARCH=arm64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-macos-arm64 ./src/cli
-	GOOS=windows GOARCH=amd64 $(GO_BUILD) -ldflags="-s -w" -o dist/mova-windows-amd64.exe ./src/cli
+	GOOS=windows GOARCH=amd64 $(GO_BUILD) -o dist/mova-windows-amd64.exe ./src/cli
+	GOOS=linux GOARCH=amd64 $(GO_BUILD) -o dist/mova-linux-amd64 ./src/cli
+	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -o dist/mova-macos-amd64 ./src/cli
+	GOOS=darwin GOARCH=arm64 $(GO_BUILD) -o dist/mova-macos-arm64 ./src/cli
 
-# Copia el binario y escribe export PATH=... en ~/.zshrc o ~/.bashrc si no existe
 install:
 	@mkdir -p "$(GOPATH_DIR)/bin"
 	@cp "dist/$(BINARY_NAME)" "$(GOPATH_DIR)/bin/$(TARGET_NAME)"
@@ -84,7 +82,7 @@ endif
 
 build:
 	$(MKDIR_DIST)
-	go build -ldflags="-s -w" -o dist/mova ./src/cli
+	$(GO_BUILD) -o dist/$(TARGET_NAME) ./src/cli
 
 clean:
 	$(RM_RF)

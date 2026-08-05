@@ -1,0 +1,50 @@
+{
+  "project": "ejemplo-token-firewall",
+  "description": "Ejemplo oficial del Token Firewall — muestra las tres etapas (Sanitizer, Cache Layout Guard, Circuit Breaker) trabajando juntas sobre un caso real: un log con líneas repetidas y un archivo fuente con un bloque de comentarios grande. Ver examples/EJEMPLO-token-firewall-WALKTHROUGH.md para la guía paso a paso.",
+  "repo": "examples/ejemplo-token-firewall-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "revisar-checkout",
+
+  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
+  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+
+  "tasks": {
+    "revisar-checkout": {
+      "prompt": "create-module",
+      "variables": {
+        "module_name": "checkout",
+        "description": "Revisar el módulo de checkout y su log de errores recientes"
+      },
+      "focus": ["checkout.js", "server.log"]
+    }
+  },
+
+  "llm_profile": {
+    "config": "llama3.2.3b"
+  },
+
+  "budget": {
+    "max_tokens": 20000,
+    "max_tokens_per_run": 50,
+    "max_monthly_usd": 5.00,
+    "on_exceed": "warn",
+    "sanitize": {
+      "enabled": true,
+      "dedupe_logs": true,
+      "strip_blank": true,
+      "strip_comments": false
+    },
+    "cache_hint": true
+  },
+
+  "jobs": [
+    {
+      "comment": "Revisión nocturna de checkout — corre todos los días a las 2 AM, con el Token Firewall completo aplicado",
+      "schedule": "0 2 * * *",
+      "tasks": ["revisar-checkout"],
+      "save": "reports/revision-checkout_{date}.md",
+      "budget": { "focus": true }
+    }
+  ]
+}

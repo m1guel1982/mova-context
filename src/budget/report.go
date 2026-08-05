@@ -23,6 +23,7 @@ func RenderMarkdown(r *Report) string {
 	b.WriteString("## Project\n\n")
 	b.WriteString(fmt.Sprintf("Project name: %s\n\n", r.ProjectName))
 	b.WriteString(fmt.Sprintf("Task: %s\n\n", r.TaskName))
+	b.WriteString(fmt.Sprintf("**Final tokens sent to the model: %d** (after Sanitizer, Cache Layout Guard, and Circuit Breaker — see below for each stage's detail)\n\n", r.TotalTokens))
 
 	b.WriteString("## Tokenization\n\n")
 	b.WriteString(fmt.Sprintf("Tool used: tiktoken-go (encoding: %s)\n\n", r.Encoding))
@@ -30,13 +31,18 @@ func RenderMarkdown(r *Report) string {
 	b.WriteString("For OpenAI models, this count is typically an exact match to what the OpenAI API bills you for. For Claude and Gemini, no official local tokenizer is publicly available, so this report reuses the same encoding as a close approximation — real counts from those providers are usually very close, but can differ, especially for non-English text or dense code. See \"Historical Token Accuracy\" below for this project's own measured difference.\n\n")
 
 	b.WriteString(deduplicationSection(r))
+	b.WriteString(sanitizerSection(r))
+	b.WriteString(firewallSummarySection(r))
 
 	b.WriteString("## Token & Cost Breakdown\n\n")
 	b.WriteString("This is where your token budget is actually going — one row per piece of the context declared in project.json (agents, skills, prompt, focus, memory), plus fixed engine overhead. Use it to see, in both tokens and dollars, exactly what is worth trimming first.\n\n")
 	b.WriteString(componentTable(r))
 	b.WriteString("\n")
+	b.WriteString(fileBreakdownSection(r))
 
 	b.WriteString(focusSection(r))
+	b.WriteString(cacheLayoutSection(r))
+	b.WriteString(circuitBreakerSection(r))
 	b.WriteString(budgetLimitSection(r))
 	b.WriteString(historicalAccuracySection(r))
 

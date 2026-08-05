@@ -12,6 +12,7 @@ import (
 	"mova.local/core"
 	"mova.local/mcp"
 	"mova.local/models"
+	"mova.local/sanitize"
 )
 
 // applyProjectLLMProfile makes project.json's "llm_profile" the single
@@ -41,19 +42,30 @@ func applyProjectLLMProfile(sess *models.Session, root string, proj *core.Projec
 	consolePrint(fmt.Sprintf("[Project] Using configured provider: %s (%s)\n", sess.Provider, sess.Model))
 }
 
-// sendWithTools handles streaming or buffered tool loops.
-func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Project, root, userText string) (reply string, streamed bool, err error) {
+// sendWithTools handles streaming or buffered tool loops. emit receives
+// every piece of output this function would otherwise print directly
+// (token chunks, "[Tool] ..." trace lines) — pass nil to get the exact
+// original behavior (writes straight to the terminal via consolePrint,
+// as `mova chat`'s REPL always has). The TUI (see tui_chat.go) passes
+// its own emit that appends to an in-memory transcript instead, since
+// writing to stdout mid-render would corrupt a Bubble Tea screen; the
+// model-calling/tool-loop logic itself is untouched either way — one
+// implementation, two output sinks.
+func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Project, root, userText string, emit func(string)) (reply string, streamed bool, err error) {
+	if emit == nil {
+		emit = consolePrint
+	}
 	if proj == nil || adapter == nil || !core.ToolsEnabled(proj.Tools) {
 		printedPrefix := false
 		reply, err = sess.SendStream(userText, func(tok string) {
 			if !printedPrefix {
-				consolePrint("[" + sess.Model + "] ")
+				emit("[" + sess.Model + "] ")
 				printedPrefix = true
 			}
-			consolePrint(tok)
+			emit(tok)
 		})
 		if err == nil {
-			consolePrint("\n")
+			emit("\n")
 		}
 		return reply, true, err
 	}
@@ -67,12 +79,12 @@ func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Projec
 		if !ok {
 			break
 		}
-		consolePrint(fmt.Sprintf("[Tool] %s %v\n", name, args))
+		emit(fmt.Sprintf("[Tool] %s %v\n", name, args))
 		result, terr := mcp.RunAgentTool(adapter, root, name, args, proj.Tools)
 		if terr != nil {
 			result = "ERROR: " + terr.Error()
 		}
-		consolePrint("[Tool] " + result + "\n")
+		emit("[Tool] " + result + "\n")
 		reply, err = sess.Send(fmt.Sprintf(
 			"TOOL_RESULT(%s): %s\n\nContinue the reply for the user using this real result. If you need another tool, emit another block; if you are done, answer in plain text.",
 			name, result))
@@ -109,7 +121,7 @@ func tokensOf(text string, proj *core.Project) int {
 }
 
 // printContextSummary prints the [Dedup]/[Focus] status lines.
- 
+
 func printContextSummary(sections *core.ContextSections) {
 	if sections.DuplicatesRemoved > 0 {
 		approxTokens := sections.DuplicatesRemovedChars / 4
@@ -135,6 +147,21 @@ func recordRealUsage(root, project string, proj *core.Project, sess *models.Sess
 	}
 	path := budget.HistoryPath(root, project, proj)
 	_ = budget.RecordUsage(path, sess.Provider, localEstimate, sess.LastUsage.PromptTokens)
+
+	// Circuit Breaker spend tracking (see budget/spend.go) — records
+	// this real call's tokens/USD toward the project's monthly total,
+	// regardless of which provider answered (Claude, GPT, Gemini, a
+	// local Ollama model...). An unpriced provider/model still records
+	// tokens with $0 — the per-run token gate still works even without
+	// pricing data, only the monthly USD gate needs it.
+	totalTokens := sess.LastUsage.PromptTokens + sess.LastUsage.CompletionTokens
+	usd := 0.0
+	if prices, err := budget.LoadPrices(root); err == nil {
+		if cost, ok := budget.EstimateCostFor(totalTokens, sess.Provider, sess.Model, prices); ok {
+			usd = cost
+		}
+	}
+	_ = budget.RecordSpend(budget.SpendPath(root, project), totalTokens, usd)
 }
 
 // providerLabel formats provider names for display.
@@ -154,4 +181,69 @@ func providerLabel(provider string) string {
 		}
 		return strings.ToUpper(provider[:1]) + provider[1:]
 	}
+}
+
+// ── Token Firewall display/layout helpers — shared by CLI chat
+// (chat_cmd.go) and the TUI chat screen (tui_chat.go). Provider-agnostic
+// on purpose: the Sanitizer and Circuit Breaker stages run identically
+// no matter which model answers (Claude, GPT, Gemini, a local Ollama
+// model...); only the Cache Layout Guard's cache_control marker is
+// Anthropic-specific (see models/provider_anthropic.go), and every other
+// provider simply ignores the unused CacheBoundary field. ──────────────
+
+// printSanitizeStatus shows a one-line summary of what the Sanitizer
+// stage removed (see mova.local/sanitize) — silent when it removed
+// nothing.
+func printSanitizeStatus(stats sanitize.Stats) {
+	if stats.LinesRemoved == 0 && stats.BlankRemoved == 0 && stats.CommentsRemoved == 0 {
+		return
+	}
+	consolePrint(fmt.Sprintf("[Sanitizer] Cleaned %d repeated line(s), %d blank-line run(s).\n", stats.LinesRemoved, stats.BlankRemoved))
+}
+
+// printCircuitBreakerStatus shows the spend-governance gate's result —
+// silent when the project never configured a ceiling.
+func printCircuitBreakerStatus(cb budget.CircuitBreakerResult) {
+	if !cb.Checked || cb.Message == "" {
+		return
+	}
+	consolePrint("[Circuit Breaker] " + cb.Message + "\n")
+}
+
+// applyCacheLayout reorders the assembled context into a cache-aware
+// static-prefix + dynamic-tail layout (see budget.LayoutForCache) when
+// the project has "budget": {"cache_hint": true}, printing a status
+// line — used by the plain-terminal CLI chat (chat_cmd.go), which is
+// free to write straight to stdout mid-conversation.
+func applyCacheLayout(sections *core.ContextSections, proj *core.Project) (text string, boundary int) {
+	text, boundary, layout := applyCacheLayoutQuiet(sections, proj)
+	if layout != nil {
+		consolePrint(fmt.Sprintf("[Cache] Static prefix: %d tokens (fingerprint %s) — see mova-budget-report.md for details.\n", layout.StaticTokens, layout.Hash))
+	}
+	return text, boundary
+}
+
+// applyCacheLayoutQuiet is the same computation with no printing at
+// all — used by the TUI's chat screen (tui_chat.go), where writing
+// straight to stdout mid-render would corrupt the Bubble Tea screen
+// (see sendWithTools' own doc comment for the same concern). Returns
+// the layout too, in case a caller wants to display it through its own
+// (non-stdout) rendering instead.
+func applyCacheLayoutQuiet(sections *core.ContextSections, proj *core.Project) (text string, boundary int, layout *budget.CacheLayout) {
+	if sections == nil || proj == nil {
+		return "", 0, nil
+	}
+	cfg := core.ResolveBudget(proj, budget.ResolveTask(proj, ""))
+	if !core.CacheGuardEnabled(cfg) {
+		return sections.Full(), 0, nil
+	}
+	l := budget.LayoutForCache(sections, modelHintOfProj(proj))
+	return l.Text, l.StaticBoundary, &l
+}
+
+func modelHintOfProj(proj *core.Project) string {
+	if proj != nil && proj.LLMProfile != nil {
+		return proj.LLMProfile.Config
+	}
+	return ""
 }

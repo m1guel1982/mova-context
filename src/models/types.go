@@ -31,12 +31,12 @@ import (
 // no se traducen para no romper compatibilidad).
 type ModelConfig struct {
 	// ── Conexión (antes vivía en config.json, uno por proveedor) ──────
-	Provider       string `json:"provider,omitempty"`       // "ollama" | "google" | "anthropic" | "openai" | "lmstudio" | ...
-	Type           string `json:"type,omitempty"`           // "ollama" (default) | "openai-compatible" | "anthropic"
-	Host           string `json:"host,omitempty"`           // p.ej. "mova_ollama" (nombre del contenedor)
-	Port           int    `json:"port,omitempty"`           // p.ej. 11434
-	BaseURL        string `json:"base_url,omitempty"`       // si está presente, tiene prioridad sobre host+port
-	APIKey         string `json:"api_key,omitempty"`        // Cloud (Gemini/OpenAI/Claude) lo exige
+	Provider       string `json:"provider,omitempty"`        // "ollama" | "google" | "anthropic" | "openai" | "lmstudio" | ...
+	Type           string `json:"type,omitempty"`            // "ollama" (default) | "openai-compatible" | "anthropic"
+	Host           string `json:"host,omitempty"`            // p.ej. "mova_ollama" (nombre del contenedor)
+	Port           int    `json:"port,omitempty"`            // p.ej. 11434
+	BaseURL        string `json:"base_url,omitempty"`        // si está presente, tiene prioridad sobre host+port
+	APIKey         string `json:"api_key,omitempty"`         // Cloud (Gemini/OpenAI/Claude) lo exige
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty"` // 0 = usa el default (120s)
 
 	// ── Modelo (antes vivía en <modelo>.json aparte) ───────────────────
@@ -109,6 +109,16 @@ func DefaultModelConfig(seed *ModelConfig) ModelConfig {
 type ChatMessage struct {
 	Role    string `json:"role"` // "system" | "user" | "assistant"
 	Content string `json:"content"`
+
+	// CacheBoundary: byte offset in Content where a stable, cacheable
+	// prefix ends (0 = not applicable). Only meaningful when Role is
+	// "system" and only read by the Anthropic provider (see
+	// provider_anthropic.go) to mark that prefix with Anthropic's own
+	// prompt-caching "cache_control" field — every other provider
+	// (OpenAI, Gemini, Ollama) ignores this field entirely, so adding
+	// it changes nothing for them. Set by mova.local/budget's
+	// LayoutForCache (see cli/chat_helpers.go, cli/tui_chat.go).
+	CacheBoundary int `json:"-"`
 }
 
 // ActiveState — config/models/active.json. Recuerda qué proveedor y qué

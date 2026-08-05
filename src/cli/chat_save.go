@@ -12,19 +12,29 @@ import (
 	"mova.local/core"
 	"mova.local/documents"
 	"mova.local/models"
+	"mova.local/orchestrator"
 )
 
 // runChatMemory saves the last exchange intelligently into memory.md.
 // Extracts ```memory``` blocks if present, or builds a compact summary.
-func runChatMemory(adapter core.Adapter, project string, sess *models.Session) {
+// emit receives every line this would otherwise print directly — pass
+// nil to get the original behavior (writes straight to the terminal via
+// consolePrint, as `mova chat`'s REPL always has); the TUI (tui_chat.go)
+// passes its own emit that appends to the in-memory transcript instead,
+// the same convention sendWithTools already establishes (see
+// chat_helpers.go).
+func runChatMemory(adapter core.Adapter, project string, sess *models.Session, emit func(string)) {
+	if emit == nil {
+		emit = consolePrint
+	}
 	if project == "" || adapter == nil {
-		consolePrint("/memory requires starting the chat with a project: mova chat <project> [task]\n")
+		emit("/memory requires starting the chat with a project: mova chat <project> [task]\n")
 		return
 	}
 
 	user, assistant, ok := sess.LastExchange()
 	if !ok {
-		consolePrint("There is no exchange to save yet.\n")
+		emit("There is no exchange to save yet.\n")
 		return
 	}
 
@@ -43,14 +53,14 @@ func runChatMemory(adapter core.Adapter, project string, sess *models.Session) {
 
 	// 3. Persistir en memory.md
 	if err := adapter.AppendMemory(project, contentToSave); err != nil {
-		consolePrint("Error saving memory: " + err.Error() + "\n")
+		emit("Error saving memory: " + err.Error() + "\n")
 		return
 	}
 
 	if isStructuredBlock {
-		consolePrint("[Memory] Saved extracted ```memory``` block to memory.md (" + project + ")\n")
+		emit("[Memory] Saved extracted ```memory``` block to memory.md (" + project + ")\n")
 	} else {
-		consolePrint("[Memory] Saved compact summary to memory.md (" + project + ")\n")
+		emit("[Memory] Saved compact summary to memory.md (" + project + ")\n")
 	}
 }
 
@@ -90,45 +100,74 @@ func summarizeContent(user, assistant string) string {
 	return fmt.Sprintf("**task:** %s\n**summary:**\n%s\n", userTask, compactAssistant)
 }
 
-// runChatBudget generates budget report.
-func runChatBudget(root string, adapter core.Adapter, project, task string) {
+// runChatBudget implements chat's "/budget" — the same group-aware
+// orchestrator.Count used by `mova run --count` and the MCP
+// "estimate_budget" tool (see run_cmd.go, mcp/budget_tool.go): one
+// implementation, every door, including this one. emit — see
+// runChatMemory. project may be an ordinary project OR a multiagent
+// group; when it's a group, Count sums one estimate per agent instead
+// of failing (no report file is written for a group — one per agent
+// would need its own path each; run "/budget group/agent" for a single
+// agent's full report-with-file).
+func runChatBudget(root string, adapter core.Adapter, project, task string, emit func(string)) {
+	if emit == nil {
+		emit = consolePrint
+	}
 	if project == "" || adapter == nil {
-		consolePrint("/budget requires starting the chat with a project: mova chat <project> [task]\n")
+		emit("/budget requires starting the chat with a project: mova chat <project> [task]\n")
 		return
 	}
-	consolePrint("[Budget] Estimating context size...\n")
-	report, err := budget.BuildReport(adapter, root, project, task, false)
+	emit("[Budget] Estimating context size...\n")
+	result, err := orchestrator.Count(adapter, root, project, task, false)
 	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
+		emit("Error: " + err.Error() + "\n")
 		return
 	}
-	consolePrint(fmt.Sprintf("[Budget] Estimated context size: %d tokens.\n", report.TotalTokens))
+
+	if result.IsGroup {
+		emit(fmt.Sprintf("[Budget] Group %s (%d agents):\n", project, len(result.Agents)))
+		for _, ac := range result.Agents {
+			if ac.Err != nil {
+				emit(fmt.Sprintf("  %-40s error: %s\n", ac.Project, ac.Err.Error()))
+				continue
+			}
+			emit(fmt.Sprintf("  %-40s %8d tokens  (task: %s)\n", ac.Project, ac.Report.TotalTokens, ac.Report.TaskName))
+		}
+		emit(fmt.Sprintf("[Budget] TOTAL — one run of every agent: %d tokens (approx.)\n", result.TotalTokens))
+		return
+	}
+
+	report := result.Report
+	emit(fmt.Sprintf("[Budget] Estimated context size: %d tokens.\n", report.TotalTokens))
 	if len(report.TotalCosts) > 0 {
-		consolePrint(fmt.Sprintf("[Budget] Estimated cost: %s %.4f (%s %s).\n",
+		emit(fmt.Sprintf("[Budget] Estimated cost: %s %.4f (%s %s).\n",
 			report.Currency, report.TotalCosts[0].USD, report.TotalCosts[0].Provider, report.TotalCosts[0].Model))
 	}
 	proj, err := adapter.GetProject(project)
 	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
+		emit("Error: " + err.Error() + "\n")
 		return
 	}
 	path, err := budget.WriteReport(root, project, proj, report)
 	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
+		emit("Error: " + err.Error() + "\n")
 		return
 	}
-	consolePrint("[Report] Budget report generated successfully: " + path + "\n")
+	emit("[Report] Budget report generated successfully: " + path + "\n")
 }
 
-// runChatSave implements `/save`.
-func runChatSave(adapter core.Adapter, root string, proj *core.Project, sess *models.Session, rest string, state *chatFileState) {
+// runChatSave implements `/save`. emit — see runChatMemory.
+func runChatSave(adapter core.Adapter, root string, proj *core.Project, sess *models.Session, rest string, state *chatFileState, emit func(string)) {
+	if emit == nil {
+		emit = consolePrint
+	}
 	if proj == nil || adapter == nil {
-		consolePrint("/save requires starting the chat with a project: mova chat <project> [task]\n")
+		emit("/save requires starting the chat with a project: mova chat <project> [task]\n")
 		return
 	}
 	flags := parseSaveArgs(rest)
 	if flags.path == "" {
-		consolePrint("Usage:\n" +
+		emit("Usage:\n" +
 			"  /save \"docs/readme.md\"                saves the LAST model response there\n" +
 			"  /save -c \"src/app.js\"               saves ONLY source code blocks from the selected response(s)\n" +
 			"  /save -text \"notes.md\"               saves ONLY prose, code blocks excluded\n" +
@@ -152,7 +191,7 @@ func runChatSave(adapter core.Adapter, root string, proj *core.Project, sess *mo
 		req.Path = flags.path
 		content, cErr := documents.SelectContent(chatTurns(sess.History), flags.mode(), flags.rangeStart, flags.rangeEnd, flags.onlyCode, flags.textOnly)
 		if cErr != nil {
-			consolePrint("[Save] Error: " + cErr.Error() + "\n")
+			emit("[Save] Error: " + cErr.Error() + "\n")
 			return
 		}
 		req.Content = content
@@ -160,10 +199,10 @@ func runChatSave(adapter core.Adapter, root string, proj *core.Project, sess *mo
 
 	result, err := documents.Save(root, req)
 	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
+		emit("Error: " + err.Error() + "\n")
 		return
 	}
-	consolePrint("[Save] " + result.Message + "\n")
+	emit("[Save] " + result.Message + "\n")
 	if !flags.isDir {
 		state.lastFile = result.Path
 	}

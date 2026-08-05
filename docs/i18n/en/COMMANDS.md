@@ -24,6 +24,10 @@ The CLI (`mova`) is a convenience layer — everything it does you can also ask 
 14. [Environment variables](#14-environment-variables)
 15. [Tokenomics — `mova budget`](#15-tokenomics--mova-budget)
 16. [Global CLI installation](#16-global-cli-installation)
+17. [Jobs — scheduled background execution](#17-jobs--scheduled-background-execution)
+18. [Multiagent — agent groups](#18-multiagent--agent-groups)
+19. [Visual interface — `mova ui`](#19-visual-interface--mova-ui)
+20. [Token Firewall](#20-token-firewall)
 
 ---
 
@@ -31,6 +35,11 @@ The CLI (`mova`) is a convenience layer — everything it does you can also ask 
 
 ```text
 mova run           [project] [task]         builds the context for the LLM
+  --count                                   don't build/print it, just estimate its token/USD cost (no
+                                             report file written) — [project] may also be a multiagent
+                                             group, summing one estimate per agent instead of failing.
+                                             Same estimate as chat's "/budget", the MCP "estimate_budget"
+                                             tool, and HTTP's /mcp route — one implementation, every door.
 mova memory        [project] "reply"        saves the session to memory.md
 mova memory-read   [project]                prints the active memory
   --all                                     include archived files
@@ -68,12 +77,31 @@ mova chat          [project] [task]         interactive chat with a local or Clo
   /tools                                    lists available commands and tools
   exit | quit                               ends the session
 
-mova budget        [project] [task]         estimates tokens and cost, 100% local
+mova budget        [project] [task]         estimates tokens and cost, 100% local, writes a report file
   --focus                                   compares the full repo vs. only what focus selects
+  (also works with a multiagent group's name — see `mova run --count` below; a group has no single
+  report file to write, so it prints the per-agent breakdown instead)
 
 mova mcp start                              starts the MCP server
   --port 3000                               as an HTTP server (default)
   --stdio                                   as a Stdio server (for Claude/Cursor)
+
+mova jobs list      [project]               list a project's scheduled jobs — also works with a multiagent
+                                             group's name (lists every agent's jobs, one section each)
+mova jobs run       [project] [index|--all] run a job (or all) now, ignoring its schedule — with a group
+                                             name, [index] is instead read as an agent name (or omitted/
+                                             --all for every agent); to run a single job by index inside
+                                             one agent, address it directly: mova jobs run group/agent 0
+mova jobs start                             start the scheduler daemon (checks cron every minute)
+
+mova agents list    [group]                 list a multiagent group's agents
+mova agents run     [group] [agent|--all]   run one or every agent in a group
+  (for token counts, use: mova run --count [group] — see above)
+
+mova ui             [project]               open the visual interface (chat, configs, jobs, agents, logs...)
+  In the file viewer/editor: ctrl+f opens a find bar to search inside the document being viewed/edited.
+  In chat: commands work here too, the same ones `mova chat` recognizes — set -model <name>, /memory,
+  /budget, /tools, /clear, /save, /delete, exit|quit — typing one of these is never sent to the model.
 ```
 
 ---
@@ -103,6 +131,18 @@ Use --focus to reduce the included files.
 This is exactly what MCP's `get_full_context` tool and `chat_completion` do too — see [§10](#10-mcp-model-context-protocol) — so whether the context is being read by `mova run`, `mova chat`, or an external model over MCP (Claude Console, Codex, Gemini, or any MCP client), the same Budget check runs before it, every time, with no extra step to remember.
 
 If the task has `focus` (in `project.json` or global), that section is automatically appended at the end — see the next section.
+
+### `--count` — estimate instead of build
+
+`mova run --count <project>` skips assembling/printing the context altogether and just estimates how many tokens/how much it would cost — the same 100%-local tiktoken-go estimate `mova budget` computes, just without writing a report file. `<project>` may also be a multiagent group's name (its own `config.json`, no `project.json` of its own — see [§18](#18-multiagent--agent-groups)): in that case it sums one estimate per agent instead of failing.
+
+```bash
+mova run --count my-project
+mova run --count my-group          # sums every agent in the group
+mova run --count my-project review-auth --focus
+```
+
+This is the exact same estimate reachable from chat's `/budget` command, the MCP `estimate_budget` tool, and HTTP's `/mcp` route — one implementation behind all four doors, so a group name that works in one works in every other.
 
 ---
 
@@ -906,6 +946,128 @@ MOVA_ADAPTER=db MOVA_DSN=postgres://user:pass@host/db mova run my-project
 | `MOVA_PROJECT_ROOT` | Extra starting point for the upward `workflow.md` search |
 | `MOVA_PROJECT_PATH` | Uses this path as the root directly, with no search |
 
+### Working across different drives/locations (Windows/Linux/macOS)
+
+Two separate things can live in two separate places, and Mova Context
+is designed for exactly that:
+
+- **The Mova root** — the folder with `workflow.md`, `projects/`,
+  `agents/`, `config/`... this is Mova Context's OWN configuration,
+  wherever you cloned/installed it (e.g. `C:\mova` on Windows).
+- **Each project's `"repo"`** (in its `project.json`) — the actual
+  codebase that project works on, which can be **anywhere**, including
+  a completely different drive or volume (e.g. `D:\my-app` on Windows,
+  `/mnt/data/my-app` on Linux, `/Volumes/Data/my-app` on macOS).
+
+`"repo"` accepts an absolute path exactly like this, and every part of
+Mova that touches project files (`focus`, `save`, `delete`, jobs'
+`save`/`delete` actions, chat's natural-language edits) already
+resolves it correctly — no extra configuration needed per feature. For
+example:
+
+```json
+{
+  "project": "my-app-audit",
+  "repo": "D:\\my-app",
+  "tasks": { "review": { "focus": ["src/checkout.js"] } }
+}
+```
+
+The only piece that needs a nudge is **finding the Mova root itself**
+when you're standing in `D:\my-app` (not inside the Mova install) and
+just type `mova`. By default, Mova searches upward from your current
+directory for `workflow.md` — which won't find anything on a
+completely separate drive. This is what `MOVA_PROJECT_ROOT` solves:
+
+```bash
+# Windows (PowerShell), one time, permanent for your user:
+[Environment]::SetEnvironmentVariable("MOVA_PROJECT_ROOT", "C:\mova", "User")
+
+# Linux/macOS, one time, permanent (add to ~/.bashrc or ~/.zshrc):
+export MOVA_PROJECT_ROOT="/home/you/mova"
+```
+
+**The double-click installers already do this for you** (see
+`installers/README.md` § Ready-to-use console) — after installing, you
+can `cd` into `D:\my-app` (or `/mnt/data/my-app`, or any other folder
+on any drive) and run `mova run my-app-audit` immediately, with no
+further setup. This was verified end-to-end: a project whose `"repo"`
+points at a folder entirely outside the Mova install still builds its
+focus context, saves job reports, and deletes files in that external
+folder correctly, from a working directory that has nothing to do with
+either location.
+
+### Network shares — UNC paths (`\\server\share`)
+
+A Windows network share works exactly like a local drive: `"repo"`
+accepts a UNC path directly —
+
+```json
+{ "repo": "\\\\server\\share\\my-app" }
+```
+
+Every place Mova resolves an absolute `"repo"` (focus, save, delete,
+jobs, budget) uses Go's own `filepath.IsAbs`/`filepath.Join`, whose
+Windows implementation explicitly recognizes a UNC prefix as a volume
+name and preserves it through every join/clean operation (verified by
+reading `internal/filepathlite`'s `volumeNameLen`/`Clean` in the Go
+standard library itself — the `\\server\share` prefix is never
+stripped or mistaken for a relative path). No extra configuration
+needed beyond what "different drive" already needs above.
+
+If you're typing a path directly in chat/MCP/HTTP instead of setting
+it in `project.json`, the same UNC syntax is recognized too (see
+`documents.IsAbsCrossPlatform`) — with one honest limitation: a UNC or
+drive-letter path only resolves when Mova itself is running as a
+**Windows** binary. A Mova instance running on Linux/macOS has no
+native way to reach `\\server\share` (there's no OS-level UNC support
+outside Windows) — mount the share first (e.g. `mount -t cifs
+//server/share /mnt/share` on Linux, or connect via Finder on macOS,
+which mounts it under `/Volumes/`), then use that resulting native
+path as `"repo"` instead.
+
+### WSL (Windows Subsystem for Linux)
+
+Two directions, both already covered by what's above:
+
+- **Running the Linux `mova` binary inside WSL2, reaching into a
+  Windows drive**: WSL2 already auto-mounts Windows drives at
+  `/mnt/c`, `/mnt/d`, etc. — just use that path as `"repo"`
+  (`"repo": "/mnt/d/my-app"`), no different from any other Linux
+  absolute path.
+- **Running the Windows `mova.exe`, reaching into a WSL distro's
+  Linux filesystem**: Windows exposes this as a UNC path —
+  `"repo": "\\\\wsl$\\Ubuntu\\home\\you\\my-app"` (or
+  `\\wsl.localhost\Ubuntu\...` on newer WSL versions) — handled by the
+  same UNC support described above.
+
+### Docker / containers
+
+Running `mova` inside a container doesn't need any special path
+handling either — a bind-mounted host directory simply *is* a native
+absolute path from the container's point of view. Mount both the Mova
+repo and the external project into the container, and point
+`MOVA_PROJECT_ROOT`/`"repo"` at their in-container locations:
+
+```bash
+docker run \
+  -v /host/path/to/mova:/mova \
+  -v /host/path/to/my-app:/workspace/my-app \
+  -e MOVA_PROJECT_ROOT=/mova \
+  your-mova-image mova run my-app-audit
+```
+
+```json
+{ "repo": "/workspace/my-app" }
+```
+
+This is the exact same "external absolute `repo` path" behavior
+verified above — a container's filesystem is just another OS-native
+absolute-path space from Mova's perspective, whether that's Linux
+paths in a Linux container or (less commonly) Windows-container paths
+under Windows containers on Docker Desktop.
+
+
 ---
 
 ## 15. Tokenomics — `mova budget`
@@ -917,11 +1079,13 @@ mova budget my-project
 mova budget my-project my-task --focus
 ```
 
-Generates `mova-budget-report.md` (configurable path via `\"budget_path\"` in `project.json` — see [PROJECT_JSON.md](PROJECT_JSON.md); defaults to `projects/<project>/mova-budget-report.md`) — always in simple English, so whoever pays the bill understands it regardless of the rest of Mova Context's language. Reachable identically from the CLI, MCP (`estimate_budget`), and the chat REPL (`/budget`):
+Generates `mova-budget-report.md` (configurable path via `\"budget_path\"` in `project.json` — see [PROJECT_JSON.md](PROJECT_JSON.md); defaults to `projects/<project>/mova-budget-report.md`) — always in simple English, so whoever pays the bill understands it regardless of the rest of Mova Context's language. Reachable identically from the CLI, `mova run --count` (no report file, see [§2](#2-assembling-context--mova-run)), MCP (`estimate_budget`), and the chat REPL/`mova ui` chat (`/budget`) — one implementation, every door:
 
 ```json
 {"name":"estimate_budget","arguments":{"project":"my-project","task":"my-task","focus":"true"}}
 ```
+
+`my-project` above may also be a multiagent group's name (see [§18](#18-multiagent--agent-groups)) instead of an ordinary project — every one of these doors sums one estimate per agent in that case instead of failing; only the report file is skipped, since a group has no single file to write it to (each agent's own report is available individually: `mova budget <group>/<agent>`).
 
 The report includes, in this order:
 
@@ -1070,3 +1234,455 @@ go build -o mova ./src/cli
 ```
 
 No special editions or build flags — a single binary, every command in this guide.
+
+### Double-click installers (Windows/Linux/macOS)
+
+For a GUI install with no terminal typing, see
+[`installers/README.md`](../../installers/README.md) —
+`installers/windows/install.bat`, `installers/macos/install.command`,
+`installers/linux/install.sh`. Same install location as `make
+install` above (`$(go env GOPATH)/bin`), so both methods stay
+compatible.
+
+Each installer finishes by opening a console **already set up to run
+`mova`** — PowerShell or CMD on Windows, the same Terminal window (or a
+new one) on macOS, the same terminal (or a new one, auto-detected) on
+Linux — so there's no separate "now open a terminal yourself" step.
+See [`installers/README.md` § Ready-to-use console](../../installers/README.md#ready-to-use-console).
+
+---
+
+## 17. Jobs — scheduled background execution
+
+> **Working example, with real captured output:**
+> [`examples/EJEMPLO-jobs-multiagente-WALKTHROUGH.md`](../../examples/EJEMPLO-jobs-multiagente-WALKTHROUGH.md)
+> (Spanish) — `mova jobs list/run/start`, logging, and multiagent all in
+> one runnable project (`projects/ejemplo-jobs-multiagente/`).
+
+The Job Engine reads the `jobs` array from a project's `project.json`
+(see [PROJECT_JSON.md § Jobs](PROJECT_JSON.md#jobs)) and runs it — the
+same executor whether triggered from CLI, chat, HTTP, or MCP.
+
+**List a project's jobs:**
+
+```bash
+mova jobs list ejemplo-ley21719
+```
+```text
+  [0] schedule="0 2 * * *"  Nightly checkout/cookies audit
+  [1] schedule="0 3 1 * *"  Monthly memory archive, no tasks
+```
+
+**Run every job for a project right now** (ignores `schedule`):
+
+```bash
+mova jobs run ejemplo-ley21719
+```
+
+**Run just one job, by its index in the `jobs` array:**
+
+```bash
+mova jobs run ejemplo-ley21719 0
+```
+
+**Start the scheduler daemon** — checks every project once a minute and
+fires any job whose `schedule` matches:
+
+```bash
+mova jobs start
+```
+```text
+[Jobs] scheduler started — checking every project once a minute (Ctrl+C to stop)
+[ejemplo-ley21719] 2026-07-30 02:00:00
+  ✓ task "auditar-checkout" executed (1,842 tokens)
+  ✓ reports/auditoria_2026-07-30.pdf saved
+  ✓ memory updated: projects/ejemplo-ley21719/memory.md
+```
+
+**From chat (Spanish/English), MCP, and HTTP** — the same flow, just a
+different door:
+
+```text
+> ejecuta los jobs de ejemplo-ley21719
+> run the jobs for ejemplo-ley21719
+```
+
+```bash
+curl -X POST http://localhost:3000/jobs/run \
+  -d '{"project": "ejemplo-ley21719"}'
+```
+
+MCP tools: `"list_jobs"` and `"run_job"` (arguments: `project`,
+optional `index`) — reachable from Claude Desktop, Cursor, or any MCP
+client, exactly like every other Mova tool (see § 13).
+
+---
+
+## 18. Multiagent — agent groups
+
+A group of related agents lives under one directory in `projects/`,
+each agent an ordinary project, orchestrated by a parent `config.json`
+— see [PROJECT_JSON.md § Multiagent](PROJECT_JSON.md#multiagent-agent-groups).
+
+**List the agents in a group:**
+
+```bash
+mova agents list ventas_online
+```
+```text
+Group: ventas_online
+Sales, support, and customer-care agents
+Agents:
+  - ventas_online/vendedor
+  - ventas_online/atencionCliente
+  - ventas_online/soporte
+```
+
+**Run every agent, sequentially:**
+
+```bash
+mova agents run ventas_online
+```
+
+**Run just one agent** (still addressable as an ordinary project, too):
+
+```bash
+mova agents run ventas_online vendedor
+# same as:
+mova run ventas_online/vendedor
+```
+
+**From chat (Spanish/English), MCP, and HTTP:**
+
+```text
+> ejecuta todos los agentes de ventas_online
+> run every agent in ventas_online
+```
+
+```bash
+curl -X POST http://localhost:3000/agents/run \
+  -d '{"group": "ventas_online"}'
+```
+
+MCP tools: `"list_agents"` and `"run_agent"` (arguments: `group`,
+optional `agent`, optional `task`).
+
+---
+
+## 19. Visual interface — `mova ui`
+
+A terminal interface (TUI), built with [Bubble Tea](https://github.com/charmbracelet/bubbletea)
+and [Lip Gloss](https://github.com/charmbracelet/lipgloss), that groups
+**everything** the commands in this document already do behind one
+command and menu-driven navigation. It doesn't replace any existing
+command — `mova run`, `mova chat`, `mova jobs`, `mova agents`, etc. all
+keep working exactly as before. The visual interface simply calls the
+same internal components (`core`, `budget`, `jobs`, `orchestrator`,
+`documents`, `models`, `logging`) from a different presentation layer.
+
+### Opening the interface
+
+```bash
+mova ui                          # opens the main menu
+mova ui ejemplo-jobs-multiagente/auditor-checkout   # jumps straight into that project's dashboard
+```
+
+One single command, with at most one optional argument (the project) —
+everything else is navigated from inside with the keyboard:
+
+```text
+↑ / ↓        move between options
+enter        open / confirm / run
+/            search within a list
+esc          go back to the previous screen
+ctrl+s       save (on file-editing screens)
+ctrl+c       quit the interface at any time
+```
+
+### Main menu
+
+```text
+Chat            Multiagent       Logs
+Projects         Models          Logging
+Workflow.md
+```
+
+### Chat
+
+Reuses the exact same session, tool-calling engine, and Budget gate as
+`mova chat` — the only difference is the reply is shown once complete
+(no token-by-token streaming, to avoid corrupting the screen render).
+If you need live streaming or in-chat commands like `/save`, `/delete`,
+or `/budget`, `mova chat` in a plain terminal remains the way to get
+those — the TUI takes nothing away from it.
+
+### Projects
+
+Pick a project from the list (the same one `mova list` returns,
+including a multiagent group's nested agents) and enter its dashboard:
+
+```text
+project.json              view and edit (Ctrl+S saves, validates JSON before writing)
+memory.md                 view and edit the active memory
+Jobs                      list and run the project's scheduled jobs
+Reports                   view files a job's "save" action produced
+Archived memory           (if present) entries archived by memory_archive
+Execution history         mova-budget-report.md and mova-token-history.json
+```
+
+### Workflow.md
+
+A direct editor for the repository root's `workflow.md` — the same
+file `mova chat`, `mova mcp`, and the Job Engine all interpret.
+
+### Models
+
+Lists every `.json` under `config/models/` (providers, `active.json`)
+and opens it for editing — the same directory `mova.local/models`
+already reads to resolve the active provider. No new format: it's the
+same `config/models/*.json` as always, just easier to browse and edit.
+
+### Logging
+
+Opens `config/log/logging.json` directly — enabling logging, changing
+the level, categories, rotation, or retention is editing this file and
+saving with Ctrl+S. See `config/log/README.en.md` for every parameter.
+
+### Multiagent
+
+```text
+Multiagent → pick a group → pick "▶ Run all" or a single agent
+```
+
+Runs the exact same `orchestrator.RunGroup` — same as `mova agents run`.
+
+### Logs
+
+Shows the active log file (the same path `mova.local/logging` uses,
+defined in `config/log/logging.json` → `"file"."path"`), read-only,
+refreshing every second. If logging is disabled, it says so and
+explains how to enable it.
+
+### Integration with the rest of the ecosystem
+
+| Feature | Real engine behind it (no duplicated logic) |
+|---|---|
+| Chat | `mova.local/models.Session` + `sendWithTools` (same as `mova chat`) |
+| Jobs | `mova.local/jobs.RunJobByIndex` (same as `mova jobs run`) |
+| Multiagent | `mova.local/orchestrator.RunGroup` (same as `mova agents run`) |
+| Saving edited files | `mova.local/documents.ValidateTextFormat` + a direct write |
+| Listing projects | `mova.local/core.Adapter.ListProjects` (same as `mova list`) |
+| Logs | `mova.local/logging.LoadConfig` (same path the real logger uses) |
+
+### Installing the interface's dependencies
+
+`mova ui` depends on three new libraries (Bubble Tea, Lip Gloss, and
+Bubbles). They were added to `go.mod` exactly like any other project
+dependency (e.g. `glamour`, already used for chat) — `go build`/`go
+install` downloads them automatically the first time, no manual step.
+This holds whether building directly (`go build -o mova ./src/cli`) or
+using any of the double-click installers (`installers/`) — nothing
+changes in them, since they already invoke `go build` internally.
+
+---
+
+## 20. Token Firewall
+
+The Token Firewall is a set of deterministic, zero-AI stages that run
+automatically, in this fixed order, every time Mova assembles a
+project's context — `mova run`, `mova chat`, the TUI's chat screen,
+`mova jobs run`, `mova agents run`, and MCP's `chat_completion` all go
+through it, since all of them share the same underlying function
+(`budget.BuildGatedContext`):
+
+```
+assemble context
+      │
+      ▼
+[1] Sanitizer          — remove repetitive noise (logs, blank lines, duplicated headers)
+      │
+      ▼
+[2] Cache Layout Guard  — lay out the prompt for provider prompt-caching
+      │
+      ▼
+[3] Circuit Breaker     — stop BEFORE anything is sent, if a spend ceiling is hit
+      │
+      ▼
+Budget gate (max_tokens) — the original hard content-size limit, unchanged
+      │
+      ▼
+sent to the model (Claude, GPT, Gemini, Ollama, or any other configured provider)
+```
+
+**Every stage is enabled by default.** Each one can be turned off
+independently in `project.json`'s `"budget"` — see
+[PROJECT_JSON.md § Budget (and the Token Firewall)](PROJECT_JSON.md#budget-and-the-token-firewall)
+for every field.
+
+### What each stage does, and what problem it solves
+
+**[1] Sanitizer** (`mova.local/sanitize`) — a project's Focus often
+includes real log files and source files with repetitive noise that
+adds tokens without adding information: 50 near-identical log lines
+that only differ by timestamp, runs of blank lines, duplicated license
+headers across several files. The Sanitizer collapses all of that,
+deterministically, in microseconds, with no model call involved —
+nothing is summarized or reworded, only exact repeats and formatting
+noise are removed. **Problem it solves:** paying (in tokens and money)
+for repetition the model doesn't need to see more than once.
+
+**[2] Cache Layout Guard** (`budget.LayoutForCache`) — reorders the
+system prompt into a stable prefix (agents + skills + prompt — curated
+project files that don't change between runs) followed by everything
+that changes every time (the timestamp header, focus, memory). Cloud
+providers cache based on an exact-match PREFIX; a single differing byte
+at the start (like a timestamp) defeats it on every call. **Problem it
+solves:** a project that already has a Cloud provider's prompt caching
+available, but never actually triggers it because the prompt's
+beginning changes every run.
+
+**[3] Circuit Breaker** (`budget.CheckCircuitBreaker`, backed by
+`mova-spend.json`) — two independent, optional ceilings:
+`max_tokens_per_run` (this one call) and `max_monthly_usd` (this
+project's running spend for the current calendar month). With
+`"on_exceed": "abort"`, it stops BEFORE anything is sent to a model —
+not a warning after the fact. **Problem it solves:** a scheduled job or
+an automated loop silently running up a bill with no one watching.
+
+**Context Cache** (`budget.SanitizeCached`, backed by
+`mova-context-cache.json`) — a fourth, optional mechanism, distinct
+from the three pipeline stages above: memoizes the Sanitizer's result
+per content hash, so re-running on UNCHANGED files skips redoing that
+work. Saves wall-clock time only, never tokens or money by itself.
+**Problem it solves:** a daemon (`mova jobs start`) or CI loop
+re-sanitizing the exact same files on every single check.
+
+### How the report ties it all together
+
+Every one of these stages writes to the same `mova-budget-report.md`
+`mova budget` already produced before the Token Firewall existed — no
+new report file, no new command. With `"detailed_reports": true`
+(default), it includes:
+
+- Tokens per individual Focus file
+- What the Sanitizer removed, and the resulting savings
+- The Cache Layout Guard's static-prefix size, fingerprint, and
+  estimated tokens reused on a cache hit
+- The Circuit Breaker's current status against both ceilings
+- **A before/after comparison**: total tokens and estimated cost with
+  the Token Firewall's cleanup applied vs. without it, as percentages
+
+### Cache Layout Guard, per provider
+
+The Cache Layout Guard's prefix reordering is universal — it always
+runs the same way regardless of provider. What differs is whether (and
+how) that stable prefix actually gets discounted:
+
+| Provider | Native prompt caching | How Mova uses it | When it doesn't apply |
+|---|---|---|---|
+| **Anthropic (Claude)** | Yes — explicit `cache_control` breakpoints in the Messages API | Mova marks the static prefix with `"cache_control": {"type": "ephemeral"}` automatically (see `models/provider_anthropic.go`) — a real, provider-level discount on that portion of future calls within the cache window | Prefix under ~1,024 tokens (Anthropic's approximate minimum, varies by model) — the layout still happens, just below the size that qualifies |
+| **OpenAI (GPT)** | Yes — automatic, prefix-based, no explicit marker needed | The stable-prefix-first layout is exactly what OpenAI's own caching looks for; Mova doesn't need to send anything extra — the reordering alone is what helps | Very short prompts, or a prefix that changes every call regardless of Mova's layout (e.g. focus files that are genuinely different every time) |
+| **Google (Gemini)** | Yes, for the Cloud API (implicit caching, and explicit context caching for larger prefixes) | Same benefit as OpenAI: the stable-prefix-first layout is what implicit caching keys on | Gemini's explicit context caching (for very large, long-lived contexts) is a separate, opt-in Google API feature Mova does not configure automatically |
+| **Ollama (local) / other local providers** | No — there is no Cloud billing or Cloud-side cache to hit | The Cache Layout Guard still runs (no downside, no cost either way) and the report still shows the static/dynamic split — useful for understanding prompt structure even with zero cost impact | Caching doesn't apply in the "save money on the next call" sense, since a local model has no per-token price and no persistent server-side cache the way Cloud APIs do |
+| **Any other provider** | Unknown / varies | The layout still applies — a stable prefix is harmless and never a downside even where it does nothing | If a provider is added later with its own caching mechanism, only `models/provider_<name>.go` needs a `cache_control`-equivalent — the layout stage itself never changes |
+
+**In every case, this increases the PROBABILITY of a cache hit — it
+never guarantees one.** Actual caching depends on the provider, the
+specific model, and whether another call reuses the same prefix while
+the provider's cache window is still open (typically minutes, not
+hours). Mova has no way to verify a cache hit actually happened after
+the fact — providers don't currently expose that in their API
+responses in a way Mova could report back.
+
+### A complete real run, start to finish
+
+This is a real execution of the example project shipped in this
+repository (`projects/ejemplo-token-firewall/`) — every number below
+was actually measured, not estimated for documentation purposes.
+
+**The input:** a project auditing a checkout module. Its Focus includes
+`checkout.js` (a large boilerplate comment header, several blank
+lines) and `server.log` (53 lines, 48 of them near-identical
+`INFO 200 OK` entries differing only by timestamp).
+
+```bash
+$ mova budget ejemplo-token-firewall
+✓ mova-budget-report.md generated
+Total tokens: 1764 (cl100k_base)
+  anthropic/claude: $0.0053 USD
+  google/gemini:    $0.0022 USD
+  openai/gpt-5:     $0.0088 USD
+```
+
+**Inside `mova-budget-report.md`, what actually happened:**
+
+```text
+## Sanitizer
+- 47 repeated line(s)/header(s) collapsed
+- 1 run(s) of excess blank lines collapsed
+Approximate savings: ~518 tokens (~2075 characters)
+
+## Token Firewall — Summary
+|        | Before | After | Savings |
+|--------|--------|-------|---------|
+| Tokens | 2737   | 1764  | 35.6%   |
+| Cost (claude) | $0.0082 | $0.0053 | 35.6% |
+
+## Cache Layout Guard
+Static prefix: 1167 tokens
+Prefix fingerprint: d58f4ec76275f850
+Estimated tokens reused on a cache hit: ~1050
+
+## Circuit Breaker
+Per-run limit: 1764 / 5000 tokens (OK)
+Monthly spend: $0.00 / $5.00 (OK)
+Status: within budget.
+```
+
+**Timing** (measured on the same machine, back-to-back runs): the
+first run took ~69ms end-to-end (process start, file reads, Sanitizer,
+tokenization, report write); the second run, with the Context Cache
+warm, took ~57ms — most of that remaining time is process startup and
+file I/O, not the Sanitizer itself, which runs in microseconds on
+content this size.
+
+**What this means in plain terms:** without the Token Firewall, this
+task would have sent 2,737 tokens to the model, every single time.
+With it, the same task sends 1,764 — **a real, measured 35.6%
+reduction**, before even counting whatever discount the Cache Layout
+Guard's static 1,167-token prefix earns on a provider that actually
+caches it. Multiply that across a job that runs nightly, or a chat
+session with many turns, and the savings compound.
+
+See [`examples/EJEMPLO-token-firewall-WALKTHROUGH.md`](../../examples/EJEMPLO-token-firewall-WALKTHROUGH.md)
+for the complete step-by-step guide, including the Circuit Breaker
+actually stopping a run in `"abort"` mode.
+
+### A simple analogy
+
+Think of the Token Firewall like **packing a suitcase before a flight
+that charges by the kilogram.**
+
+- The **Sanitizer** is folding your clothes properly instead of
+  stuffing them in — same clothes, same trip, noticeably less space,
+  and nothing is left behind.
+- The **Cache Layout Guard** is packing the things you'll need to show
+  at every checkpoint (passport, boarding pass) in the same spot every
+  time, in the front pocket — the ones at the checkpoint counter get
+  faster at recognizing your bag when it always looks the same at a
+  glance, and wave you through quicker.
+- The **Circuit Breaker** is the airline's own scale at check-in —
+  it stops you before you board with an overweight bag, instead of
+  surprising you with a bill after the flight already left.
+
+**Benefits:** every trip costs less, the airline's own discounts
+(caching) actually apply more often, and you never board a flight you
+can't afford. **Possible downside:** folding takes a moment, and if
+you truly need to show the customs officer every wrinkle in a shirt
+(e.g. a task genuinely about analyzing raw, unmodified log noise),
+over-folding could hide something you needed. **Mitigation:** every
+stage is independently toggleable, `strip_comments` defaults off
+specifically to avoid removing documentation intent, and nothing is
+ever summarized or reworded — only exact repeats and formatting noise
+are touched, so what remains is always the real content, just without
+the padding.

@@ -1,0 +1,29 @@
+{
+  "enabled": true,
+  "structured": false,
+  "level": "info",
+  "categories": {
+    "jobs": true,
+    "orchestrator": true,
+    "memory": true,
+    "save": true,
+    "delete": true,
+    "budget": true,
+    "chat": true,
+    "mcp": true,
+    "http": true,
+    "cli": true
+  },
+  "file": {
+    "path": "logs/mova.log",
+    "auto_create": true
+  },
+  "rotation": {
+    "mode": "daily",
+    "custom_days": 7
+  },
+  "retention": {
+    "policy": "daily",
+    "custom_days": 30
+  }
+}
