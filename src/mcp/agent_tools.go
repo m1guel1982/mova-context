@@ -12,7 +12,7 @@
 // per provider, and small local models (like llama3.2:3b) frequently
 // don't support them reliably at all. Instead this uses ONE plain-text,
 // provider-agnostic protocol that works identically for Ollama, Gemini,
-// Claude, GPT, or anything else Mova talks to — same "simplicidad"
+// Claude, GPT, or anything else Mova talks to — same "simplicity"
 // principle as the rest of the project: one protocol, three doors
 // (CLI/MCP/HTTP), same as core.BuildContext.
 package mcp
@@ -99,16 +99,16 @@ func ToolsSystemPrompt(cfg *core.ToolsConfig) string {
 	}
 
 	var b strings.Builder
-	b.WriteString("\n\n---\nHERRAMIENTAS DISPONIBLES (crear/escribir archivos y directorios)\n")
-	b.WriteString("Podés pedirle a Mova que ejecute una acción real sobre el sistema de archivos del proyecto. Para eso, tu respuesta debe contener EXACTAMENTE este bloque, en cualquier punto de tu respuesta (no le agregues nada de texto adentro):\n\n")
+	b.WriteString("\n\n---\nAVAILABLE TOOLS (create/write files and directories)\n")
+	b.WriteString("You can ask Mova to execute a real action on the project's file system. To do so, your response must contain EXACTLY this block anywhere in your message (do not add any extra text inside it):\n\n")
 	b.WriteString(toolCallStart + "\n")
-	b.WriteString(`{"name": "<una_de_las_herramientas_de_abajo>", "arguments": {...}}` + "\n")
+	b.WriteString(`{"name": "<one_of_the_tools_below>", "arguments": {...}}` + "\n")
 	b.WriteString(toolCallEnd + "\n\n")
-	b.WriteString("Herramientas permitidas en esta sesión y sus argumentos:\n")
+	b.WriteString("Allowed tools in this session and their arguments:\n")
 	for _, name := range names {
 		b.WriteString("- " + name + ": " + argsHintFor(name) + "\n")
 	}
-	b.WriteString("\nDespués de emitir el bloque, dejá de escribir — Mova ejecuta la acción y te devuelve el resultado real como un nuevo turno para que sigas la respuesta con eso. Si no necesitás ninguna herramienta, respondé normalmente en texto, sin ningún bloque.\n---\n")
+	b.WriteString("\nAfter emitting the block, stop writing — Mova will execute the action and return the actual result as a new turn so you can continue your response with it. If you do not need any tools, respond normally in plain text, without any block.\n---\n")
 	return b.String()
 }
 
@@ -120,13 +120,13 @@ func ToolsSystemPrompt(cfg *core.ToolsConfig) string {
 // command — see cli/chat_cmd.go.
 func FileToolsHelp() string {
 	var b strings.Builder
-	b.WriteString("Comandos de archivos/directorios en este chat:\n\n")
-	b.WriteString("  /save \"ruta/archivo.ext\"     crea o edita un archivo con la ÚLTIMA respuesta del modelo; el formato (.md/.docx/.pdf/.xlsx/.svg/.py/...) se detecta por la extensión\n")
-	b.WriteString("  /save -d \"ruta/carpeta\"       crea solo un directorio (y sus padres, si faltan)\n")
-	b.WriteString("  /tools                       muestra esta ayuda\n\n")
-	b.WriteString(fmt.Sprintf("Formatos soportados por /save: %s\n\n", strings.Join(documents.RegisteredExtensions(), ", ")))
+	b.WriteString("File/directory commands in this chat:\n\n")
+	b.WriteString("  /save \"path/file.ext\"     creates or edits a file using the LAST model response; format (.md/.docx/.pdf/.xlsx/.svg/.py/...) is detected by extension\n")
+	b.WriteString("  /save -d \"path/folder\"     creates a directory only (including missing parents)\n")
+	b.WriteString("  /tools                      shows this help text\n\n")
+	b.WriteString(fmt.Sprintf("Formats supported by /save: %s\n\n", strings.Join(documents.RegisteredExtensions(), ", ")))
 	if len(AgentToolNames()) > 0 {
-		b.WriteString("Si el proyecto tiene \"tools\": {\"enabled\": true} en su project.json, el propio modelo también puede invocar estas acciones dentro de su respuesta:\n")
+		b.WriteString("If the project has \"tools\": {\"enabled\": true} in its project.json, the model itself can also invoke these actions within its response:\n")
 		for _, name := range AgentToolNames() {
 			b.WriteString("- " + name + ": " + argsHintFor(name) + "\n")
 		}
@@ -137,13 +137,13 @@ func FileToolsHelp() string {
 func argsHintFor(name string) string {
 	switch name {
 	case "save":
-		return `{"path": "carpeta/archivo.ext", "content": "..."} — el formato (.md/.txt/.docx/.pdf/.xlsx/.svg/.py/.json/...) se elige SOLO por la extensión de "path", nunca lo elegís vos a mano. Para crear solo un directorio: {"directory": "carpeta/subcarpeta"} (sin "path" ni "content"). Si el archivo ya existe, por default se sobreescribe — agregá "append": true para sumar en vez de reemplazar.`
+		return `{"path": "folder/file.ext", "content": "..."} — the format (.md/.txt/.docx/.pdf/.xlsx/.svg/.py/.json/...) is chosen ONLY by the "path" extension, never manually by you. To create a directory only: {"directory": "folder/subfolder"} (omit "path" and "content"). If the file already exists, it is overwritten by default — add "append": true to append instead of replacing.`
 	case "read_file":
-		return `{"filename": "ruta/archivo.ext"}`
+		return `{"filename": "path/file.ext"}`
 	case "patch_file":
-		return `{"filename": "ruta/archivo.ext", "search": "texto exacto único", "replace": "texto nuevo"}`
+		return `{"filename": "path/file.ext", "search": "exact unique text", "replace": "new text"}`
 	case "read_document_layer":
-		return `{"filename": "ruta/archivo.docx|.xlsx|.pdf"}`
+		return `{"filename": "path/file.docx|.xlsx|.pdf"}`
 	default:
 		return "{}"
 	}
@@ -183,11 +183,11 @@ func ParseAgentToolCall(reply string) (name string, arguments map[string]any, ok
 // when tools aren't enabled, or when the tool isn't in the allow-list.
 func RunAgentTool(adapter core.Adapter, root, name string, arguments map[string]any, cfg *core.ToolsConfig) (string, error) {
 	if !core.ToolsEnabled(cfg) {
-		return "", fmt.Errorf(`tool-calling no está habilitado para este proyecto — agregá "tools": {"enabled": true} en project.json`)
+		return "", fmt.Errorf(`tool-calling is not enabled for this project — add "tools": {"enabled": true} to project.json`)
 	}
 	set := allowedSet(cfg.Allow)
 	if !set[name] {
-		return "", fmt.Errorf("la herramienta %q no está permitida para este proyecto (ver project.json's \"tools.allow\", o la lista completa en AgentToolNames)", name)
+		return "", fmt.Errorf("tool %q is not allowed for this project (see project.json's \"tools.allow\", or the complete list in AgentToolNames)", name)
 	}
 	return documentTool(adapter, root, name, arguments)
 }
@@ -203,7 +203,7 @@ func RunAgentTool(adapter core.Adapter, root, name string, arguments map[string]
 func RunFileTool(adapter core.Adapter, root, name string, arguments map[string]any) (string, error) {
 	set := allowedSet(nil)
 	if !set[name] {
-		return "", fmt.Errorf("la herramienta %q no es un tool de archivos/directorios reconocido", name)
+		return "", fmt.Errorf("tool %q is not a recognized file/directory tool", name)
 	}
 	return documentTool(adapter, root, name, arguments)
 }

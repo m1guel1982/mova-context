@@ -46,8 +46,11 @@ Every project lives in `projects/<name>/project.json`. This is the single source
 | `budget_path` | string | where `mova-budget-report.md` is written — see **Budget report** below |
 | `token_history_path` | string | where `mova-token-history.json` is written — see **Token history** below |
 | `tools` | object | `{ "enabled": true/false }` — lets chat call file/document tools mid-conversation |
+| `jobs` | array | scheduled background jobs (cron `schedule` + actions) — see **Jobs** below |
 
 `repo`, `workflow_path`, `budget_path`, and `token_history_path` are all single strings — on purpose. One value per field keeps a project.json easy to read and easy to reason about; there is no array form for any of them.
+
+`repo` doesn't have to live near Mova's own install — it accepts an absolute path pointing anywhere, including a different drive/volume entirely (`"repo": "D:\\my-app"` on Windows, `"repo": "/mnt/data/my-app"` on Linux, `"repo": "/Volumes/Data/my-app"` on macOS), which every focus/save/delete/jobs action already resolves correctly. See [COMMANDS.md § Working across different drives/locations](COMMANDS.md#working-across-different-drivesocations-windowslinuxmacos) for the full explanation and how to run `mova` from inside that external folder.
 
 ## Working on part of `repo`, instead of a second repository
 
@@ -170,3 +173,158 @@ projects/
 ```
 
 Agents/skills/prompts are global resources (they live once, under `agents/`, `skills/`, `prompts/` at the Mova root); each project only *references* them by name in `use`/`prompt`. If `project-a` and `project-b` both use `"lazy-minimalism"`, it's the exact same skill file for both — nothing is copied per project. Each project keeps its own `budget_path`/`token_history_path`/`workflow_path`, so their Budget reports and token history never mix.
+
+## Budget (and the Token Firewall)
+
+`"budget"` (project- or task-level — a task's own `budget` replaces the
+project's, same rule as `focus`) always accepted `max_tokens`, a hard
+content-size ceiling. Since the Token Firewall, it also accepts every
+field below — a set of deterministic, zero-AI stages that reduce what
+gets sent to a model and govern what it costs, running automatically
+before that gate. **Every stage is enabled by default** — set the
+matching field to `false` to opt out of just that one:
+
+```json
+{
+  "budget": {
+    "max_tokens": 20000,
+    "max_tokens_per_run": 8000,
+    "max_monthly_usd": 15.00,
+    "on_exceed": "warn",
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true,
+    "circuit_breaker": true,
+    "token_estimation": true,
+    "detailed_reports": true,
+    "context_cache": true
+  }
+}
+```
+
+| Field | Type | Default | What it does |
+|---|---|---|---|
+| `max_tokens` | number | none | Hard ceiling on the assembled context — unchanged since before the Token Firewall existed |
+| `max_tokens_per_run` | number | none (0 = no ceiling) | Circuit Breaker: aborts/warns if a single run's token count exceeds this |
+| `max_monthly_usd` | number | none (0 = no ceiling) | Circuit Breaker: aborts/warns if this project's tracked spend for the current calendar month reaches this |
+| `on_exceed` | `"warn"` \| `"abort"` | `"warn"` | What the Circuit Breaker does when a ceiling above is hit |
+| `sanitize` | object | enabled, conservative | The Sanitizer's own settings — see below |
+| `cache_hint` | boolean | `true` | Enables the Cache Layout Guard (reorders the system prompt for provider prompt-caching) — set `false` to disable |
+| `circuit_breaker` | boolean | `true` | Enables the Circuit Breaker mechanism itself, independent of whether a ceiling is configured — set `false` to disable even with ceilings still set |
+| `token_estimation` | boolean | `true` | Uses the real tiktoken tokenizer — set `false` for a fast chars/4 approximation instead (a performance trade-off, not a savings feature) |
+| `detailed_reports` | boolean | `true` | Includes the full breakdown (per-file tokens, before/after comparison) in mova-budget-report.md — set `false` for just the totals |
+| `context_cache` | boolean | `true` | Enables Mova's own local memoization of Sanitizer results (mova-context-cache.json) — saves wall-clock time on repeat runs with unchanged files |
+
+### `sanitize` — the Sanitizer's own settings
+
+| Field | Type | Default | What it does |
+|---|---|---|---|
+| `enabled` | boolean | `true` | Master switch for the whole Sanitizer stage |
+| `dedupe_logs` | boolean | `true` | Collapses 3+ near-identical consecutive lines (ignoring a leading timestamp) into the first occurrence + a counter — the "50 lines of INFO 200 OK" case |
+| `strip_blank` | boolean | `true` | Collapses runs of 3+ blank lines to 1 |
+| `strip_comments` | boolean | `false` | Removes comment-only blocks of 5+ lines — off by default, since a task about documentation needs them intact |
+
+See [COMMANDS.md § Token Firewall](COMMANDS.md#token-firewall) for the
+full explanation of each stage, how the Cache Layout Guard behaves per
+provider (Claude, GPT, Gemini, Ollama...), and a complete worked
+example with real measured savings.
+
+## Jobs
+
+`jobs` is an array of scheduled background jobs, run by the Job Engine
+(`mova.local/jobs`) — the same executor `mova jobs run`, the "run_job"
+MCP tool, `POST /jobs/run`, and the `mova jobs start` daemon all share.
+Each entry combines a cron `schedule` with one or more independent
+actions:
+
+```json
+{
+  "jobs": [
+    {
+      "comment": "Nightly checkout/cookies audit",
+      "schedule": "0 2 * * *",
+      "tasks": ["auditar-checkout", "auditar-cookies"],
+      "save": "reports/auditoria_{date}.pdf",
+      "budget": { "focus": true },
+      "memory": "Auditoría de checkout y cookies realizada ({date})"
+    },
+    {
+      "comment": "Monthly memory archive, no tasks",
+      "schedule": "0 3 1 * *",
+      "memory_archive": { "days": 30 }
+    },
+    {
+      "comment": "Run every task defined in this project",
+      "schedule": "0 4 * * *",
+      "tasks": ["*"],
+      "save": "reports/auditoria_completa_{date}.pdf"
+    },
+    {
+      "comment": "Clean up temp files",
+      "schedule": "0 5 * * *",
+      "delete": ["reports/temp_*.csv", "logs/draft.md"]
+    }
+  ]
+}
+```
+
+| Field | Type | What it does |
+|---|---|---|
+| `comment` | string | free text, never interpreted — for humans reading project.json |
+| `schedule` | string | 5-field cron (`min hour dom month dow`) — see README.md § Cron for examples |
+| `tasks` | array of strings | task names from this project's `tasks`, or `["*"]` to run all of them |
+| `save` | string | output path; `{date}` expands to `YYYY-MM-DD`. Format is picked from the extension (`.md`, `.pdf`, `.docx`...), same as chat's `/save` |
+| `memory` | string | text appended to `memory.md` via `AppendMemory`; supports `{date}` and `{time}` |
+| `memory_archive` | object | `{ "days": N }` — archives memory entries older than N days (defaults to the project's own `archive` retention when omitted) |
+| `delete` | array of strings | glob patterns (relative to `repo`), e.g. `"reports/temp_*.csv"` |
+| `budget` | object | `{ "focus": true }` — also writes a `mova-budget-report.md`, like `mova budget --focus`. Distinct from the top-level `budget` field (a token ceiling): this one is an ACTION, not a gate |
+
+Every field is independent — a job can declare any subset of
+`tasks`/`save`/`memory`/`memory_archive`/`delete`/`budget`. All
+declared actions for a job run in this fixed order: tasks → save →
+memory → memory_archive → delete → budget, regardless of the order
+they're written in JSON.
+
+Run jobs on demand, ignoring `schedule`, with `mova jobs run <project>`
+(or `mova jobs run <project> <index>` for a single job) — see
+COMMANDS.md § Jobs.
+
+## Multiagent (agent groups)
+
+A **group** is a directory under `projects/` holding several
+independent agents, each an ordinary project with its own
+`project.json`:
+
+```text
+projects/
+    ventas_online/
+        config.json
+        vendedor/
+            project.json
+        atencionCliente/
+            project.json
+        soporte/
+            project.json
+```
+
+`projects/ventas_online/config.json` is the parent/orchestrator file:
+
+```json
+{
+  "group": "ventas_online",
+  "description": "Sales, support, and customer-care agents",
+  "agents": ["vendedor", "atencionCliente", "soporte"]
+}
+```
+
+| Field | Type | What it's for |
+|---|---|---|
+| `group` | string | display name (defaults to the directory name if omitted) |
+| `description` | string | free text |
+| `agents` | array of strings | subdirectory names, each with its own `project.json`. If omitted, every subdirectory containing a `project.json` is auto-discovered |
+
+Each agent is addressed as `<group>/<agent>` — an ordinary project name
+that every existing command already understands (`mova run
+ventas_online/vendedor`, `mova budget ventas_online/vendedor`, `mova
+jobs run ventas_online/vendedor`, ...). `mova agents run ventas_online`
+runs every agent sequentially through the same assemble+Budget-gate
+pipeline `mova run` uses for any project — see COMMANDS.md § Multiagent.

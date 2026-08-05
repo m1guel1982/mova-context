@@ -8,8 +8,8 @@ import "path/filepath"
 type Project struct {
 	Project     string            `json:"project"`
 	Description string            `json:"description"`
-	Repo        string            `json:"repo"` // the project's single repository — for more than one directory inside it, use "focus" (see ResolveFocus), not a second repo
-	Lang        string            `json:"lang"` // "es", "en", "fr", "" (legacy)
+	Repo        string            `json:"repo"`        // the project's single repository — for more than one directory inside it, use "focus" (see ResolveFocus), not a second repo
+	Lang        string            `json:"lang"`        // "es", "en", "fr", "" (legacy)
 	Adapter     string            `json:"adapter"`     // "file" | "db"
 	DSN         string            `json:"dsn"`         // database connection string
 	LLM         string            `json:"llm"`         // legacy: "claude" | "gpt" | "ollama" (still works)
@@ -38,6 +38,40 @@ type Project struct {
 	// "10. token_history_path") — see mova.local/budget.HistoryPath.
 	TokenHistoryPath string       `json:"token_history_path,omitempty"`
 	Tools            *ToolsConfig `json:"tools"` // optional: lets mova chat / chat_completion call MCP file/document tools mid-conversation (see ToolsConfig)
+	// Jobs: optional list of scheduled background jobs for this project
+	// (cron "schedule" + one or more actions: tasks/save/memory/
+	// memory_archive/delete/budget). See mova.local/jobs for the engine
+	// that reads this field and PROJECT_JSON.md § Jobs for the full
+	// spec. Empty/omitted = no scheduled jobs for this project.
+	Jobs []JobSpec `json:"jobs,omitempty"`
+}
+
+// JobSpec maps one entry of project.json's "jobs" array. Kept in package
+// core (next to Project) rather than inside mova.local/jobs so that
+// core.Project — the single source of truth for project.json — never
+// needs to import the jobs package; mova.local/jobs imports core, not
+// the other way around (same rule as Adapter/adapters).
+type JobSpec struct {
+	Comment       string            `json:"comment,omitempty"`        // free-text note, never interpreted
+	Schedule      string            `json:"schedule"`                 // 5-field cron: "min hour dom month dow"
+	Tasks         []string          `json:"tasks,omitempty"`          // task names from this project's "tasks", or ["*"] for all
+	Save          string            `json:"save,omitempty"`           // output path; supports "{date}" (see jobs.ExpandDate)
+	Memory        string            `json:"memory,omitempty"`         // text appended to memory.md via AppendMemory when the job runs
+	MemoryArchive *JobMemoryArchive `json:"memory_archive,omitempty"` // archives memory.md entries older than Days
+	Delete        []string          `json:"delete,omitempty"`         // glob patterns (relative to repo), e.g. "reports/temp_*.csv"
+	Budget        *JobBudget        `json:"budget,omitempty"`         // when set, also writes a budget report (mova budget)
+}
+
+// JobMemoryArchive maps a job's "memory_archive" block.
+type JobMemoryArchive struct {
+	Days int `json:"days"` // 0 = use ArchiveConfig's default (30, see RetentionDays)
+}
+
+// JobBudget maps a job's "budget" block — distinct from BudgetConfig
+// (project.json's own "budget", a hard token ceiling): this one is a
+// job ACTION ("also produce a budget/focus report"), not a gate.
+type JobBudget struct {
+	Focus bool `json:"focus"` // true = compare full-repo vs. focus-only token cost, like `mova budget --focus`
 }
 
 // ResolveWorkflowPath decides which workflow.md file applies to a run of
@@ -138,20 +172,10 @@ type ArchiveConfig struct {
 //
 //	budget.max_tokens (this struct, project.json)        → INPUT  ceiling, enforced by Mova BEFORE sending anything
 //	model_config.num_predict (config/models/.../*.json)  → OUTPUT ceiling, sent to the provider AS a request parameter
-type BudgetConfig struct {
-	MaxTokens int `json:"max_tokens"` // 0 = no limit configured, mova budget never flags anything
-}
-
-// ResolveBudget decides which BudgetConfig applies to a run: the task's
-// own `budget` (if set) wins and REPLACES the project's, same rule as
-// ResolveFocus. Returns nil if neither declares one — "no limit
-// configured" is not the same as "limit of 0".
-func ResolveBudget(proj *Project, task *Task) *BudgetConfig {
-	if task.Budget != nil {
-		return task.Budget
-	}
-	return proj.Budget
-}
+//
+// See core/budget_config.go for BudgetConfig/SanitizeConfig/ResolveBudget
+// — split into its own file once the Token Firewall's fields pushed
+// this one over the 300-line limit.
 
 // MemoryDeleteRequest describes a delete operation (CLI → Adapter).
 type MemoryDeleteRequest struct {

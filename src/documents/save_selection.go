@@ -131,11 +131,14 @@ func TranscriptText(exchanges []Exchange) string {
 // ExtractCodeBlocks returns strictly the contents of every fenced ```
 // code block in text, in order — independent of language ("go", "python",
 // "yaml", or no tag at all), used by `/save -c` ("únicamente código").
+// If no ``` blocks exist, it falls back to heuristic checks (isLikelyCode)
+// to support raw code responses directly.
 func ExtractCodeBlocks(text string) []string {
 	var blocks []string
 	lines := strings.Split(text, "\n")
 	inBlock := false
 	var cur strings.Builder
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") {
@@ -152,7 +155,87 @@ func ExtractCodeBlocks(text string) []string {
 			cur.WriteString(line + "\n")
 		}
 	}
-	return blocks
+
+	if len(blocks) > 0 {
+		return blocks
+	}
+
+	// Fallback: If no markdown fences exist, check if the full content is plain code
+	trimmedText := strings.TrimSpace(text)
+	if isLikelyCode(trimmedText) {
+		return []string{trimmedText}
+	}
+
+	return nil
+}
+
+// isLikelyCode heuristically inspects text to check if it represents raw source code
+// or configuration files across multiple languages while avoiding false positives on explanatory prose.
+func isLikelyCode(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if len(trimmed) == 0 {
+		return false
+	}
+
+	// Direct check for structured data/markup formats (JSON, XML, HTML, SVG)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "<") {
+		return true
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	if len(lines) == 0 {
+		return false
+	}
+
+	codeSignals := 0
+
+	for _, line := range lines {
+		lineTrimmed := strings.TrimSpace(line)
+		if lineTrimmed == "" {
+			continue
+		}
+
+		// Strict syntax terminators
+		if strings.HasSuffix(lineTrimmed, ";") || strings.HasSuffix(lineTrimmed, "{") || strings.HasSuffix(lineTrimmed, "}") {
+			codeSignals++
+			continue
+		}
+
+		// Explicit code comment prefixes
+		if strings.HasPrefix(lineTrimmed, "//") || strings.HasPrefix(lineTrimmed, "/*") || strings.HasPrefix(lineTrimmed, "#!") {
+			codeSignals++
+			continue
+		}
+
+		// Common programming keywords and operators
+		if strings.Contains(lineTrimmed, ":=") || strings.Contains(lineTrimmed, "==") || strings.Contains(lineTrimmed, "!=") ||
+			strings.Contains(lineTrimmed, "const ") || strings.Contains(lineTrimmed, "let ") || strings.Contains(lineTrimmed, "var ") ||
+			strings.Contains(lineTrimmed, "import ") || strings.Contains(lineTrimmed, "function") || strings.Contains(lineTrimmed, "return ") {
+			codeSignals++
+			continue
+		}
+
+		// Distinguish programming arrow syntax from text arrows
+		if strings.Contains(lineTrimmed, "=>") {
+			if isArrowFunctionOrMap(lineTrimmed) {
+				codeSignals++
+			}
+		}
+	}
+
+	ratio := float64(codeSignals) / float64(len(lines))
+	return ratio >= 0.35 || codeSignals >= 3
+}
+
+// isArrowFunctionOrMap filters programming '=>' from explanatory text arrows.
+func isArrowFunctionOrMap(line string) bool {
+	if strings.Contains(line, "=> {") || strings.Contains(line, ")=>") || strings.Contains(line, ") =>") || strings.HasSuffix(line, "=>") {
+		return true
+	}
+	if strings.Contains(line, ";") || strings.Contains(line, "\"") || strings.Contains(line, "'") {
+		return true
+	}
+	return false
 }
 
 // StripCodeBlocks removes every fenced ``` code block and keeps

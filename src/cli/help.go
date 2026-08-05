@@ -6,6 +6,12 @@ func usage() {
 	consolePrint(`mova — Mova Context v3
 
   mova run           [project] [task]        generate context for LLM
+    --count                                  don't build/print the context, just estimate its token/USD
+                                              cost (same as mova budget, no report file written) — also
+                                              accepts a multiagent group name, summing one estimate per
+                                              agent instead of failing. Same estimate reachable identically
+                                              from chat's "/budget", the MCP "estimate_budget" tool, and
+                                              HTTP's /mcp route — one implementation, every door.
   mova memory        [project] "response"    save session to memory.md
   mova memory-read   [project]               print active memory
     --all                                    include archives
@@ -34,6 +40,19 @@ func usage() {
     enable | disable                         toggle auto-archive
     days N                                   set retention days (1, 10, 30, 90...)
     confirm true|false                       toggle confirmation on delete
+
+  mova jobs list     [project]               list a project's scheduled jobs (project.json "jobs")
+  mova jobs run      [project] [index|--all] run one job now (by index) or every job (default)
+  mova jobs start                            start the job scheduler daemon (checks every project each minute)
+
+  mova agents run    [group] [agent|--all]   run one or every agent under projects/[group]/config.json
+  mova agents list   [group]                 list agents declared in a multiagent group
+    (for token counts, use: mova run --count [group] — see above)
+
+  mova ui            [project]               open the interactive terminal interface (chat, config, jobs,
+                                              multiagent, reports, logs — everything, one command)
+    In the file viewer/editor: ctrl+f opens a find bar to search inside the document
+    In chat: commands work here too — set -model <n>, /memory, /budget, /tools, /clear, /save, /delete, exit
 
   Local models (Ollama, LM Studio, vLLM...) — see docs/i18n/en/COMMANDS.md
   mova config        <provider>              set the active provider (ollama, lmstudio...)

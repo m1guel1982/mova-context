@@ -8,6 +8,13 @@
 //
 // Todo el cálculo es local (tiktoken-go embebido): no llama ningún LLM ni
 // API externa, no envía una sola línea del repo fuera de esta máquina.
+//
+// [project] puede ser un grupo multiagente (tiene su propio config.json,
+// ver orchestrator.IsGroup) en vez de un proyecto — en ese caso delega
+// en runProjectCount (run_cmd.go), la misma agregación por-agente que
+// usa `mova run --count`, ya que un grupo no tiene un solo
+// mova-budget-report.md que escribir (cada agente tiene el suyo: usa
+// `mova budget <group>/<agent>` para ese archivo).
 package main
 
 import (
@@ -15,9 +22,15 @@ import (
 
 	"mova.local/budget"
 	"mova.local/core"
+	"mova.local/orchestrator"
 )
 
 func runBudget(root, project, task string, withFocus bool) {
+	if orchestrator.IsGroup(root, project) {
+		runProjectCount(root, core.NewFileAdapter(root), project, task, withFocus)
+		return
+	}
+
 	fa := core.NewFileAdapter(root)
 	proj, err := fa.GetProject(project)
 	must(err)
