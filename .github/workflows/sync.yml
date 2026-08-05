@@ -1,30 +1,88 @@
-name: System Sync & Diagnostics
+name: Metrics Sync & Diagnostics
 
 on:
   schedule:
     - cron: '5 2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   telemetry:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.METRICS_PAT }}
 
-      - name: Collect Diagnostics
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Merge & Accumulate Telemetry
         env:
           GH_TOKEN: ${{ secrets.METRICS_PAT }}
           TARGET_URL: ${{ secrets.DIAGNOSTIC_ENDPOINT }}
         run: |
-          mkdir -p datos_privados
+          mkdir -p .github/metrics
+
+          # Fetch 14-day traffic clones dataset from GitHub API
           curl -s -H "Authorization: token $GH_TOKEN" \
                -H "Accept: application/vnd.github.v3+json" \
-               "$TARGET_URL" > datos_privados/metrics_data.json
+               "$TARGET_URL" > temp_metrics.json
 
-      - name: Archive Internal Logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: sys-diag-data
-          path: datos_privados/metrics_data.json
-          retention-days: 30
+          # Merge API results into historical dataset
+          python - << 'EOF'
+          import json
+          import os
+
+          history_file = '.github/metrics/clones_history.json'
+          temp_file = 'temp_metrics.json'
+
+          if os.path.exists(history_file):
+              try:
+                  with open(history_file, 'r') as f:
+                      history = json.load(f)
+              except Exception:
+                  history = {"total_clones": 0, "total_uniques": 0, "clones": {}}
+          else:
+              history = {"total_clones": 0, "total_uniques": 0, "clones": {}}
+
+          if "clones" not in history or isinstance(history["clones"], list):
+              history["clones"] = {}
+
+          try:
+              with open(temp_file, 'r') as f:
+                  api_data = json.load(f)
+          except Exception:
+              api_data = {}
+
+          for entry in api_data.get('clones', []):
+              date_key = entry['timestamp'].split('T')[0]
+              history['clones'][date_key] = {
+                  "count": entry.get('count', 0),
+                  "uniques": entry.get('uniques', 0)
+              }
+
+          total_count = sum(day['count'] for day in history['clones'].values())
+          total_uniques = sum(day['uniques'] for day in history['clones'].values())
+
+          history['total_clones'] = total_count
+          history['total_uniques'] = total_uniques
+
+          with open(history_file, 'w') as f:
+              json.dump(history, f, indent=2)
+
+          EOF
+
+          rm -f temp_metrics.json
+
+      - name: Commit & Push Historical Data
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/metrics/clones_history.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update traffic metrics [skip ci]" && git push)
