@@ -261,22 +261,97 @@ More detail and full examples in [COMMANDS.en.md § mova budget](COMMANDS.en.md#
 
 ---
 
-## 7. Try it in 2 minutes
+## 7. Quick Installation & Test (2 Minutes)
+
+You can install and start using **mova** in just a few minutes using whichever method you prefer.
+
+### Option A — Automatic Installer (Recommended)
+
+1. Go to the `installers/` folder in the repository.
+2. Run the installer for your operating system:
+
+| Operating System | Installer |
+|------------------|-----------|
+| Windows | `install.bat` |
+| macOS | `install.command` |
+| Linux | `install.sh` |
+
+The installer will:
+
+- Build the executable.
+- Install it on your system.
+- Automatically configure your **PATH**.
+
+Once the installation is complete, open any terminal (CMD, PowerShell, Git Bash, Bash, Zsh, etc.) and run:
+
+```bash
+mova run local-tests
+```
+
+You can also run:
+
+```bash
+mova
+```
+
+or launch the interactive interface:
+
+```bash
+mova ui
+```
+
+---
+
+### Option B — Using the Makefile (Developers)
+
+If you already have **Go** and **make** installed:
+
+**Install globally:**
+
+```bash
+make install
+mova run local-tests
+```
+
+**Build locally only (`dist/`):**
+
+```bash
+make build
+./dist/mova run local-tests
+```
+
+**Build binaries for all supported platforms:**
+
+```bash
+make build-all
+```
+
+---
+
+### Option C — Manual Build
+
+If you prefer to build directly with Go:
 
 ```bash
 go build -o mova ./src/cli
-mova run pruebas-locales
+./mova run local-tests
 ```
 
-There's a full example project at `projects/pruebas-locales/` — inspect its `project.json` or run the command above to see the assembled context.
+---
 
-> **Working on code that lives somewhere else entirely** (a different
-> drive on Windows, a different mount on Linux/macOS)? A project's
-> `"repo"` accepts an absolute path pointing anywhere — the double-click
-> installers already set things up so `mova` works from inside that
-> external folder too, no extra configuration. See
-> [COMMANDS.md § Working across different drives/locations](COMMANDS.md#working-across-different-drivesocations-windowslinuxmacos).
+### Working with Projects Located Anywhere
 
+Your project does **not** need to be inside the **mova** repository.
+
+The `repo` command accepts absolute paths, allowing you to work with projects located on:
+
+- Another drive (Windows).
+- Another mount point (Linux/macOS).
+- Any directory on your system.
+
+The installers automatically configure everything so **mova** works from any project location without additional setup.
+
+> See **COMMANDS.md** → **Working Across Different Drives/Locations** for more details.
 ---
 
 ## 8. Go deeper
