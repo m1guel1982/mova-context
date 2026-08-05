@@ -77,25 +77,29 @@ func runChat(root, project, task string) {
 		applyProjectLLMProfile(sess, root, proj)
 
 		consolePrint("[Context] Building context...\n")
-		sections, err := core.BuildContextSections(adapter, root, project, task)
-		if err != nil {
-			consolePrint("[Context] Warning: could not build context for " + project + ": " + err.Error() + "\n")
-		} else {
-			ctxText := sections.Full()
-			printContextSummary(sections)
-
-			resolvedTask := core.ResolveTaskName(proj, task)
-			t := budget.ResolveTask(proj, resolvedTask)
-			if gateErr := budget.EnforceLimit(proj, t, tokensOf(ctxText, proj)); gateErr != nil {
-				consolePrint("\n" + gateErr.Error() + "\n\n")
-				return
-			}
-			sess.SetSystem(ctxText + mcp.ToolsSystemPrompt(proj.Tools))
-			if core.ToolsEnabled(proj.Tools) {
-				consolePrint("[Tools] Enabled for this chat — the model may create/write files and directories (see project.json's \"tools\").\n")
-			}
-			consolePrint("[Context] Project loaded: " + project + "\n")
+		// budget.BuildGatedContext runs the full Token Firewall
+		// (Sanitizer → Circuit Breaker → the existing max_tokens gate)
+		// — the exact same pipeline `mova run`/`mova jobs run`/
+		// `mova agents run` already go through, so chat never has its
+		// own copy of "build then gate".
+		gated := budget.BuildGatedContext(adapter, root, project, task)
+		if gated.Sections != nil {
+			printContextSummary(gated.Sections)
 		}
+		printSanitizeStatus(gated.Sanitize)
+		printCircuitBreakerStatus(gated.CircuitBreaker)
+		if gated.Err != nil {
+			consolePrint("\n" + gated.Err.Error() + "\n\n")
+			return
+		}
+
+		systemText, boundary := applyCacheLayout(gated.Sections, proj)
+		sess.SetSystem(systemText + mcp.ToolsSystemPrompt(proj.Tools))
+		sess.CacheBoundary = boundary
+		if core.ToolsEnabled(proj.Tools) {
+			consolePrint("[Tools] Enabled for this chat — the model may create/write files and directories (see project.json's \"tools\").\n")
+		}
+		consolePrint("[Context] Project loaded: " + project + "\n")
 	}
 
 	consolePrint(chatBanner(sess))
@@ -131,10 +135,10 @@ func runChat(root, project, task string) {
 			consolePrint(fmt.Sprintf("[Model] Switched to: %s (provider: %s)\n", sess.Model, sess.Provider))
 
 		case line == "/memory":
-			runChatMemory(adapter, project, sess)
+			runChatMemory(adapter, project, sess, nil)
 
 		case line == "/budget":
-			runChatBudget(root, adapter, project, task)
+			runChatBudget(root, adapter, project, task, nil)
 
 		case line == "/tools":
 			consolePrint(mcp.FileToolsHelp())
@@ -143,7 +147,7 @@ func runChat(root, project, task string) {
 			clearScreen()
 
 		case strings.HasPrefix(line, "/save"):
-			runChatSave(adapter, root, proj, sess, strings.TrimSpace(strings.TrimPrefix(line, "/save")), fileState)
+			runChatSave(adapter, root, proj, sess, strings.TrimSpace(strings.TrimPrefix(line, "/save")), fileState, nil)
 
 		case strings.HasPrefix(line, "/delete"):
 			runChatDelete(root, proj, strings.TrimSpace(strings.TrimPrefix(line, "/delete")), scanner)
@@ -176,7 +180,7 @@ func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project,
 	label := providerLabel(sess.Provider)
 	consolePrint("[" + label + "] Sending request...\n")
 
-	reply, streamed, err := sendWithTools(sess, adapter, proj, root, line)
+	reply, streamed, err := sendWithTools(sess, adapter, proj, root, line, nil)
 	if err != nil {
 		consolePrint("Error: " + err.Error() + "\n")
 		return
@@ -200,4 +204,3 @@ func chatBanner(sess *models.Session) string {
 	b.WriteString("\ntype `exit` to quit.\n\n")
 	return b.String()
 }
-

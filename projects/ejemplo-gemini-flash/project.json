@@ -16,7 +16,7 @@
   },
 
   "llm_profile": {
-    "config": "gemini-3.5-flash"
+    "config": "llama3.2.3b"
   },
 
   "budget": {

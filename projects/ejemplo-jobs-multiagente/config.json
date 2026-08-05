@@ -1,0 +1,5 @@
+{
+  "group": "ejemplo-jobs-multiagente",
+  "description": "Dos agentes de compliance (auditor-checkout, auditor-cookies) que auditan distintas partes del mismo sitio, cada uno con su propio project.json, memoria, budget y jobs programados. Orquestados desde este config.json.",
+  "agents": ["auditor-checkout", "auditor-cookies"]
+}

@@ -16,6 +16,8 @@ Docs: **[Español](README.md)** · **[English](README.en.md)**
 6. [What the CLI brings](#6-what-the-cli-brings) — a summary of what's new
 7. [Try it in 2 minutes](#7-try-it-in-2-minutes)
 8. [Go deeper](#8-go-deeper)
+9. [Job Engine, Cron & Multiagent](#9-job-engine-cron--multiagent)
+10. [Visual interface — `mova ui`](#10-visual-interface--mova-ui)
 
 ---
 
@@ -132,6 +134,27 @@ And because that notebook is yours — not a generic average from thousands of o
 
 **Why this matters for your wallet (and your sanity):** every token you send to a Cloud model costs money; if the model is local, a context that doesn't fit the window silently truncates or degrades. Mova attacks both problems with the same mechanism: **measure before spending, stop if it's over, and learn from every real call.**
 
+### The Token Firewall — the newest, biggest lever
+
+Everything below in this section was already true before this feature
+existed. The Token Firewall adds three more deterministic, zero-AI
+stages that run automatically, in front of every one of them — same
+`mova run`, `mova chat`, jobs, MCP, the TUI, no new command:
+
+| Stage | What it does | Real, measured result (shipped example) |
+|---|---|---|
+| **Sanitizer** | Collapses repeated log lines, blank-line runs, and duplicated file headers — before anything is counted | 2,737 → 1,764 tokens: **35.6% fewer tokens, same information** |
+| **Cache Layout Guard** | Reorders the prompt so its first tokens are a byte-stable prefix, which is what lets Claude/GPT/Gemini's own prompt caching actually trigger | ~1,050 of 1,167 static-prefix tokens estimated reusable on a cache hit (~90%, Anthropic's own published discount) |
+| **Circuit Breaker** | Per-run and monthly USD ceilings, checked BEFORE anything is sent — `"on_exceed": "abort"` stops execution, not just a warning after the bill arrives | Verified: a run that would exceed its ceiling never reaches the model |
+
+**Every stage is on by default**, independently toggleable in
+`project.json`, and every number above is real — measured by actually
+running the example shipped in this repository
+(`projects/ejemplo-token-firewall/`), not projected for documentation.
+See [COMMANDS.md § Token Firewall](COMMANDS.md#token-firewall) for the
+full mechanics, how caching behaves per provider, and the complete
+walkthrough.
+
 ### The gate: `budget.max_tokens` stops the run, not just warns
 
 ```json
@@ -247,6 +270,13 @@ mova run pruebas-locales
 
 There's a full example project at `projects/pruebas-locales/` — inspect its `project.json` or run the command above to see the assembled context.
 
+> **Working on code that lives somewhere else entirely** (a different
+> drive on Windows, a different mount on Linux/macOS)? A project's
+> `"repo"` accepts an absolute path pointing anywhere — the double-click
+> installers already set things up so `mova` works from inside that
+> external folder too, no extra configuration. See
+> [COMMANDS.md § Working across different drives/locations](COMMANDS.md#working-across-different-drivesocations-windowslinuxmacos).
+
 ---
 
 ## 8. Go deeper
@@ -256,6 +286,103 @@ There's a full example project at `projects/pruebas-locales/` — inspect its `p
 | See every command (memory, Focus, MCP, HTTP, tokenomics) | [COMMANDS.en.md](COMMANDS.en.md) |
 | Read the full spec that models follow | [workflow.md](../../../workflow.md) |
 | Understand the source code (Resolvers, Adapters, how to extend it) | [SOURCE.md](../SOURCE.md) |
+
+---
+
+---
+
+## 9. Job Engine, Cron & Multiagent
+
+### Scheduling work: the Job Engine
+
+A project can declare **jobs** in its `project.json` — scheduled,
+unattended runs that build context, save reports, update memory, clean
+up files, and produce budget reports, all on a cron schedule:
+
+```json
+{
+  "jobs": [
+    {
+      "schedule": "0 2 * * *",
+      "tasks": ["auditar-checkout", "auditar-cookies"],
+      "save": "reports/auditoria_{date}.pdf",
+      "budget": { "focus": true },
+      "memory": "Auditoría de checkout y cookies realizada"
+    }
+  ]
+}
+```
+
+Run it on demand with `mova jobs run <project>`, or start the daemon
+that checks every project once a minute with `mova jobs start`. See
+[PROJECT_JSON.md § Jobs](PROJECT_JSON.md#jobs) for every field and
+[COMMANDS.en.md § Jobs](COMMANDS.en.md) for every command.
+
+### Understanding `schedule` (Cron)
+
+`schedule` uses standard 5-field cron syntax:
+
+```text
+schedule: "0 2 * * *"
+           │ │ │ │ │
+           │ │ │ │ └─ day of week (0-6, 0 = Sunday, * = every day)
+           │ │ │ └─── month (1-12, * = every month)
+           │ │ └───── day of month (1-31, * = every day)
+           │ └─────── hour (0-23)
+           └───────── minute (0-59)
+```
+
+A few easy examples:
+
+| `schedule` | Runs... |
+|---|---|
+| `"0 2 * * *"` | every day at 2:00 AM |
+| `"30 8 * * 1"` | every Monday at 8:30 AM |
+| `"0 0 1 * *"` | at midnight on the 1st of every month |
+| `"*/15 * * * *"` | every 15 minutes |
+| `"0 9-17 * * 1-5"` | every hour, 9 AM to 5 PM, Monday through Friday |
+
+### Multiagent: several agents under one group
+
+A directory under `projects/` can hold several independent agents,
+each an ordinary project, orchestrated by a parent `config.json`:
+
+```text
+projects/
+    ventas_online/
+        config.json          ← the orchestrator
+        vendedor/project.json
+        atencionCliente/project.json
+        soporte/project.json
+```
+
+```bash
+mova agents run ventas_online          # every agent, sequentially
+mova agents run ventas_online vendedor # just one agent
+```
+
+Each agent keeps its own memory, budget, focus, tasks, and jobs — see
+[PROJECT_JSON.md § Multiagent](PROJECT_JSON.md#multiagent-agent-groups).
+
+---
+
+## 10. Visual interface — `mova ui`
+
+Everything above is also reachable from a simple, lightweight terminal
+interface:
+
+```bash
+mova ui
+```
+
+One single command, navigated with the arrow keys and Enter: chat,
+`project.json`, `workflow.md`, model configuration, logging, memory,
+jobs, multiagent, reports, and logs, all from the same place — without
+adding a new command per feature. The interface replaces nothing: it
+calls the exact same components `mova chat`, `mova jobs run`, and
+`mova agents run` already use. See
+[COMMANDS.md § Visual interface](COMMANDS.md#19-visual-interface--mova-ui)
+for the full detail.
 
 ---
 

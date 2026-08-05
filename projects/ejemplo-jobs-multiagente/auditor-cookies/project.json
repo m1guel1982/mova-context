@@ -1,0 +1,37 @@
+{
+  "project": "ejemplo-jobs-multiagente/auditor-cookies",
+  "description": "Agente del grupo 'ejemplo-jobs-multiagente' — audita el banner de cookies en busca de consentimiento sin opción de rechazo ni configuración granular. Corre como job programado, sin intervención manual.",
+  "repo": "examples/ejemplo-jobs-multiagente-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "auditar",
+
+  "agents": { "domain": "base", "use": ["privacy-auditor"], "custom": [] },
+  "skills": { "domain": "base", "use": ["granular-consent"], "custom": [] },
+
+  "tasks": {
+    "auditar": {
+      "prompt": "audit-consent-flow",
+      "variables": { "module": "cookies", "regulation": "Ley 21.719 (Chile)" },
+      "focus": ["cookies.html"]
+    }
+  },
+
+  "budget": { "max_tokens": 20000 },
+
+  "jobs": [
+    {
+      "comment": "Auditoría nocturna del banner de cookies — corre todos los días a las 2 AM",
+      "schedule": "0 2 * * *",
+      "tasks": ["auditar"],
+      "save": "reports/auditoria-cookies_{date}.md",
+      "budget": { "focus": true },
+      "memory": "Auditoría de cookies ejecutada el {date} a las {time} — ver reports/auditoria-cookies_{date}.md"
+    },
+    {
+      "comment": "Archivado mensual de memoria — el día 1 de cada mes a las 3 AM, sin tasks",
+      "schedule": "0 3 1 * *",
+      "memory_archive": { "days": 30 }
+    }
+  ]
+}

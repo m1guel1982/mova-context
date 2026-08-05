@@ -12,11 +12,17 @@ import (
 	"net/http"
 
 	"mova.local/core"
+	"mova.local/logging"
 	"mova.local/mcp"
 )
 
 // StartServer inicia el servidor MCP sobre HTTP (ideal para Postman/curl).
 func StartServer(adapter core.Adapter, root string, port int) error {
+	logger := logging.Open(root)
+	logging.SetDefault(logger)
+	defer logger.Close()
+	logger.Info("http", "server starting on port %d", port)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -109,6 +115,60 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 			ID:      json.RawMessage("1"),
 			Method:  "tools/call",
 			Params:  map[string]any{"name": "get_workflow", "arguments": args},
+		}
+		responseBytes := mcp.Process(adapter, root, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseBytes)
+	})
+
+	mux.HandleFunc("/jobs/run", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			mcpErrorHTTP(w, -32700, "parse error", nil)
+			return
+		}
+		// Body: {"project": "...", "index": "0"} (index optional — runs
+		// every job for the project when omitted). Same convenience-shape
+		// convention as /save, /delete, /workflow above: reexpressed as
+		// tools/call so it runs through mcp.Process → executeTool →
+		// "run_job" → mova.local/jobs.RunJob — the exact same flow
+		// `mova jobs run` uses. See mova.local/jobs/engine.go.
+		req := mcp.Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage("1"),
+			Method:  "tools/call",
+			Params:  map[string]any{"name": "run_job", "arguments": args},
+		}
+		responseBytes := mcp.Process(adapter, root, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseBytes)
+	})
+
+	mux.HandleFunc("/agents/run", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			mcpErrorHTTP(w, -32700, "parse error", nil)
+			return
+		}
+		// Body: {"group": "...", "agent": "...", "task": "..."} (agent
+		// optional — runs every agent in the group when omitted). Same
+		// convenience-shape convention: reexpressed as tools/call so it
+		// runs through mcp.Process → executeTool → "run_agent" →
+		// mova.local/orchestrator.RunGroup — the exact same flow
+		// `mova agents run` uses. See mova.local/orchestrator/run.go.
+		req := mcp.Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage("1"),
+			Method:  "tools/call",
+			Params:  map[string]any{"name": "run_agent", "arguments": args},
 		}
 		responseBytes := mcp.Process(adapter, root, req)
 		w.Header().Set("Content-Type", "application/json")

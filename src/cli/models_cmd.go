@@ -1,12 +1,12 @@
-// models_cmd.go — comandos de gestión de modelos locales:
+// models_cmd.go — local model management commands:
 //
-//	mova config       <provider>              elige el proveedor activo
-//	mova show config  [modelo]                muestra proveedor activo o un modelo
-//	mova install      modelo1,modelo2,...     descarga modelos (con barra de progreso)
-//	mova model-list                           modelos instalados en el proveedor activo
-//	mova remove       modelo1,modelo2,...     elimina modelos del proveedor activo
+//   mova config       <provider>             selects active provider
+//   mova show config  [model]                shows active provider or a model
+//   mova install      model1,model2,...      downloads models (with progress bar)
+//   mova model-list                          installed models in active provider
+//   mova remove       model1,model2,...      deletes models from active provider
 //
-// Todo esto vive en config/models/ — ver docs/i18n/es/COMMANDS.md.
+// All of this lives in config/models/ — see docs/COMMANDS.md.
 package main
 
 import (
@@ -20,15 +20,15 @@ import (
 // runConfigProvider — mova config <provider>
 func runConfigProvider(root, provider string) {
 	must(models.SetActiveProvider(root, provider))
-	consolePrint("proveedor activo: " + provider + "\n")
+	consolePrint("active provider: " + provider + "\n")
 }
 
-// runShowConfig — mova show config [modelo]
+// runShowConfig — mova show config [model]
 func runShowConfig(root, model string) {
 	state, err := models.GetActiveState(root)
 	must(err)
 	if state.Provider == "" {
-		die("no hay proveedor activo — corré `mova config <provider>` primero (p.ej. `mova config ollama`)")
+		die("no active provider — run `mova config <provider>` first (e.g. `mova config ollama`)")
 	}
 
 	name := model
@@ -38,11 +38,11 @@ func runShowConfig(root, model string) {
 	if name == "" {
 		names, err := models.ListModelConfigs(root, state.Provider)
 		must(err)
-		consolePrint("proveedor activo: " + state.Provider + " (sin modelo elegido todavía)\n")
+		consolePrint("active provider: " + state.Provider + " (no model selected yet)\n")
 		if len(names) == 0 {
-			consolePrint("no hay archivos de configuración en config/models/" + state.Provider + " — creá uno (ver docs/i18n/es/COMMANDS.md)\n")
+			consolePrint("no configuration files in config/models/" + state.Provider + " — create one (see docs/COMMANDS.md)\n")
 		} else {
-			consolePrint("modelos configurados: " + strings.Join(names, ", ") + "\n")
+			consolePrint("configured models: " + strings.Join(names, ", ") + "\n")
 		}
 		return
 	}
@@ -55,16 +55,16 @@ func runShowConfig(root, model string) {
 	printJSON(mc)
 }
 
-// runInstall — mova install modelo1,modelo2,...
+// runInstall — mova install model1,model2,...
 func runInstall(root, csv string) {
 	state, err := models.GetActiveState(root)
 	must(err)
 	if state.Provider == "" {
-		die("no hay proveedor activo — corré `mova config <provider>` primero")
+		die("no active provider — run `mova config <provider>` first")
 	}
 	names := splitCSV(csv)
 	if len(names) == 0 {
-		die("indicá al menos un modelo: mova install llama3.1,mistral")
+		die("specify at least one model: mova install llama3.1,mistral")
 	}
 
 	bars := map[string]*progressBar{}
@@ -80,7 +80,7 @@ func runInstall(root, csv string) {
 		bar.finish()
 	}
 	must(err)
-	consolePrint("instalación completa: " + strings.Join(names, ", ") + "\n")
+	consolePrint("installation complete: " + strings.Join(names, ", ") + "\n")
 }
 
 // runModelList — mova model-list
@@ -88,12 +88,12 @@ func runModelList(root string) {
 	state, err := models.GetActiveState(root)
 	must(err)
 	if state.Provider == "" {
-		die("no hay proveedor activo — corré `mova config <provider>` primero")
+		die("no active provider — run `mova config <provider>` first")
 	}
 	list, err := models.ListInstalled(root, state.Provider)
 	must(err)
 	if len(list) == 0 {
-		consolePrint("no hay modelos instalados en " + state.Provider + "\n")
+		consolePrint("no installed models in " + state.Provider + "\n")
 		return
 	}
 	for _, m := range list {
@@ -105,19 +105,19 @@ func runModelList(root string) {
 	}
 }
 
-// runRemove — mova remove modelo1,modelo2,...
+// runRemove — mova remove model1,model2,...
 func runRemove(root, csv string) {
 	state, err := models.GetActiveState(root)
 	must(err)
 	if state.Provider == "" {
-		die("no hay proveedor activo — corré `mova config <provider>` primero")
+		die("no active provider — run `mova config <provider>` first")
 	}
 	names := splitCSV(csv)
 	if len(names) == 0 {
-		die("indicá al menos un modelo: mova remove llama3.1,mistral")
+		die("specify at least one model: mova remove llama3.1,mistral")
 	}
 	must(models.Remove(root, state.Provider, names))
-	consolePrint("eliminado: " + strings.Join(names, ", ") + "\n")
+	consolePrint("removed: " + strings.Join(names, ", ") + "\n")
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -138,8 +138,8 @@ func printJSON(v any) {
 	consolePrint(string(data) + "\n")
 }
 
-// progressBar — barra de progreso simple para `mova install`, una línea
-// por modelo, actualizada in-place con retorno de carro (\r).
+// progressBar — simple progress bar for `mova install`, one line
+// per model, updated in-place using carriage return (\r).
 type progressBar struct {
 	model string
 	done  bool
@@ -157,7 +157,7 @@ func (b *progressBar) update(status string, percent int) {
 		consolePrint(fmt.Sprintf("\r%-16s %-22s", b.model, status))
 		return
 	}
-	filled := percent / 5 // barra de 20 caracteres
+	filled := percent / 5 // 20-character bar
 	bar := strings.Repeat("=", filled) + strings.Repeat("-", 20-filled)
 	consolePrint(fmt.Sprintf("\r%-16s [%s] %3d%%  %s", b.model, bar, percent, status))
 	if status == "success" {

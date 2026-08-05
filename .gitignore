@@ -1,6 +1,6 @@
 # Build artifacts
-#dist/
-#*.exe
+dist/
+*.exe
 
 # OS / editor
 .DS_Store

@@ -17,7 +17,7 @@ import (
 type anthropicProvider struct{ cfg *ModelConfig }
 
 func (p *anthropicProvider) Chat(ctx context.Context, model string, mc *ModelConfig, messages []ChatMessage) (string, Usage, error) {
-	system, rest := splitSystemMessage(messages)
+	system, boundary, rest := splitSystemMessage(messages)
 
 	body := map[string]any{
 		"model":      model,
@@ -25,7 +25,7 @@ func (p *anthropicProvider) Chat(ctx context.Context, model string, mc *ModelCon
 		"messages":   rest,
 	}
 	if system != "" {
-		body["system"] = system
+		body["system"] = systemField(system, boundary)
 	}
 
 	var out struct {
@@ -55,17 +55,37 @@ func (p *anthropicProvider) Chat(ctx context.Context, model string, mc *ModelCon
 
 // splitSystemMessage pulls the first "system"-role message out of a chat
 // history — Anthropic's API takes system as a separate top-level field,
-// not as a message with role "system" like OpenAI/Ollama expect.
-func splitSystemMessage(messages []ChatMessage) (system string, rest []ChatMessage) {
+// not as a message with role "system" like OpenAI/Ollama expect. Also
+// returns that message's CacheBoundary (0 if unset/not applicable).
+func splitSystemMessage(messages []ChatMessage) (system string, boundary int, rest []ChatMessage) {
 	rest = make([]ChatMessage, 0, len(messages))
 	for _, m := range messages {
 		if m.Role == "system" && system == "" {
 			system = m.Content
+			boundary = m.CacheBoundary
 			continue
 		}
 		rest = append(rest, m)
 	}
-	return system, rest
+	return system, boundary, rest
+}
+
+// systemField builds Anthropic's "system" request field. With no
+// boundary (the common case — "cache_hint" not enabled, or no provider
+// benefits from it), it's the same plain string Anthropic has always
+// accepted. With a boundary, it becomes a two-block array: the stable
+// prefix marked with "cache_control": {"type": "ephemeral"} (Anthropic's
+// prompt-caching marker — see https://docs.anthropic.com, "Prompt
+// caching"), and the rest as a second, uncached block. Anthropic accepts
+// both forms for "system"; this never breaks a request that doesn't use it.
+func systemField(system string, boundary int) any {
+	if boundary <= 0 || boundary >= len(system) {
+		return system
+	}
+	return []map[string]any{
+		{"type": "text", "text": system[:boundary], "cache_control": map[string]string{"type": "ephemeral"}},
+		{"type": "text", "text": system[boundary:]},
+	}
 }
 
 func postAnthropicJSON(ctx context.Context, cfg *ModelConfig, body any, out any) error {

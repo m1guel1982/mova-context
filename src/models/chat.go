@@ -27,6 +27,13 @@ type Session struct {
 	System    string // system prompt fijo (p.ej. el contexto de mova run)
 	History   []ChatMessage
 	LastUsage Usage // tokens reales del último turno (0,0 si el proveedor no los reporta)
+
+	// CacheBoundary: byte offset in System where a stable, cacheable
+	// prefix ends (0 = disabled). Set by mova.local/budget's
+	// LayoutForCache when a project has "budget": {"cache_hint": true}
+	// — see cli/chat_helpers.go, cli/tui_chat.go. Threaded into the
+	// system ChatMessage built below, read only by provider_anthropic.go.
+	CacheBoundary int
 }
 
 // NewSession arranca una sesión usando el proveedor/modelo activo
@@ -122,7 +129,7 @@ func (s *Session) Send(userText string) (string, error) {
 
 	messages := make([]ChatMessage, 0, len(s.History)+1)
 	if s.System != "" {
-		messages = append(messages, ChatMessage{Role: "system", Content: s.System})
+		messages = append(messages, ChatMessage{Role: "system", Content: s.System, CacheBoundary: s.CacheBoundary})
 	}
 	messages = append(messages, s.History...)
 
@@ -182,7 +189,7 @@ func (s *Session) SendStream(userText string, onToken func(string)) (string, err
 
 	messages := make([]ChatMessage, 0, len(s.History)+1)
 	if s.System != "" {
-		messages = append(messages, ChatMessage{Role: "system", Content: s.System})
+		messages = append(messages, ChatMessage{Role: "system", Content: s.System, CacheBoundary: s.CacheBoundary})
 	}
 	messages = append(messages, s.History...)
 

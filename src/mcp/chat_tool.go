@@ -77,21 +77,37 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 	if project != "" {
 		statusLog.WriteString("[Context] Building context...\n")
 		taskName := str(args, "task")
-		sections, err := core.BuildContextSections(adapter, root, project, taskName)
-		if err != nil {
-			return "", fmt.Errorf("building project context: %w", err)
+		// budget.BuildGatedContext runs the full Token Firewall
+		// (Sanitizer → Circuit Breaker → the existing max_tokens gate)
+		// — the exact same pipeline `mova chat`/the TUI/`mova run`
+		// already go through, so MCP never has its own copy of
+		// "build then gate".
+		gated := budget.BuildGatedContext(adapter, root, project, taskName)
+		if gated.Sections != nil {
+			writeContextSummary(&statusLog, gated.Sections)
 		}
-		writeContextSummary(&statusLog, sections)
+		if gated.Sanitize.LinesRemoved > 0 || gated.Sanitize.BlankRemoved > 0 {
+			statusLog.WriteString(fmt.Sprintf("[Sanitizer] Cleaned %d repeated line(s), %d blank-line run(s).\n", gated.Sanitize.LinesRemoved, gated.Sanitize.BlankRemoved))
+		}
+		if gated.CircuitBreaker.Message != "" {
+			statusLog.WriteString("[Circuit Breaker] " + gated.CircuitBreaker.Message + "\n")
+		}
+		if gated.Err != nil {
+			return "", gated.Err
+		}
 
-		resolvedTask := core.ResolveTaskName(proj, taskName)
-		// Budget gate: always runs, even with no task at all (falls back
-		// to the project-level "budget" via budget.ResolveTask) — nothing
-		// ever reaches the model without this check first.
-		t := budget.ResolveTask(proj, resolvedTask)
-		if gateErr := budget.EnforceLimit(proj, t, tokensOfText(sections.Full(), proj)); gateErr != nil {
-			return "", gateErr
+		systemText, boundary := gated.Text, 0
+		if cfg := core.ResolveBudget(proj, budget.ResolveTask(proj, taskName)); core.CacheGuardEnabled(cfg) {
+			modelHint := ""
+			if proj.LLMProfile != nil {
+				modelHint = proj.LLMProfile.Config
+			}
+			layout := budget.LayoutForCache(gated.Sections, modelHint)
+			systemText, boundary = layout.Text, layout.StaticBoundary
+			statusLog.WriteString(fmt.Sprintf("[Cache] Static prefix: %d tokens (fingerprint %s).\n", layout.StaticTokens, layout.Hash))
 		}
-		sess.SetSystem(sections.Full() + ToolsSystemPrompt(proj.Tools))
+		sess.SetSystem(systemText + ToolsSystemPrompt(proj.Tools))
+		sess.CacheBoundary = boundary
 		if core.ToolsEnabled(proj.Tools) {
 			statusLog.WriteString("[Tools] Enabled for this call — the model may create/write files and directories (see project.json's \"tools\").\n")
 		}
@@ -220,6 +236,18 @@ func recordRealUsageMCP(root, project string, proj *core.Project, sess *models.S
 	}
 	path := budget.HistoryPath(root, project, proj)
 	_ = budget.RecordUsage(path, sess.Provider, localEstimate, sess.LastUsage.PromptTokens)
+
+	if project == "" || proj == nil {
+		return
+	}
+	totalTokens := sess.LastUsage.PromptTokens + sess.LastUsage.CompletionTokens
+	usd := 0.0
+	if prices, err := budget.LoadPrices(root); err == nil {
+		if cost, ok := budget.EstimateCostFor(totalTokens, sess.Provider, sess.Model, prices); ok {
+			usd = cost
+		}
+	}
+	_ = budget.RecordSpend(budget.SpendPath(root, project), totalTokens, usd)
 }
 
 func providerLabelMCP(provider string) string {

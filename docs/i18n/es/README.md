@@ -16,6 +16,8 @@ Docs: **[Español](README.md)** · **[English](README.en.md)**
 6. [Lo que trae el CLI](#6-lo-que-trae-el-cli) — resumen de las novedades
 7. [Probarlo en 2 minutos](#7-probarlo-en-2-minutos)
 8. [Seguir profundizando](#8-seguir-profundizando)
+9. [Job Engine, Cron y Multiagente](#9-job-engine-cron-y-multiagente)
+10. [Interfaz visual — `mova ui`](#10-interfaz-visual--mova-ui)
 
 ---
 
@@ -130,6 +132,28 @@ Antes de viajar, pesás la valija en tu casa con una balanza de baño. Te da una
 Y como esa libreta es tuya —no un promedio genérico de miles de valijas ajenas— la calibración que aprende Mova es específica de **tu proyecto**: su mezcla de idioma, su código, sus documentos.
 
 **Por qué esto importa para el bolsillo (y la cordura):** cada token que le mandás a un modelo Cloud cuesta dinero; si el modelo es local, un contexto que no entra en la ventana se trunca o degrada en silencio, sin avisar. Mova ataca los dos problemas con el mismo mecanismo: **medir antes de gastar, cortar si se pasa, y aprender de cada llamada real.**
+
+### El Token Firewall — la palanca más nueva y más grande
+
+Todo lo de abajo en esta sección ya era cierto antes de que existiera
+esta función. El Token Firewall agrega tres etapas más, determinísticas
+y sin IA, que corren automáticamente, delante de cada una de ellas —
+el mismo `mova run`, `mova chat`, jobs, MCP, el TUI, sin ningún comando
+nuevo:
+
+| Etapa | Qué hace | Resultado real, medido (ejemplo incluido) |
+|---|---|---|
+| **Sanitizer** | Colapsa líneas de log repetidas, corridas de líneas en blanco, y encabezados de archivo duplicados — antes de contar nada | 2.737 → 1.764 tokens: **35,6% menos tokens, misma información** |
+| **Cache Layout Guard** | Reordena el prompt para que sus primeros tokens sean un prefijo estable, byte a byte — que es lo que hace que el prompt caching de Claude/GPT/Gemini realmente se active | ~1.050 de 1.167 tokens del prefijo estático estimados reutilizables en un acierto de caché (~90%, el descuento propio y publicado de Anthropic) |
+| **Circuit Breaker** | Límites por corrida y mensuales en USD, chequeados ANTES de enviar nada — `"on_exceed": "abort"` detiene la ejecución, no solo avisa después de que llegó la factura | Verificado: una corrida que superaría su límite nunca llega al modelo |
+
+**Cada etapa está activada por defecto**, se puede desactivar de forma
+independiente en `project.json`, y cada número de arriba es real —
+medido corriendo de verdad el ejemplo incluido en este repositorio
+(`projects/ejemplo-token-firewall/`), no proyectado para la
+documentación. Ver [COMMANDS.md § Token Firewall](COMMANDS.md#token-firewall)
+para la mecánica completa, cómo se comporta el caching según el
+proveedor, y la guía paso a paso completa.
 
 ### El gate: `budget.max_tokens` corta la ejecución, no solo avisa
 
@@ -246,6 +270,14 @@ mova run pruebas-locales
 
 Hay un proyecto de ejemplo completo en `projects/pruebas-locales/` — inspeccioná su `project.json` o corré el comando de arriba para ver el contexto ensamblado.
 
+> **¿Trabajás sobre código que vive en otro lado** (otra unidad en
+> Windows, otro punto de montaje en Linux/macOS)? El `"repo"` de un
+> proyecto acepta una ruta absoluta que apunte a cualquier lado — los
+> instaladores de doble clic ya dejan todo configurado para que `mova`
+> funcione parado adentro de esa carpeta externa también, sin
+> configuración adicional. Ver [COMMANDS.md § Trabajar entre distintas
+> unidades/ubicaciones](COMMANDS.md#trabajar-entre-distintas-unidadesubicaciones-windowslinuxmacos).
+
 ---
 
 ## 8. Seguir profundizando
@@ -255,6 +287,105 @@ Hay un proyecto de ejemplo completo en `projects/pruebas-locales/` — inspeccio
 | Ver todos los comandos (memoria, Focus, MCP, HTTP, tokenomics) | [COMMANDS.md](COMMANDS.md) |
 | Leer la especificación completa que siguen los modelos | [workflow.md](../../../workflow.md) |
 | Entender el código fuente (Resolvers, Adapters, cómo extenderlo) | [SOURCE.md](../SOURCE.md) *(English)* |
+
+---
+
+---
+
+## 9. Job Engine, Cron y Multiagente
+
+### Programar trabajo: el Job Engine
+
+Un proyecto puede declarar **jobs** en su `project.json` — ejecuciones
+programadas y desatendidas que arman contexto, guardan reportes,
+actualizan memoria, limpian archivos y generan reportes de budget,
+todo según un horario cron:
+
+```json
+{
+  "jobs": [
+    {
+      "schedule": "0 2 * * *",
+      "tasks": ["auditar-checkout", "auditar-cookies"],
+      "save": "reports/auditoria_{date}.pdf",
+      "budget": { "focus": true },
+      "memory": "Auditoría de checkout y cookies realizada"
+    }
+  ]
+}
+```
+
+Se ejecuta bajo demanda con `mova jobs run <project>`, o se inicia el
+daemon que revisa cada proyecto una vez por minuto con `mova jobs
+start`. Ver [PROJECT_JSON.md § Jobs](PROJECT_JSON.md#jobs) para cada
+campo y [COMMANDS.md § Jobs](COMMANDS.md) para cada comando.
+
+### Entendiendo `schedule` (Cron)
+
+`schedule` usa la sintaxis cron estándar de 5 campos:
+
+```text
+schedule: "0 2 * * *"
+           │ │ │ │ │
+           │ │ │ │ └─ día de la semana (0-6, 0 = domingo, * = todos)
+           │ │ │ └─── mes (1-12, * = todos)
+           │ │ └───── día del mes (1-31, * = todos)
+           │ └─────── hora (0-23)
+           └───────── minuto (0-59)
+```
+
+Algunos ejemplos simples:
+
+| `schedule` | Se ejecuta... |
+|---|---|
+| `"0 2 * * *"` | todos los días a las 2:00 AM |
+| `"30 8 * * 1"` | todos los lunes a las 8:30 AM |
+| `"0 0 1 * *"` | a medianoche, el día 1 de cada mes |
+| `"*/15 * * * *"` | cada 15 minutos |
+| `"0 9-17 * * 1-5"` | cada hora, de 9 AM a 5 PM, de lunes a viernes |
+
+### Multiagente: varios agentes bajo un grupo
+
+Un directorio bajo `projects/` puede contener varios agentes
+independientes, cada uno un proyecto normal, orquestados por un
+`config.json` padre:
+
+```text
+projects/
+    ventas_online/
+        config.json          ← el orquestador
+        vendedor/project.json
+        atencionCliente/project.json
+        soporte/project.json
+```
+
+```bash
+mova agents run ventas_online          # todos los agentes, en secuencia
+mova agents run ventas_online vendedor # un solo agente
+```
+
+Cada agente mantiene su propia memoria, budget, focus, tasks y jobs —
+ver [PROJECT_JSON.md § Multiagente](PROJECT_JSON.md#multiagente-grupos-de-agentes).
+
+---
+
+## 10. Interfaz visual — `mova ui`
+
+Todo lo de arriba también se puede usar desde una interfaz de terminal,
+simple y liviana:
+
+```bash
+mova ui
+```
+
+Un solo comando, navegado con las flechas y Enter: chat, `project.json`,
+`workflow.md`, configuración de modelos, logging, memoria, jobs,
+multiagentes, reportes y logs, todo desde el mismo lugar — sin agregar
+comandos nuevos por cada función. La interfaz no reemplaza nada: llama
+exactamente a los mismos componentes que ya usan `mova chat`, `mova
+jobs run` y `mova agents run`. Ver
+[COMMANDS.md § Interfaz visual](COMMANDS.md#19-interfaz-visual--mova-ui)
+para el detalle completo.
 
 ---
 

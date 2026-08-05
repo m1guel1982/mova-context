@@ -442,3 +442,82 @@ ruta absoluta
 5. Ejecutar
 6. Actualizar memory.md
 ```
+---
+
+## JOB ENGINE
+
+```text
+SI project.json tiene "jobs"
+→ cada entrada combina "schedule" (cron, 5 campos) con acciones:
+   tasks | save | memory | memory_archive | delete | budget
+```
+
+Orden fijo de acciones dentro de un job (siempre, sin importar el
+orden en el JSON):
+
+```text
+1. tasks           — arma contexto (mismo motor que "Ejecutar" arriba)
+2. save            — guarda el resultado (mismo motor que /save)
+3. memory          — agrega a memory.md (mismo motor que "Actualizar memory.md")
+4. memory_archive  — archiva entradas viejas
+5. delete          — elimina archivos (glob patterns)
+6. budget          — genera mova-budget-report.md (con --focus opcional)
+```
+
+```text
+"tasks": ["*"] → ejecutar TODAS las tasks del proyecto, en orden alfabético
+```
+
+Ejecución: `mova jobs run <project>` (bajo demanda, ignora schedule) o
+`mova jobs start` (daemon, revisa cron cada minuto) — desde CLI, chat,
+HTTP (`POST /jobs/run`) o MCP (tool `run_job`), siempre el mismo motor
+(`mova.local/jobs`). Ver PROJECT_JSON.md § Jobs para el detalle
+completo de cada campo.
+
+---
+
+## MULTIAGENTE
+
+```text
+projects/[grupo]/config.json         ← orquestador (opcional "agents": [...])
+projects/[grupo]/[agente]/project.json  ← cada agente es un proyecto normal
+```
+
+```text
+SI se referencia "[grupo]/[agente]" como nombre de proyecto
+→ resolver project.json en projects/[grupo]/[agente]/project.json
+→ el RESULTADO ESPERADO de arriba aplica sin cambios: cada agente
+  tiene su propio memory.md, budget, focus, tasks y jobs
+```
+
+Ejecución del grupo completo, secuencial (un agente después del otro):
+
+```text
+1. Leer projects/[grupo]/config.json
+2. Si "agents" está vacío, auto-descubrir subdirectorios con project.json
+3. Para cada agente, en orden: resolver [grupo]/[agente] y aplicar el
+   RESULTADO ESPERADO completo (proyecto, task, contexto, budget, memory)
+4. Reportar el resultado de cada agente
+```
+
+```text
+mova agents run [grupo]           → todos los agentes
+mova agents run [grupo] [agente]  → un solo agente
+```
+
+Interpretación conceptual desde cualquier puerta de entrada (Claude
+Console, ChatGPT, CLI, MCP, HTTP) — los mismos verbos de "lee/ejecuta
+workflow.md" se extienden a grupos:
+
+```text
+read   → leer config.json de un grupo (listar agentes)
+load   → resolver el grupo y validar cada project.json
+start  → iniciar la orquestación del grupo (init + execute)
+init   → preparar el contexto de cada agente sin ejecutar aún
+execute→ correr los agentes (uno, varios, o todos)
+workflow → aplicar el RESULTADO ESPERADO de este archivo a cada agente
+```
+
+Ninguno de estos verbos duplica lógica: todos terminan resolviendo
+project.json + budget + memory + save de la manera ya descrita en este
+documento, una vez por agente.

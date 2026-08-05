@@ -23,12 +23,9 @@ package budget
 
 import (
 	"fmt"
-	"sort"
 
 	"mova.local/core"
-	"mova.local/core/focus"
-	"mova.local/core/focus/resolvers"
-	"mova.local/documents"
+	"mova.local/sanitize"
 )
 
 // ModelCost is one estimated-cost row for a given provider/model.
@@ -96,6 +93,32 @@ type Report struct {
 	// config/prices.json, comparing the local estimate against real
 	// Cloud API usage recorded for this project (see history.go).
 	HistoricalAccuracy []ProviderAccuracy
+
+	// Token Firewall — see budget_config.go, gated_context.go,
+	// spend.go, cachelayout.go, contextcache.go, mova.local/sanitize.
+	// All zero-valued when a project never opts into any of it.
+	SanitizeStats  sanitize.Stats
+	CircuitBreaker CircuitBreakerResult
+	CacheLayout    *CacheLayout // nil unless Cache Guard is enabled (default) — see core.CacheGuardEnabled
+
+	// RawTokens/RawCosts: the total BEFORE the Sanitizer ran — only
+	// populated when core.DetailedReportsEnabled(cfg), since it costs
+	// one extra tokenization pass over the unsanitized text purely for
+	// this comparison. TotalTokens/TotalCosts (above) are always the
+	// AFTER numbers — every existing caller of this struct keeps
+	// meaning exactly what it always meant.
+	RawTokens int
+	RawCosts  []ModelCost
+
+	// FileBreakdown: one row per Focus file, tokens after sanitizing —
+	// only populated when core.DetailedReportsEnabled(cfg).
+	FileBreakdown []ComponentBreakdown
+
+	// MemorySavingsPercent/CostSavingsPercent: (Raw-Total)/Raw*100 —
+	// 0 when RawTokens is 0 (not computed, or genuinely nothing to
+	// compare against).
+	MemorySavingsPercent float64
+	CostSavingsPercent   float64
 }
 
 // BuildReport builds the full Report: reads project.json (via
@@ -121,6 +144,18 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 	if err != nil {
 		return nil, err
 	}
+
+	// Token Firewall stage [1]: sanitize BEFORE counting, so every
+	// number below (per-component and total) already reflects it —
+	// the report shows the real, optimized cost, not a "before" number
+	// with a separate "savings" footnote bolted on. The raw (pre-
+	// sanitize) text is kept only long enough to measure it for the
+	// before/after comparison below, when detailed reports are on.
+	cfg := core.ResolveBudget(proj, &task)
+	detailed := core.DetailedReportsEnabled(cfg)
+	rawFocus, rawMemory := sections.Focus, sections.Memory
+
+	sanitizeStats := SanitizeCached(root, projectName, sections, sanitizeConfigFrom(cfg), core.ContextCacheEnabled(cfg))
 
 	prices, err := LoadPrices(root)
 	if err != nil {
@@ -173,6 +208,23 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 	report.DuplicatesRemoved = sections.DuplicatesRemoved
 	report.MaxTokens, report.OverBudget = CheckLimit(proj, &task, report.TotalTokens)
 	report.HistoricalAccuracy = buildHistoricalAccuracy(root, projectName, proj, prices)
+	report.SanitizeStats = sanitizeStats
+
+	// Token Firewall stages [2]/[3] preview — `mova budget` never sends
+	// anything to a model, so a Circuit Breaker "abort" here is purely
+	// informational (the error, if any, is intentionally discarded);
+	// the actual enforcement happens in BuildGatedContext.
+	cbResult, _ := CheckCircuitBreaker(root, projectName, cfg, report.TotalTokens)
+	report.CircuitBreaker = cbResult
+
+	if core.CacheGuardEnabled(cfg) {
+		layout := LayoutForCache(sections, modelHint)
+		report.CacheLayout = &layout
+	}
+
+	if detailed {
+		populateDetailedReport(report, rawFocus, rawMemory, sections, modelHint, prices)
+	}
 
 	if withFocusComparison {
 		comparison, err := compareFocus(root, proj, &task, sections.Focus, modelHint)
@@ -189,89 +241,3 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 // configured in config/prices.json, using mova-token-history.json's
 // accumulators (see history.go). A provider with no recorded API calls
 // yet gets HasData=false ("No historical data") — never an error.
-func buildHistoricalAccuracy(root, projectName string, proj *core.Project, prices *PricesConfig) []ProviderAccuracy {
-	history, err := LoadHistory(HistoryPath(root, projectName, proj))
-	if err != nil {
-		history = TokenHistory{}
-	}
-	var out []ProviderAccuracy
-	for _, providerName := range prices.SortedProviderNames() {
-		percent, ok := history.DeviationPercent(providerName)
-		out = append(out, ProviderAccuracy{Provider: providerName, DeviationPercent: percent, HasData: ok})
-	}
-	return out
-}
-
-// EstimateCost cross-references tokens against every provider/model in
-// prices.json. Adding a new provider or model in that JSON shows up here
-// automatically — this function never needs to change.
-func EstimateCost(tokens int, prices *PricesConfig) []ModelCost {
-	divisor := prices.UnitDivisor()
-	var out []ModelCost
-	for _, providerName := range prices.SortedProviderNames() {
-		modelNames := make([]string, 0, len(prices.Providers[providerName].Models))
-		for name := range prices.Providers[providerName].Models {
-			modelNames = append(modelNames, name)
-		}
-		sort.Strings(modelNames)
-		for _, modelName := range modelNames {
-			entry := prices.Providers[providerName].Models[modelName]
-			usd := (float64(tokens) / divisor) * entry.Input
-			clp := usd * prices.ExchangeRateCLP
-			out = append(out, ModelCost{Provider: providerName, Model: modelName, USD: usd, CLP: clp})
-		}
-	}
-	return out
-}
-
-// compareFocus compares the token count of the WHOLE repo (no focus
-// filtering at all — resolvers.WalkAllFiles, the same walking utility the
-// focus engine uses internally) against the already-computed FOCUS
-// section text (focusText) — the same content the real context would
-// use, never tokenized twice with different logic. Focus is never
-// automatic compression — it's the developer deciding what context to send.
-func compareFocus(root string, proj *core.Project, task *core.Task, focusText, modelHint string) (*FocusComparison, error) {
-	items := core.ResolveFocus(proj, task)
-	if len(items) == 0 {
-		return nil, fmt.Errorf("project %q (task %q) has no \"focus\" configured — nothing to compare. Add \"focus\" to project.json or to the task", proj.Project, task.Prompt)
-	}
-
-	repoDir, _, err := documents.ResolveDirectoryPath(root, proj.Repo, "")
-	if err != nil {
-		return nil, err
-	}
-
-	var fullText []byte
-	ctx := focus.Context{RepoPath: repoDir}
-	resolvers.WalkAllFiles(ctx, repoDir, func(path string) {
-		fullText = append(fullText, resolvers.ReadFile(path)...)
-		fullText = append(fullText, '\n')
-	})
-
-	tokensWithoutFocus, _, err := CountTokens(string(fullText), modelHint)
-	if err != nil {
-		return nil, fmt.Errorf("could not tokenize the whole repository: %w", err)
-	}
-	tokensWithFocus, _, err := CountTokens(focusText, modelHint)
-	if err != nil {
-		return nil, fmt.Errorf("could not tokenize the focus content: %w", err)
-	}
-
-	savings := 0.0
-	if tokensWithoutFocus > 0 {
-		savings = (1 - float64(tokensWithFocus)/float64(tokensWithoutFocus)) * 100
-	}
-
-	return &FocusComparison{
-		TokensWithoutFocus: tokensWithoutFocus,
-		TokensWithFocus:    tokensWithFocus,
-		SavingsPercent:     savings,
-	}, nil
-}
-
-func orDefaultCurrency(c string) string {
-	if c == "" {
-		return "USD"
-	}
-	return c
-}

@@ -415,3 +415,609 @@ Also fixed in the same pass: `mcp/server.go`'s generic tool-error wrapper used t
 - **A genuine need for more than one repository per project**: don't reach for an array field on `Project` directly — model it explicitly (a `RepoConfig`-shaped type, scoped tasks/focus per repo) once there's a real multi-repo use case driving the design, rather than speculatively supporting it now (see **Follow-up simplification** above).
 
 
+
+## Recent changes — Job Engine, Logging, Multiagent orchestrator
+
+This section documents one specific change set, on top of everything
+above, which is still the accurate description of the rest of the
+architecture.
+
+### Why
+
+Three requirements arrived together: (1) run scheduled, unattended
+work (audits, reports, cleanup, memory archiving) on a cron schedule;
+(2) an opt-in logging system, disabled by default; (3) orchestrate
+several related agents (each an ordinary project) from one parent
+config file. All three share the same constraint every prior change
+set in this document shared: **CLI, chat, HTTP, and MCP must behave
+identically**, through one shared implementation — no per-door logic.
+
+### New packages
+
+| Package | What it is |
+|---|---|
+| `jobs/` | The Job Engine. `cron.go` (dependency-free 5-field cron parser/matcher), `engine.go` (`RunJob`/`RunProjectJobs`/`RunJobByIndex` — the one execution flow), `actions_tasks.go`/`actions_save.go`/`actions_memory.go`/`actions_delete.go`/`actions_budget.go` (one file per action, each reusing an existing component — `core.BuildContextSections`, `documents.Save`, `Adapter.AppendMemory`/`ArchiveMemory`, `documents.Delete`, `budget.BuildReport`), `scheduler.go` (`RunScheduler`/`RunDueJobs` — the `mova jobs start` daemon) |
+| `orchestrator/` | The multiagent orchestrator. `config.go` (`LoadGroupConfig` — reads `projects/<group>/config.json`, auto-discovers agent subdirectories when `"agents"` is omitted), `run.go` (`RunAgent`/`RunGroup` — sequential by design, see "Extensibility" below) |
+| `logging/` | The logging system. `config.go` (`LoadConfig` — reads `config/log/logging.json`, always returns a safe disabled default), `level.go` (debug/info/warning/error), `rotate.go` (rotation interval + retention cleanup, pure functions), `logger.go` (`Open`/`Logger` — the file writer, rotation-on-write), `default.go` (`SetDefault`/`L()` — the process-wide default every package logs through) |
+
+### Modified files (non-doc)
+
+- **`core/types.go`** — added `Project.Jobs []JobSpec` (new `jobs` JSON
+  key) and the `JobSpec`/`JobMemoryArchive`/`JobBudget` types, kept in
+  `core` (not `jobs`) so `core.Project` never has to import the `jobs`
+  package — `jobs` imports `core`, never the reverse (same rule
+  `Adapter`/`adapters` already follows).
+- **`budget/gated_context.go`** (new file) — `BuildGatedContext`
+  extracts the exact "assemble context, then apply the Budget gate"
+  sequence `cli/run_cmd.go`'s `runProject` used to inline, so
+  `orchestrator.RunAgent` (which needs to do precisely that, once per
+  agent) reuses it instead of a second copy. **`cli/run_cmd.go`** was
+  refactored to call it too — this is the one non-additive change in
+  this set, made because the alternative was duplicating the exact
+  business logic the spec's "no duplicar lógica de negocio" rule
+  forbids.
+- **`cli/main.go`** — added the `jobs`/`agents` dispatch cases; opens
+  the shared `logging.Logger` once at startup (`logging.Open` +
+  `logging.SetDefault`), logs the invoked command line.
+- **`cli/jobs_cmd.go`**, **`cli/agents_cmd.go`** (new files) — CLI
+  argument parsing only; all business logic lives in `jobs`/`orchestrator`.
+- **`cli/help.go`** — added `mova jobs`/`mova agents` to the usage text.
+- **`mcp/job_tool.go`**, **`mcp/agent_group_tool.go`** (new files) —
+  `"list_jobs"`/`"run_job"`/`"list_agents"`/`"run_agent"` tools.
+- **`mcp/server.go`** — registered the four tools above (schema in
+  `tools()`, dispatch in `executeTool`'s switch); opens the shared
+  Logger in `StartStdio`; logs each tool call.
+- **`http/server.go`** — added `/jobs/run` and `/agents/run`, both thin
+  wrappers over the matching MCP tool call (same pattern `/save`/`/delete`/`/workflow`
+  already used) — no HTTP-specific logic; opens the shared Logger in
+  `StartServer`.
+- **`config/log/logging.json`** (new file) — the default logging
+  config, `"enabled": false`.
+
+### Execution flow — a job run
+
+```
+mova jobs run <project> [index]  /  POST /jobs/run  /  MCP "run_job"  /  mova jobs start (cron match)
+        │
+        ▼
+jobs.RunJob(adapter, root, project, proj, spec)
+        │
+        ├─ 1. runTasks     — core.BuildContextSections per task (or every task for "*"),
+        │                    same budget.EnforceLimit gate `mova run` applies, per task
+        ├─ 2. runSave      — documents.Save(spec.Save with {date} expanded, accumulated task output)
+        ├─ 3. runMemory    — Adapter.AppendMemory(spec.Memory with {date}/{time} expanded)
+        ├─ 4. runMemoryArchive — Adapter.ArchiveMemory(days, or core.RetentionDays(proj.Archive))
+        ├─ 5. runDelete    — glob-expand spec.Delete, then documents.Delete(Confirm: true)
+        ├─ 6. runBudget    — budget.BuildReport + budget.WriteReport (spec.Budget.Focus)
+        ▼
+*jobs.Result{Project, Steps, Errors} — printed by CLI, returned as MCP/HTTP tool text
+```
+
+### Execution flow — a multiagent group run
+
+```
+mova agents run <group> [agent]  /  POST /agents/run  /  MCP "run_agent"
+        │
+        ▼
+orchestrator.RunGroup(adapter, root, group, only, task)
+        │
+        ├─ 1. orchestrator.LoadGroupConfig(root, group)   — read projects/<group>/config.json
+        │        (auto-discovers agent subdirectories if "agents" is omitted)
+        ├─ 2. for each agent (sequentially):
+        │        orchestrator.RunAgent → budget.BuildGatedContext(adapter, root,
+        │        "<group>/<agent>", task)  — the SAME function `mova run` uses; an
+        │        agent is never a special case, only a project name with a "/" in it
+        ▼
+[]orchestrator.AgentResult{Agent, Project, Text, Tokens, Err} — one per agent, in order
+```
+
+Nothing new was needed in `core/file_adapter.go` for nested project
+paths — `GetProject`/`ListProjects` already resolve any path under
+`projects/` relative to that directory, so `"ventas_online/vendedor"`
+was already a valid project name before this change set; the
+orchestrator package's only real job is reading `config.json` and
+looping.
+
+### Extensibility — what to touch for a new capability
+
+- **A new Job Engine action** (e.g. a future `"notify"`): add the field
+  to `core.JobSpec` (`core/types.go`), add one `actions_notify.go` file
+  in `jobs/` following the exact shape of `actions_save.go`/`actions_memory.go`
+  (a `run<Name>(jc *jobContext, res *Result)` function that reuses an
+  existing component), and add one `run<Name>(jc, res)` call to
+  `jobs.RunJob`'s fixed sequence in `jobs/engine.go`. Nothing else in
+  the engine changes — `RunProjectJobs`, `RunJobByIndex`, `RunDueJobs`,
+  the CLI/MCP/HTTP doors, and every other action are untouched.
+- **A new job action that also needs a CLI/MCP/HTTP-visible result**:
+  the existing `Result.Steps`/`Result.Errors` already carry through to
+  every door via `jobs.Result` — no new plumbing needed unless the
+  action needs its own dedicated argument (in which case, add it next
+  to `index` in `mcp/job_tool.go`'s `runJobTool` and `cli/jobs_cmd.go`'s
+  `runJobsRun`).
+- **A new multiagent capability** (e.g. parallel execution): the single
+  place to change is `orchestrator.RunGroup`'s for-loop in
+  `orchestrator/run.go` — see the comment there for exactly how
+  (goroutine per agent + `sync.WaitGroup`) without touching
+  `RunAgent`, `GroupConfig`, or any caller's contract.
+- **A new logging category**: no code change needed — any string is a
+  valid category key in `config/log/logging.json`'s `"categories"`
+  object; call `logging.L().Info("your-category", "...")` from
+  wherever the trace should come from. Document the new category in
+  `config/log/README.en.md`/`README.es.md`'s parameter table for
+  consistency (not required for it to function).
+
+### Troubleshooting — Jobs / Orchestrator / Logging
+
+- **A job doesn't fire on schedule**: check `jobs.ParseSchedule`
+  accepted the `"schedule"` string (invalid cron syntax is reported as
+  a per-job error by `RunDueJobs`, not a crash) and that `mova jobs
+  start` is actually running — the daemon only checks while its
+  process is alive; a missed minute while the process was down is
+  never "caught up" (same as system cron).
+- **A job's `"save"` produced an unexpected file format**: the format
+  is picked by `documents.Save` from the path's extension, same as
+  `/save` — if the extension doesn't match a registered writer, check
+  `documents.RegisteredExtensions`.
+- **An agent isn't found under a group**: `orchestrator.LoadGroupConfig`
+  only auto-discovers subdirectories that contain their own
+  `project.json` — a directory without one is silently skipped, not an
+  error.
+- **Logging produces nothing**: `config/log/logging.json`'s `"enabled"`
+  is `false` by default — check that first, then `"level"` (a `"debug"`
+  message is dropped if `"level"` is `"info"` or higher) and
+  `"categories"` (an explicit, non-empty object only logs the
+  categories set to `true`).
+
+### Compatibility
+
+Every change here is additive at the `project.json` level: a project
+that never declares `"jobs"` behaves exactly as before, and
+`"agents"`/multiagent groups are opt-in (a plain `projects/<name>/project.json`
+with no sibling `config.json` is just a regular project, unaffected).
+`cli/run_cmd.go`'s refactor to call `budget.BuildGatedContext` is
+behavior-preserving — the same status lines print in the same order,
+the same Budget gate runs before the same output, verified against the
+existing `budget`/`core` test suite plus a full `go build ./...` of the
+whole module.
+
+## Recent changes — Terminal UI (`mova ui`)
+
+### Why
+
+A single, low-friction way to browse and edit everything Mova Context
+already manages (project.json, workflow.md, model/log configs, memory,
+jobs, multiagent groups, reports, logs, execution history) without
+memorizing a growing list of flags — and without adding a second
+implementation of anything the CLI already does correctly.
+
+### New files (all package `main`, i.e. `cli/` — not a separate
+top-level package)
+
+The TUI is presentation, not business logic — like `chat_cmd.go`,
+`jobs_cmd.go`, `agents_cmd.go` before it, it belongs in `cli/` so it can
+call `must`/`die`/`consolePrint`/`newAdapter`/`sendWithTools` directly
+(package `main` can't be imported, so a separate `mova.local/tui`
+package would have forced either duplicating those helpers or exporting
+CLI internals — both worse than keeping it in the same package).
+
+| File | What it is |
+|---|---|
+| `cli/ui_cmd.go` | Entry point: `runUI(root, project)`, wires `tea.NewProgram` around `tuiApp` |
+| `cli/tui_app.go` | Root model — a screen STACK (push/pop), routes `Update`/`View` to whichever screen is on top |
+| `cli/tui_style.go` | Every Lip Gloss style, in one place |
+| `cli/tui_menu.go` | ONE generic list-based menu screen, reused by nearly every section |
+| `cli/tui_mainmenu.go` | Builds the main menu's items |
+| `cli/tui_fileview.go` | ONE generic file viewer/editor (textarea), reused for project.json, workflow.md, memory.md, model configs, logging.json |
+| `cli/tui_projectpicker.go` | Lists projects (`core.Adapter.ListProjects`) and routes to any destination screen |
+| `cli/tui_dashboard.go` | Per-project menu (project.json, memory.md, Jobs, Reports, history) |
+| `cli/tui_reports.go` | Generic directory listing, reused for reports/ and memory-archive/ |
+| `cli/tui_textscreen.go` | Read-only screen for in-memory text (job/agent run output — no backing file) |
+| `cli/tui_jobs.go` | Lists + runs a project's jobs via `jobs.RunJobByIndex` |
+| `cli/tui_agents.go` | Lists groups/agents + runs them via `orchestrator.RunGroup` |
+| `cli/tui_models.go` | Lists/edits `config/models/**/*.json` |
+| `cli/tui_logs.go` | Tails the active log file (`logging.LoadConfig`'s path), auto-refreshing |
+| `cli/tui_chat.go` | Chat screen — same session/tool-loop setup as `runChat` |
+| `cli/tui_paths.go` | Small path helpers shared by the screens above |
+
+### Modified files
+
+- **`cli/chat_helpers.go`** — `sendWithTools` gained one new parameter,
+  `emit func(string)`. `nil` preserves the exact original behavior
+  (writes straight to the terminal via `consolePrint`, as `mova chat`'s
+  REPL always has). This is the one change that made the TUI's chat
+  screen possible without a second copy of the model-call/tool-loop
+  logic: it passes its own `emit` (a no-op — the TUI shows replies once
+  complete, not token-by-token, to avoid writing to stdout mid-render
+  and corrupting the Bubble Tea screen) instead of `consolePrint`.
+- **`cli/chat_cmd.go`** — its one call site now passes `nil` explicitly;
+  behavior is unchanged.
+- **`cli/main.go`** — bootstraps logging then calls `dispatch(root)`.
+- **`cli/dispatch.go`** — added the `"ui"` case.
+- **`src/go.mod`** — added `github.com/charmbracelet/bubbletea`,
+  `github.com/charmbracelet/lipgloss`, `github.com/charmbracelet/bubbles`
+  as direct requires, same single-block style the existing four
+  dependencies already used. No `go.sum` entries were hand-added: this
+  project's `go.sum` was already incomplete for `glamour`'s own
+  transitive dependencies before this change, meaning `go build` already
+  relied on Go's standard "fetch + verify + add missing go.sum entries
+  automatically" behavior — the same mechanism now covers the three new
+  dependencies too, with zero extra steps for double-click installers or
+  a plain `go build` (both already just call `go build`/`go install`).
+
+### Extensibility — adding a new TUI section
+
+Almost always: call `newMenuScreen(title, items, help)` with a new
+`menuItem` whose `onSelect` pushes an existing screen constructor
+(`newFileScreen`, `newDirListScreen`, `newTextScreen`) pointed at the
+right path — see any entry in `tui_mainmenu.go` or `tui_dashboard.go`
+for the pattern. A genuinely new interaction (not view/edit/list/run)
+gets its own `tuiScreen` implementation, following the shape of
+`tui_jobs.go` or `tui_chat.go` (small, single-purpose, calling straight
+into an existing package — never re-implementing what that package
+already does).
+
+### Troubleshooting
+
+- **`mova ui` fails to start**: it needs a real terminal (TTY) — running
+  it with stdin/stdout redirected to a file or pipe will fail the same
+  way any Bubble Tea program would.
+- **First build after pulling this change is slower / needs internet**:
+  expected — Go is downloading the three new dependencies the first
+  time, exactly like it already did for `glamour`. Subsequent builds
+  use the local module cache.
+- **A file edited in the TUI didn't save**: only `Ctrl+S` writes to
+  disk; navigating away (`Esc`) without saving discards the in-memory
+  edit, by design, so accidental navigation never loses — or corrupts —
+  a file silently.
+
+## Recent changes — installers open a ready-to-use console
+
+### Why
+
+The double-click installers (`installers/windows/`, `installers/macos/`,
+`installers/linux/`) already copied the `mova` binary and updated
+`PATH`, but still left one manual step: closing/reopening a terminal
+for that `PATH` change to take effect, then navigating to a useful
+directory. This change removes that step — each installer now finishes
+by asking which console to leave open, already on `PATH` and already
+in the Mova root, so `mova` works the moment the installer's console
+appears (or the current window hands off to an interactive shell).
+
+### What changed (installer scripts only — no Go source touched)
+
+- **`installers/windows/install.ps1`** — after the existing
+  build/copy/`PATH` steps, prompts `[1] PowerShell (default) / [2] CMD
+  / [3] Don't open one` and launches the chosen console via
+  `Start-Process`, with `$env:PATH`/`set PATH=` extended inline for
+  that specific process (a brand-new process isn't guaranteed to see a
+  registry `PATH` change made moments earlier in the same login
+  session) and its working directory set to the repo root.
+- **`installers/macos/install.command`** — after the existing steps,
+  prompts `[1] Continue right here (default) / [2] Open a new Terminal
+  window / [3] Don't open one`. Option 1 exports `PATH` for the
+  current shell and `exec`s a fresh login shell in place (same
+  window, same process slot) — the simplest form of "hand off a
+  ready-to-use console" since `.command` files already run inside
+  Terminal.app. Option 2 uses `osascript` to open a second Terminal
+  window via AppleScript, falling back to option 1's behavior if
+  AppleScript automation isn't available.
+- **`installers/linux/install.sh`** — same three-way prompt as macOS.
+  Option 2 tries `$TERMINAL` first, then auto-detects one of
+  `x-terminal-emulator`, `gnome-terminal`, `konsole`, `xfce4-terminal`,
+  `tilix`, `alacritty`, `kitty`, `xterm` (Linux has no single "the"
+  terminal emulator, unlike Windows/macOS), falling back to option 1's
+  in-place `exec` if none is found.
+- **Both `install.command` and `install.sh`** — also fixed `mktemp`'s
+  temp-binary template to `mktemp "${TMPDIR:-/tmp}/mova.XXXXXX"` (the
+  positional-template form works identically on BSD/macOS and GNU/Linux
+  `mktemp`; the previous `-t mova` form is BSD-only and fails on GNU
+  systems with "too few X's in template").
+
+### Compatibility
+
+Purely additive to the installer scripts — the build/copy/`PATH` logic
+from the earlier installers section is untouched, so a person who
+chooses "Don't open one" gets exactly the previous behavior (a note to
+open a new terminal manually). No Go source, `go.mod`, or `Makefile`
+target changed; `make install`/`make build-all` behave exactly as
+before.
+
+### Generating installers for a new release
+
+See [`installers/README.md` § Generating installers for a new
+version](../installers/README.md#generating-installers-for-a-new-version) —
+the scripts are version-independent (no version number or file list
+hardcoded anywhere in them), so a new release only means optionally
+running `make build-all` to refresh `dist/`'s prebuilt binaries before
+packaging; the installer scripts themselves never need to change.
+
+## Recent changes — installers set MOVA_PROJECT_ROOT (work from any drive)
+
+### Why
+
+A person can clone/install Mova Context in one place (e.g. `C:\mova`)
+while the actual codebase a project audits/works on lives somewhere
+completely different (e.g. `D:\my-app`). The "different codebase
+location" half of that was already fully supported — every project.json
+`"repo"` accepts an absolute path, and every subsystem that touches
+project files already resolves it correctly (see the `filepath.IsAbs`/
+`documents.IsAbsCrossPlatform` checks across `core/focus/`,
+`documents/pathresolve.go`, `documents/types.go`, `budget/`, `jobs/`).
+What was missing was the OTHER half: finding Mova's *own* `workflow.md`
+when the person is standing inside that external folder and just types
+`mova` — `runtime.FindRoot()` only searches upward from the current
+directory (plus the binary's own directory as a last resort), neither
+of which reaches a separate drive/volume.
+
+`MOVA_PROJECT_ROOT` already existed as an escape hatch for this
+(documented for MCP clients launching `mova` from an unrelated working
+directory — see `runtime/root.go`), but nothing set it automatically,
+so a person would hit "No Mova project was found" the first time they
+tried this from outside the repo, with no obvious fix short of reading
+`runtime/root.go`'s error message closely.
+
+### What changed (installer scripts + docs only — no Go source touched)
+
+- **`installers/windows/install.ps1`** — after adding `<GOPATH>\bin` to
+  `PATH`, also sets the user-level `MOVA_PROJECT_ROOT` environment
+  variable to this repo's path via the registry (`[Environment]::
+  SetEnvironmentVariable(...)`), only if it isn't already set. The
+  console opened afterward (PowerShell/CMD) also gets it applied inline
+  for that immediate session, same reasoning as the `PATH` inline
+  application already documented above.
+- **`installers/macos/install.command`**, **`installers/linux/install.sh`**
+  — same idea via `~/.zshrc`/`~/.bashrc`: append `export
+  MOVA_PROJECT_ROOT="$REPO_ROOT"` if not already present, export it in
+  the current session immediately, and include it in the "open a new
+  terminal window" path too. Also switched the "continue in this same
+  window" handoff from `exec "$SHELL" -l` (login shell — doesn't
+  necessarily source `.bashrc`, depending on whether `.bash_profile`
+  chains to it) to `exec "$SHELL" -i` (interactive shell — and since
+  `PATH`/`MOVA_PROJECT_ROOT` are already exported in the running
+  installer process before the `exec`, they carry over via the
+  replaced process's inherited environment regardless of which
+  rc-file the new shell does or doesn't source).
+- **Documentation** — `docs/i18n/{en,es}/COMMANDS.md` § Environment
+  variables gained a full "working across different drives/locations"
+  explanation with a worked Windows/Linux/macOS example;
+  `docs/i18n/{en,es}/PROJECT_JSON.md`'s `repo` field description now
+  points to it; `docs/i18n/{en,es}/README.md` gained a short callout;
+  `installers/README.md` documents the new install step.
+
+### How this was verified
+
+A real project (`project.json` with `"repo"` set to an absolute path
+entirely outside the Mova repo tree, e.g. `/tmp/external-drive/app`)
+was run end-to-end from a working directory that has nothing to do
+with either location:
+
+1. `mova run <project>` — confirmed the assembled context correctly
+   included `focus` content read from the external path.
+2. `mova jobs run <project>` (with a `"save"` action) — confirmed the
+   report was written *inside the external folder*
+   (`/tmp/external-drive/app/reports/...`), not under the Mova root.
+3. Without `MOVA_PROJECT_ROOT` set, the exact same commands correctly
+   fail with "No Mova project was found" — confirming the fix actually
+   addresses a real gap, not a false alarm.
+4. With `MOVA_PROJECT_ROOT` set (as the installers now do
+   automatically), both commands above succeed from a brand-new,
+   non-login interactive shell — the realistic "open a new terminal
+   window" scenario — with zero manual configuration.
+
+### Compatibility
+
+Purely additive: existing installs where `mova` is already run from
+inside the repo (the original, still-supported workflow) are
+unaffected — `MOVA_PROJECT_ROOT` is only ever consulted as an *extra*
+starting point in `runtime.FindRoot()`'s search order, never a
+replacement for the existing upward search. A person who already has
+`MOVA_PROJECT_ROOT` set to something else on purpose is left alone
+(the installer only sets it when absent). No Go source, `go.mod`, or
+`Makefile` target changed.
+
+## Recent changes — UNC paths, WSL, and Docker (verified, docs only)
+
+### Why
+
+Following the `MOVA_PROJECT_ROOT` work above, the natural next question
+was whether the same "external `repo` path" support extends to Windows
+network shares (UNC, `\\server\share`), WSL, and Docker — all common
+ways a real team's codebase ends up somewhere Mova's own install
+doesn't naturally reach.
+
+### What was found
+
+**No code change was needed — this was already correctly implemented.**
+Verified by reading Go's own standard library source
+(`internal/filepathlite/path_windows.go`'s `IsAbs`/`volumeNameLen`,
+and `Clean`'s UNC-preserving logic) rather than assuming: on Windows,
+`filepath.IsAbs` explicitly treats a UNC prefix (`\\server\share`) as
+a volume name and correctly reports it as absolute, and `filepath.Join`/
+`filepath.Clean` preserve that prefix through every join/clean
+operation instead of stripping or mis-parsing it. Every place across
+the codebase that resolves a project's `"repo"` — `core/focus/`,
+`budget/report.go`, `budget/history.go`, `jobs/actions_delete.go`,
+`documents/types.go`, `cli/tui_paths.go`, `cli/tui_logs.go` — already
+uses `filepath.IsAbs`/`filepath.Join` consistently (audited with a
+project-wide `grep` for every absolute-path check in the repo), so a
+UNC `"repo"` works today with zero additional code.
+
+Two related scenarios turned out to be pure usage patterns of that
+same already-verified behavior, needing documentation rather than code:
+
+- **WSL**: a Linux `mova` inside WSL2 reaching a Windows drive is just
+  a normal Linux absolute path (`/mnt/d/...`, auto-mounted by WSL2). A
+  Windows `mova.exe` reaching into a WSL distro's filesystem does so
+  via a UNC path (`\\wsl$\Ubuntu\...` / `\\wsl.localhost\Ubuntu\...`)
+  — the exact same UNC support above, no separate case.
+- **Docker**: a bind-mounted host directory is simply a native
+  absolute path from the container's point of view — the exact same
+  "external absolute `repo`" behavior already verified for the
+  `MOVA_PROJECT_ROOT` change, just inside a container's filesystem
+  namespace instead of a second drive.
+
+The one honest limitation documented alongside this: a UNC or
+drive-letter path in `"repo"` (or typed in chat/MCP/HTTP — see
+`documents.IsAbsCrossPlatform`/`normalizeAbsPath` in
+`documents/pathresolve.go`) only resolves when Mova itself runs as a
+**Windows** binary — there is no OS-level UNC support on Linux/macOS,
+so reaching a Windows share from those requires mounting it first
+(`mount -t cifs`, or Finder on macOS) and using the resulting native
+path instead. `normalizeAbsPath` already surfaces this as a clear,
+actionable error rather than silently writing to the wrong place.
+
+### Where this is documented
+
+`docs/i18n/{en,es}/COMMANDS.md` § Environment variables, under
+"Network shares — UNC paths", "WSL", and "Docker / containers" — each
+with a worked example (`project.json` snippet and, for Docker, the
+matching `docker run` invocation).
+
+### Compatibility
+
+Documentation-only change — no Go source, `go.mod`, `Makefile`, or
+installer script was touched.
+
+## Recent changes — Token Firewall (Sanitizer, Cache Layout Guard, Circuit Breaker, Context Cache)
+
+### Why
+
+Every existing cost control in Mova (`max_tokens`, the Budget gate)
+answers "is this context too big?" — none of them answered "is this
+context bigger than it needs to be?", "is this prompt shaped so a
+provider's own caching can actually discount it?", or "has this
+project's spend quietly crossed a line no one is watching?". The Token
+Firewall answers those three questions, deterministically, with no AI
+involved and no new external dependency — consistent with every other
+Mova subsystem's design (Job Engine, Focus, Budget itself).
+
+### Architecture — one pipeline, one chokepoint
+
+```
+budget.BuildGatedContext(adapter, root, project, task)
+        │
+        ├─ core.BuildContextSections   (unchanged — the existing assembly)
+        │
+        ├─ [1] SanitizeCached          (contextcache.go → sanitize.ApplyFocus/ApplyMemory)
+        ├─ [2] CheckCircuitBreaker     (spend.go, reads/writes mova-spend.json)
+        ├─ [3] EnforceLimit            (limit.go — the pre-existing max_tokens gate, unchanged)
+        │
+        ▼
+GatedContext{Text, Tokens, Sanitize, CircuitBreaker, Err}
+```
+
+`BuildGatedContext` was already the single function `mova run`
+(`cli/run_cmd.go`) and `orchestrator.RunAgent` shared (see the earlier
+"budget.BuildGatedContext" change). This change set additionally
+**consolidated three call sites that had their own copy of "build then
+gate"** onto the same function: `cli/chat_cmd.go`'s `runChat`,
+`cli/tui_chat.go`'s `newChatScreen`, `jobs/actions_tasks.go`'s
+`runTasks`, and `mcp/chat_tool.go`'s `chat_completion` tool. Every one
+of those five call sites — CLI, TUI, Jobs, MCP, and the original
+`mova run`/orchestrator pair — now shares the exact same Token Firewall
+automatically, with zero duplicated pipeline logic anywhere.
+
+The **Cache Layout Guard** is deliberately NOT part of
+`BuildGatedContext`'s output text — reordering Header-first `Full()`
+into static-prefix-first only matters for an actual model call, so it
+stays a separate function (`budget.LayoutForCache`) that only the four
+chat-sending call sites (CLI, TUI, MCP, and — for the preview shown in
+`mova-budget-report.md` — `BuildReport`) call. `mova run`'s printed
+output and the report's other sections keep `Full()`'s original,
+more-readable Header-first order untouched.
+
+### New packages/files
+
+| File | What it is |
+|---|---|
+| `sanitize/sanitize.go` | Text-level rules: `dedupeRepeatedLines` (timestamp-aware — strips a leading `YYYY-MM-DD HH:MM:SS`-style prefix for COMPARISON only, so real logs where every line's timestamp differs are still recognized as repeats), blank-line collapsing, optional comment-block stripping |
+| `sanitize/dedupe.go` | `DedupeLeadingBlocks` — cross-file leading-block dedup (license headers, import blocks) shared across several Focus files |
+| `sanitize/sections.go` | `Apply`/`ApplyFocus`/`ApplyMemory` — wires the rules above onto a `*core.ContextSections`, parsing/reassembling `core/engine.go`'s `"FOCUS:<path>"` marker convention **including its `"\n\n---\n## FOCUS\n"` preamble**, which an earlier version of this file's `splitFocusBlocks` silently dropped on rebuild (a real bug caught during testing — see "What was found during review" below) |
+| `budget/cachelayout.go` | `LayoutForCache` — builds the static-prefix/dynamic-tail layout + a stability fingerprint (sha256, truncated for readability) |
+| `budget/spend.go` | `SpendState`/`CheckCircuitBreaker`/`RecordSpend`/`EstimateCostFor` — the spend-governance gate, backed by `mova-spend.json` |
+| `budget/contextcache.go` | `SanitizeCached` — per-project local memoization of the Sanitizer's result, backed by `mova-context-cache.json` |
+| `budget/report_pipeline.go` | The report sections these stages add: Sanitizer, Cache Layout Guard, Circuit Breaker, Token Firewall Summary (before/after) |
+| `core/budget_config.go` | Extended with the new `BudgetConfig` fields and their `core.XEnabled(cfg)` reader functions (all default-true — see "Configuration model" below) |
+| `models/types.go`, `models/chat.go` | `ChatMessage.CacheBoundary`/`Session.CacheBoundary` — an inert `int` field every provider except Anthropic ignores entirely |
+| `models/provider_anthropic.go` | `systemField` — builds Anthropic's two-content-block `system` array with `cache_control` when a boundary is set; a plain string (unchanged) otherwise |
+
+### Configuration model — default-on, explicit opt-out
+
+Every Token Firewall field defaults to **enabled** (`nil` in Go, absent
+in JSON, or an explicit `true` all mean "on") — the opposite default
+from `core.ToolsEnabled` (tools default OFF), because these stages are
+safety/efficiency defaults, not opt-in extras. Each is independently a
+`*bool` in `core.BudgetConfig`, read through a matching
+`core.XEnabled(cfg)` function (`CacheGuardEnabled`,
+`CircuitBreakerEnabled`, `TokenEstimationEnabled`,
+`DetailedReportsEnabled`, `ContextCacheEnabled`, `SanitizerEnabled`) —
+one place per toggle to ask "is this on for this project?", instead of
+every caller re-deriving the nil-means-true logic itself.
+
+### What was found during review (fixed, not just noted)
+
+A dedicated review pass — running the real binary against the shipped
+example (`projects/ejemplo-token-firewall/`), not just reading the code
+— caught two real bugs before release:
+
+1. **Log dedup missed the realistic case.** The first
+   `dedupeRepeatedLines` implementation compared lines byte-for-byte,
+   which correctly found duplicates in a synthetic test but found
+   **zero** in a realistic log where every line has a unique timestamp
+   (otherwise identical). Fixed by comparing lines with a leading
+   timestamp pattern stripped, while still keeping (and printing) the
+   original, timestamped line. Verified: 47 of 48 near-identical log
+   lines now collapse correctly.
+2. **`splitFocusBlocks` dropped the `"## FOCUS"` header on rebuild.**
+   `core/engine.go` prepends `"\n\n---\n## FOCUS\n"` before the first
+   `"FOCUS:<path>"` marker; the original split/rejoin logic didn't
+   account for that preamble and silently discarded it when
+   `ApplyFocus` reassembled `sections.Focus`, corrupting the actual
+   prompt sent to the model. Fixed by capturing and preserving the
+   preamble explicitly (`splitFocusBlocks` now returns it alongside the
+   parsed blocks). Verified with `mova run`'s actual printed output —
+   the `## FOCUS` header survives byte-for-byte.
+
+Both were caught specifically because the review used the real,
+end-to-end example rather than unit-level reasoning alone — the
+practical argument for shipping a working example alongside every
+feature in this codebase, not just documentation describing one.
+
+### Performance (measured, not assumed)
+
+Back-to-back real runs of the shipped example, same machine: ~69ms for
+a cold run (no Context Cache entry yet), ~57ms once the Context Cache
+is warm. Most of that remaining time is process startup and file I/O —
+the Sanitizer itself, on content this size, runs in single-digit
+microseconds (pure string/regex operations, no I/O, no network).
+
+### Extensibility
+
+- **A new Sanitizer rule**: add a function to `sanitize/sanitize.go`
+  following `dedupeRepeatedLines`'s shape, call it from `Text` gated by
+  a new `Config` field, and add the matching field to
+  `core.SanitizeConfig` (`core/budget_config.go`). Nothing else changes
+  — `ApplyFocus`/`ApplyMemory`/`Apply` and every caller stay the same.
+- **A new provider's cache mechanism**: only `models/provider_<name>.go`
+  needs a `cache_control`-equivalent, reading `ChatMessage.CacheBoundary`
+  the same way `provider_anthropic.go` does — the layout stage
+  (`budget.LayoutForCache`) never needs to know which provider will
+  read its output.
+- **A new Circuit Breaker ceiling**: add a field to `BudgetConfig`, a
+  check in `spend.go`'s `CheckCircuitBreaker`, and a line in
+  `circuitBreakerMessage` — `GatedContext`/the report already surface
+  whatever `CircuitBreakerResult` carries.
+
+### Compatibility
+
+A `project.json` that never touches any Token Firewall field behaves
+exactly as it always did, with one exception made deliberately and
+documented above: **the new fields default to enabled**, meaning a
+project written before this change set gets Sanitizer/Cache Layout
+Guard/Circuit Breaker-mechanism/Context Cache automatically, at their
+conservative defaults (Sanitizer's `strip_comments` off, no ceilings
+configured so the Circuit Breaker has nothing to enforce, Cache Layout
+Guard reordering the prompt with zero behavioral downside even where a
+provider doesn't cache). Nothing that previously worked stops working;
+`mova run`'s printed output, `mova-token-history.json`, and every
+existing report section are unchanged in format and meaning.

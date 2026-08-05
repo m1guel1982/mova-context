@@ -1,0 +1,32 @@
+{
+  "project": "ejemplo-jobs-multiagente/auditor-checkout",
+  "description": "Agente del grupo 'ejemplo-jobs-multiagente' — audita el flujo de checkout en busca de consentimiento empaquetado (T&C + privacidad + marketing en un solo checkbox). Corre como job programado, sin intervención manual.",
+  "repo": "examples/ejemplo-jobs-multiagente-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "auditar",
+
+  "agents": { "domain": "base", "use": ["privacy-auditor"], "custom": [] },
+  "skills": { "domain": "base", "use": ["granular-consent"], "custom": [] },
+
+  "tasks": {
+    "auditar": {
+      "prompt": "audit-consent-flow",
+      "variables": { "module": "checkout", "regulation": "Ley 21.719 (Chile)" },
+      "focus": ["checkout.html"]
+    }
+  },
+
+  "budget": { "max_tokens": 20000 },
+
+  "jobs": [
+    {
+      "comment": "Auditoría nocturna del checkout — corre todos los días a las 2 AM",
+      "schedule": "0 2 * * *",
+      "tasks": ["auditar"],
+      "save": "reports/auditoria-checkout_{date}.md",
+      "budget": { "focus": true },
+      "memory": "Auditoría de checkout ejecutada el {date} a las {time} — ver reports/auditoria-checkout_{date}.md"
+    }
+  ]
+}
