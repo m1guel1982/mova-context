@@ -261,12 +261,89 @@ Más detalle y ejemplos completos en [COMMANDS.md § mova budget](COMMANDS.md#mo
 
 ---
 
-## 7. Probarlo en 2 minutos
+## 7. Instalación y prueba rápida (2 minutos)
+
+Puedes instalar y probar **mova** en pocos minutos utilizando el método que prefieras.
+
+### Opción A — Instalador automático (Recomendado)
+
+1. Ve a la carpeta `installers/` del repositorio.
+2. Ejecuta el instalador correspondiente a tu sistema operativo:
+
+| Sistema Operativo | Instalador |
+|-------------------|------------|
+| Windows | `install.bat` |
+| macOS | `install.command` |
+| Linux | `install.sh` |
+
+El instalador:
+
+- Compila el ejecutable.
+- Lo instala en tu sistema.
+- Configura automáticamente el **PATH**.
+
+Una vez finalizado, abre cualquier terminal (CMD, PowerShell, Git Bash, Bash, Zsh, etc.) y ejecuta:
+
+```bash
+mova run pruebas-locales
+```
+También puedes ejecutar:
+
+```bash
+mova
+```
+o abrir la interfaz interactiva:
+
+```bash
+mova ui
+```
+
+### Opción B — Makefile (Desarrolladores)
+
+Si tienes **Go** y **make** instalados:
+
+**Instalar globalmente:**
+
+```bash
+make install
+mova run pruebas-locales
+```
+**Compilar solo localmente (`dist/`):**
+
+```bash
+make build
+./dist/mova run pruebas-locales
+```
+**Generar binarios para todas las plataformas:**
+
+```bash
+make build-all
+```
+
+### Opción C — Compilación manual
+
+Si prefieres compilar directamente con Go:
 
 ```bash
 go build -o mova ./src/cli
-mova run pruebas-locales
+./mova run pruebas-locales
 ```
+
+---
+
+### Trabajar con proyectos ubicados en cualquier carpeta
+
+No es necesario que el proyecto se encuentre dentro del repositorio de **mova**.
+
+El comando `repo` acepta rutas absolutas, por lo que puedes trabajar con proyectos ubicados en:
+
+- Otra unidad (Windows).
+- Otro punto de montaje (Linux/macOS).
+- Cualquier carpeta del sistema.
+
+Los instaladores configuran automáticamente el entorno para que **mova** funcione desde cualquier ubicación, sin configuración adicional.
+
+ Consulta **COMMANDS.md** → **Trabajar entre distintas unidades/ubicaciones** para más información.
 
 Hay un proyecto de ejemplo completo en `projects/pruebas-locales/` — inspeccioná su `project.json` o corré el comando de arriba para ver el contexto ensamblado.
 
