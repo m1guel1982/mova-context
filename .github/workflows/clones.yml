@@ -1,0 +1,30 @@
+name: Aprendiendo Métricas con Actions
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Se ejecuta a la medianoche
+  workflow_dispatch: # Permite probarlo manualmente haciendo clic en un botón
+
+jobs:
+  obtener-clones:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Consultar API de Clones de GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p datos_privados
+          curl -s -H "Authorization: token $GH_TOKEN" \
+               -H "Accept: application/vnd.github.v3+json" \
+               https://api.github.com/repos/${{ github.repository }}/traffic/clones \
+               > datos_privados/clones.json
+
+      - name: Guardar reporte como Artefacto Privado
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-clones-diario
+          path: datos_privados/clones.json
+          retention-days: 30
