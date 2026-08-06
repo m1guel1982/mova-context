@@ -1,40 +1,15 @@
-name: Metrics Sync & Diagnostics
-
-on:
-  schedule:
-    - cron: '5 2 * * *'
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  telemetry:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.METRICS_PAT }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Merge & Accumulate Telemetry
+- name: Merge & Accumulate Telemetry
         env:
           GH_TOKEN: ${{ secrets.METRICS_PAT }}
           TARGET_URL: ${{ secrets.DIAGNOSTIC_ENDPOINT }}
         run: |
           mkdir -p .github/metrics
 
-          # Fetch 14-day traffic clones dataset from GitHub API
-          curl -s -H "Authorization: token $GH_TOKEN" \
+          # Usar -f para que falle la Action si la API devuelve 401, 404, etc.
+          curl -f -s -H "Authorization: token $GH_TOKEN" \
                -H "Accept: application/vnd.github.v3+json" \
                "$TARGET_URL" > temp_metrics.json
 
-          # Merge API results into historical dataset
           python - << 'EOF'
           import json
           import os
@@ -54,19 +29,24 @@ jobs:
           if "clones" not in history or isinstance(history["clones"], list):
               history["clones"] = {}
 
-          try:
-              with open(temp_file, 'r') as f:
-                  api_data = json.load(f)
-          except Exception:
-              api_data = {}
+          with open(temp_file, 'r') as f:
+              api_data = json.load(f)
 
-          for entry in api_data.get('clones', []):
-              date_key = entry['timestamp'].split('T')[0]
-              history['clones'][date_key] = {
-                  "count": entry.get('count', 0),
-                  "uniques": entry.get('uniques', 0)
-              }
+          clones_data = api_data.get('clones', [])
 
+          # Soporte tanto para lista (API oficial) como para diccionario
+          if isinstance(clones_data, list):
+              for entry in clones_data:
+                  date_key = entry['timestamp'].split('T')[0]
+                  history['clones'][date_key] = {
+                      "count": entry.get('count', 0),
+                      "uniques": entry.get('uniques', 0)
+                  }
+          elif isinstance(clones_data, dict):
+              for date_key, metrics in clones_data.items():
+                  history['clones'][date_key] = metrics
+
+          # Recalcular totales acumulados
           total_count = sum(day['count'] for day in history['clones'].values())
           total_uniques = sum(day['uniques'] for day in history['clones'].values())
 
@@ -79,10 +59,3 @@ jobs:
           EOF
 
           rm -f temp_metrics.json
-
-      - name: Commit & Push Historical Data
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "github-actions[bot]"
-          git add .github/metrics/clones_history.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update traffic metrics [skip ci]" && git push)
