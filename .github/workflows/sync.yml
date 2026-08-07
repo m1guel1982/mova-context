@@ -2,7 +2,7 @@ name: Metrics Sync & Diagnostics
 
 on:
   schedule:
-    - cron: '0 14 * * *'
+    - cron: '30 15 * * *' # Ejecución automática a las 11:30 AM hora de Chile (15:30 UTC)
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.METRICS_PAT }}
+          token: ${{ secrets.METRICS_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -24,15 +24,27 @@ jobs:
 
       - name: Merge & Accumulate Telemetry
         env:
-          GH_TOKEN: ${{ secrets.METRICS_PAT }}
+          GH_TOKEN: ${{ secrets.METRICS_PAT || secrets.GITHUB_TOKEN }}
           TARGET_URL: ${{ secrets.DIAGNOSTIC_ENDPOINT }}
         run: |
           mkdir -p .github/metrics
 
-          # Usar -f para que falle la Action si la API devuelve 401, 404, etc.
-          curl -f -s -H "Authorization: token $GH_TOKEN" \
-               -H "Accept: application/vnd.github.v3+json" \
-               "$TARGET_URL" > temp_metrics.json
+          ENDPOINT="${TARGET_URL:-https://api.github.com/repos/${{ github.repository }}/traffic/clones}"
+          echo "Consultando endpoint: $ENDPOINT"
+
+          # Capturar la respuesta y el código de estado HTTP (evita que curl cancele en silencio)
+          HTTP_STATUS=$(curl -s -o temp_metrics.json -w "%{http_code}" \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "$ENDPOINT")
+
+          echo "Código HTTP recibido de la API: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "Error: La API de GitHub respondió con estado $HTTP_STATUS"
+            cat temp_metrics.json
+            exit 1
+          fi
 
           python - << 'EOF'
           import json
@@ -58,7 +70,6 @@ jobs:
 
           clones_data = api_data.get('clones', [])
 
-          # Soporte tanto para lista (API oficial) como para diccionario
           if isinstance(clones_data, list):
               for entry in clones_data:
                   date_key = entry['timestamp'].split('T')[0]
@@ -70,7 +81,6 @@ jobs:
               for date_key, metrics in clones_data.items():
                   history['clones'][date_key] = metrics
 
-          # Recalcular totales acumulados
           total_count = sum(day['count'] for day in history['clones'].values())
           total_uniques = sum(day['uniques'] for day in history['clones'].values())
 
@@ -89,4 +99,10 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "github-actions[bot]"
           git add .github/metrics/clones_history.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update traffic metrics [skip ci]" && git push)
+          
+          if git diff --staged --quiet; then
+            echo "Sin cambios en el número de clones para subir."
+          else
+            git commit -m "chore: update traffic metrics [skip ci]"
+            git push
+          fi
