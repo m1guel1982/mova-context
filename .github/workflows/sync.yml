@@ -2,7 +2,7 @@ name: Metrics Sync & Diagnostics
 
 on:
   schedule:
-    - cron: '30 15 * * *' # Ejecución automática a las 11:30 AM hora de Chile (15:30 UTC)
+    - cron: '5 4 * * *' 
   workflow_dispatch:
 
 permissions:
