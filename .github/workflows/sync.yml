@@ -2,7 +2,8 @@ name: Metrics Sync & Diagnostics
 
 on:
   schedule:
-    - cron: '5 4 * * *' 
+    - cron: '17 7 * * *'
+      timezone: 'America/Santiago'
   workflow_dispatch:
 
 permissions:
