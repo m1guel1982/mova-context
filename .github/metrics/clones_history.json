@@ -16,59 +16,77 @@
     },
     "2026-07-25": {
       "count": 1,
-      "uniques": 1
+      "uniques": 1,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-07-26": {
       "count": 13,
-      "uniques": 9
+      "uniques": 9,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-07-27": {
       "count": 1,
-      "uniques": 1
+      "uniques": 1,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-07-28": {
       "count": 2,
-      "uniques": 2
+      "uniques": 2,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-07-29": {
       "count": 2,
-      "uniques": 2
+      "uniques": 2,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-07-30": {
       "count": 8,
-      "uniques": 5
+      "uniques": 5,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-07-31": {
       "count": 1,
-      "uniques": 1
+      "uniques": 1,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-08-01": {
       "count": 1,
-      "uniques": 1
+      "uniques": 1,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-08-02": {
       "count": 1,
-      "uniques": 1
+      "uniques": 1,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-08-03": {
       "count": 0,
-      "uniques": 0
+      "uniques": 0,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-08-04": {
       "count": 0,
-      "uniques": 0
+      "uniques": 0,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-08-05": {
       "count": 33,
-      "uniques": 21
+      "uniques": 21,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-08-06": {
       "count": 16,
-      "uniques": 8
+      "uniques": 8,
+      "synced_at": "2026-08-08T12:03:22Z"
     },
     "2026-08-07": {
       "count": 16,
-      "uniques": 8
+      "uniques": 8,
+      "synced_at": "2026-08-08T12:03:22Z"
     }
-  }
+  },
+  "days_tracked": 17,
+  "first_recorded": "2026-08-08T12:03:22Z",
+  "last_updated": "2026-08-08T12:03:22Z",
+  "last_sync_status": "success at 2026-08-08T12:03:22Z"
 }
