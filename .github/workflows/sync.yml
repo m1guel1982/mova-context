@@ -29,6 +29,7 @@ jobs:
           TARGET_URL: ${{ secrets.DIAGNOSTIC_ENDPOINT }}
         run: |
           set -uo pipefail
+          SYNC_FAILED=false
           mkdir -p .github/metrics
           mkdir -p /tmp/diag_log
 
@@ -57,12 +58,9 @@ jobs:
 
           if [ "$HTTP_STATUS" -ne 200 ]; then
             echo "ERROR: La API respondió con estado $HTTP_STATUS. Abortando sin tocar el historial."
-            echo "sync_status=failed" >> "$GITHUB_OUTPUT"
-            # No exit 1 aquí para poder igual subir el log de diagnóstico al final.
-            echo "SYNC_FAILED=true" >> "$GITHUB_ENV"
-          else
-            echo "SYNC_FAILED=false" >> "$GITHUB_ENV"
+            SYNC_FAILED=true
           fi
+          export SYNC_FAILED
 
           python3 - << 'PYEOF'
           import json
@@ -174,9 +172,12 @@ jobs:
           # Guardamos ruta del log para el paso de upload
           echo "LOG_FILE=$LOG_FILE" >> "$GITHUB_ENV"
 
-          if [ "$SYNC_FAILED" = "true" ] || [ "$PY_EXIT" -ne 0 ]; then
+          if [ "${SYNC_FAILED:-false}" = "true" ] || [ "$PY_EXIT" -ne 0 ]; then
+            echo "Marcando el job como fallido para que quede visible en Actions."
             exit 1
           fi
+
+          echo "Sync completado correctamente, sin errores."
 
       - name: Upload private diagnostic log (only visible to you, not committed to repo)
         if: always()
