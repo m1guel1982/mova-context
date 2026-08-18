@@ -1,14 +1,10 @@
 name: Metrics Sync & Diagnostics
 
 # IMPORTANTE: este archivo debe vivir en .github/workflows/metrics.yml
-# (no en .github/metrics/). GitHub solo reconoce workflows dentro de
-# .github/workflows/. La carpeta .github/metrics/ es solo donde el propio
-# script guarda clones_history.json y se crea sola con mkdir -p, no hace
-# falta crearla a mano.
 
 on:
   schedule:
-    - cron: '17 10 * * *'   # 07:17 America/Santiago = 10:17 UTC (CLT, UTC-3).
+    - cron: '17 10 * * *'   # 07:17 America/Santiago = 10:17 UTC
   workflow_dispatch:
 
 concurrency:
@@ -50,6 +46,13 @@ jobs:
           echo "Repository: ${{ github.repository }}"
           echo "Trigger: ${{ github.event_name }}"
           echo "==================================================="
+
+          # Intenta recuperar el archivo histórico remoto en caso de no existir localmente
+          if [ ! -f .github/metrics/clones_history.json ]; then
+            echo "Buscando historial previo en la rama remota main..."
+            git checkout origin/main -- .github/metrics/clones_history.json || true
+          fi
+
           ENDPOINT="${TARGET_URL:-https://api.github.com/repos/${{ github.repository }}/traffic/clones}"
           echo "Endpoint a consultar: $ENDPOINT"
           HTTP_STATUS=$(curl -s -o temp_metrics.json -w "%{http_code}" \
@@ -147,7 +150,7 @@ jobs:
               with open(history_file, 'w') as f:
                   json.dump(history, f, indent=2, ensure_ascii=False)
               print("Historial actualizado y guardado correctamente.")
-          PYEOF 
+          PYEOF
           PY_EXIT=$?
           rm -f temp_metrics.json
           echo "==================================================="
