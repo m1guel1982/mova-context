@@ -5,6 +5,10 @@ on:
     - cron: '17 10 * * *'   # 07:17 America/Santiago = 10:17 UTC (CLT, UTC-3). Ver nota abajo sobre horario de verano.
   workflow_dispatch:
 
+concurrency:
+  group: metrics-sync
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -170,7 +174,9 @@ jobs:
             echo "Sin cambios para subir."
           else
             git commit -m "chore: update traffic metrics [skip ci]"
-            git pull --rebase -X ours origin main
+            echo "Sincronizando con origin/main..."
+            git fetch origin main
+            git rebase origin/main
             git push origin main
           fi
 Footer
