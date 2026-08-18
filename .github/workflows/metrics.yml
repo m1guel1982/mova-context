@@ -147,7 +147,7 @@ jobs:
               with open(history_file, 'w') as f:
                   json.dump(history, f, indent=2, ensure_ascii=False)
               print("Historial actualizado y guardado correctamente.")
-          PYEOF
+          PYEOF 
           PY_EXIT=$?
           rm -f temp_metrics.json
           echo "==================================================="
