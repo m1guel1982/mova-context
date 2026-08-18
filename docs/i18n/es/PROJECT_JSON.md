@@ -19,7 +19,7 @@ Cada proyecto vive en `projects/<nombre>/project.json`. Esta es la única fuente
     "revisar": { "prompt": "review-project" }
   },
 
-  "llm_profile": { "provider": "ollama", "config": "llama3.2.3b" }
+  "llm_profile": {  "config": "llama3.2.3b" }
 }
 ```
 
@@ -31,10 +31,7 @@ Cada proyecto vive en `projects/<nombre>/project.json`. Esta es la única fuente
 | `description` | string | texto libre, se muestra en `mova projects` |
 | `repo` | string | el único repositorio del proyecto. Un repositorio por proyecto, una sola ruta — ver **¿Más de un directorio?** abajo si la tentación es agregar un segundo |
 | `lang` | string | `"es"`, `"en"`, ... — qué variante de idioma de prompts/agents/skills cargar |
-| `adapter` | string | `"file"` (default) o `"db"` |
-| `dsn` | string | connection string, solo con `adapter: "db"` |
-| `llm` | string | legacy: `"claude"` \| `"gpt"` \| `"ollama"` — sigue funcionando |
-| `llm_profile` | object | `{ "provider", "config" }` — la forma moderna de elegir modelo (ver [COMMANDS.md §6](COMMANDS.md#6-modelos-y-proveedores)) |
+| `llm_profile` | object | `{  "config" }` — la forma moderna de elegir modelo (ver [COMMANDS.md §6](COMMANDS.md#6-modelos-y-proveedores)) |
 | `default_task` | string | task usada cuando no se indica ninguna en la línea de comandos |
 | `variables` | object | `{nombre: valor}` inyectadas en prompts/agents/skills |
 | `agents` / `skills` | object | `{ "domain", "use": [...], "custom": [...] }` |
