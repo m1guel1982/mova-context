@@ -39,7 +39,7 @@ This is the actual output of running `mova run <project> --diagram` in this repo
 
 The diagram demonstrates how Mova Context combines local and cloud-based models within a single execution pipeline:
 
-![Multi-agent diagram example mixing Cloud and Local models](../assets/example-cloud-local.png)
+![Multi-agent diagram example mixing Cloud and Local models](docs/assets/example-cloud-local.png)
 
 - **Hybrid execution per agent:** While `data-analyst` and `purpose-analyst` run locally via Ollama (`llama3.2:3b`), `ai-privacy-reviewer` operates via Google Cloud (`gemini-3-flash-preview`).
 - **Targeted PII protection:** The Token Firewall enables `PII Masking: true` specifically for the agent transmitting data externally (`ai-privacy-reviewer`), pseudonymizing sensitive details (`78/1694 token(s) pseudonymized`) before leaving the machine, whereas local agents keep `PII Masking: false`.
