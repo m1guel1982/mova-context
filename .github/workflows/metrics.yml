@@ -47,11 +47,9 @@ jobs:
           echo "Trigger: ${{ github.event_name }}"
           echo "==================================================="
 
-          # Intenta recuperar el archivo histórico remoto en caso de no existir localmente
-          if [ ! -f .github/metrics/clones_history.json ]; then
-            echo "Buscando historial previo en la rama remota main..."
-            git checkout origin/main -- .github/metrics/clones_history.json || true
-          fi
+          # Asegura traer la última versión del historial desde git remoto antes de ejecutar Python
+          git fetch origin main || true
+          git checkout origin/main -- .github/metrics/clones_history.json || true
 
           ENDPOINT="${TARGET_URL:-https://api.github.com/repos/${{ github.repository }}/traffic/clones}"
           echo "Endpoint a consultar: $ENDPOINT"
@@ -73,20 +71,21 @@ jobs:
           import json
           import os
           from datetime import datetime, timezone
+
           history_file = '.github/metrics/clones_history.json'
           temp_file = 'temp_metrics.json'
           now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
           failed = os.environ.get('SYNC_FAILED', 'false') == 'true'
+
+          history = {}
           if os.path.exists(history_file):
               try:
                   with open(history_file, 'r') as f:
                       history = json.load(f)
+                  print(f"Historial previo cargado exitosamente. Días registrados actualmente: {len(history.get('clones', {}))}")
               except Exception as e:
-                  print(f"AVISO: no se pudo leer el historial existente ({e}), se crea uno nuevo.")
-                  history = {}
-          else:
-              print("AVISO: no existe historial previo, se crea uno nuevo desde cero.")
-              history = {}
+                  print(f"AVISO: no se pudo leer el historial existente ({e}), se mantendrá estructura base.")
+
           history.setdefault("total_clones", 0)
           history.setdefault("total_uniques", 0)
           history.setdefault("days_tracked", 0)
@@ -94,15 +93,16 @@ jobs:
           history.setdefault("last_updated", None)
           history.setdefault("last_sync_status", None)
           history.setdefault("clones", {})
+
           if isinstance(history["clones"], list):
               print("AVISO: formato antiguo de 'clones' (lista) detectado, migrando a dict.")
               history["clones"] = {}
+
           if failed:
               print("Sync marcado como FALLIDO por código HTTP no-200. No se actualizan los datos de clones.")
               history["last_sync_status"] = f"failed at {now_iso}"
               with open(history_file, 'w') as f:
                   json.dump(history, f, indent=2, ensure_ascii=False)
-              print("Historial guardado sin cambios en clones (solo se registró el intento fallido).")
           else:
               try:
                   with open(temp_file, 'r') as f:
@@ -113,9 +113,12 @@ jobs:
                   with open(history_file, 'w') as f:
                       json.dump(history, f, indent=2, ensure_ascii=False)
                   raise SystemExit(1)
+
               clones_data = api_data.get('clones', [])
               new_days = 0
               updated_days = 0
+
+              # PURE MERGE: Se preservan las llaves históricas y solo se actualizan/agregan las de la API
               if isinstance(clones_data, list):
                   for entry in clones_data:
                       date_key = entry['timestamp'].split('T')[0]
@@ -131,25 +134,26 @@ jobs:
                           "uniques": uniques,
                           "synced_at": now_iso
                       }
-              elif isinstance(clones_data, dict):
-                  for date_key, metrics in clones_data.items():
-                      history['clones'][date_key] = metrics
-                      history['clones'][date_key].setdefault("synced_at", now_iso)
+
+              # Recalcular totales sobre la totalidad de claves preservadas
               total_count = sum(day.get('count', 0) for day in history['clones'].values())
               total_uniques = sum(day.get('uniques', 0) for day in history['clones'].values())
+
               history['total_clones'] = total_count
               history['total_uniques'] = total_uniques
               history['days_tracked'] = len(history['clones'])
               history['last_updated'] = now_iso
               history['last_sync_status'] = f"success at {now_iso}"
+
               print(f"Días nuevos agregados: {new_days}")
-              print(f"Días actualizados (mismo día, valor distinto): {updated_days}")
-              print(f"Total histórico de días trackeados: {history['days_tracked']}")
+              print(f"Días actualizados: {updated_days}")
+              print(f"Total histórico acumulado de días: {history['days_tracked']}")
               print(f"Total acumulado de clones: {total_count}")
               print(f"Total acumulado de uniques: {total_uniques}")
+
               with open(history_file, 'w') as f:
                   json.dump(history, f, indent=2, ensure_ascii=False)
-              print("Historial actualizado y guardado correctamente.")
+              print("Historial preservado y actualizado correctamente.")
           PYEOF
           PY_EXIT=$?
           rm -f temp_metrics.json
@@ -210,6 +214,5 @@ jobs:
 
           if [ "$success" != "true" ]; then
             echo "No se pudo pushear tras $MAX_RETRIES intentos."
-            echo "El próximo run programado volverá a recalcular el historial completo, así que no se pierden datos."
             exit 1
           fi
