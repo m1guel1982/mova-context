@@ -36,7 +36,20 @@ func dispatch(root string) {
 		if project == "" {
 			project = runtime.AutoDetect(root)
 		}
-		if flagBool("--count") {
+		if flagBool("--diagram") {
+			// project is still whatever positionalArgs(2) found first —
+			// safe. But positionalArgs has no notion of "--export/--path
+			// take a value", so with `--diagram --export pdf --path X`
+			// it would mistake "pdf" for task and "X" for a second
+			// positional — task is deliberately NOT read from it here;
+			// `mova run <project> --diagram` never takes a task today.
+			adapter := getAdapter(project)
+			if orchestrator.IsGroup(root, project) {
+				adapter = core.NewFileAdapter(root)
+			}
+			formats := strings.Split(flagStr("--export", "svg"), ",")
+			runDiagram(root, adapter, project, "", formats, flagStr("--path", ""))
+		} else if flagBool("--count") {
 			// See orchestrator/count.go: IsGroup decides which adapter
 			// to use exactly the way `mova agents run` already does for
 			// actually executing a group (plain file adapter — a group
@@ -115,8 +128,12 @@ func dispatch(root string) {
 			return
 		}
 		for _, r := range results {
-			consolePrint(fmt.Sprintf("  [%s/%s/%s] %s\n  %s\n\n",
-				r.Kind, r.Domain, r.Lang, r.Name, r.Excerpt))
+			loc := r.Path
+			if r.Line > 0 {
+				loc = fmt.Sprintf("%s:%d", r.Path, r.Line)
+			}
+			consolePrint(fmt.Sprintf("  [%s/%s/%s] %s\n  %s\n  %s\n\n",
+				r.Kind, r.Domain, r.Lang, r.Name, loc, r.Excerpt))
 		}
 
 	case "mcp":

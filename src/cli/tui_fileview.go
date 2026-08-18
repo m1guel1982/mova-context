@@ -21,6 +21,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -48,6 +49,11 @@ type fileScreen struct {
 	matches    []fileMatch
 	matchIdx   int // index into matches of the current match, -1 = none jumped to yet
 	searchNote string
+
+	// pendingQuery: set by newFileScreenAtQuery (tui_search.go) to open
+	// this screen already positioned at a match, instead of an empty
+	// find bar — consumed once, in Init(), right after content loads.
+	pendingQuery string
 }
 
 // fileMatch is one occurrence of the search query, as a (row, col)
@@ -69,6 +75,19 @@ func newFileScreen(app *tuiApp, title, path string, editable bool) *fileScreen {
 	return &fileScreen{app: app, title: title, path: path, editable: editable, area: ta, search: si, matchIdx: -1}
 }
 
+// newFileScreenAtQuery is what tui_search.go's global search results
+// open into: the SAME file viewer newFileScreen always uses, just
+// already in find mode with query typed in and the cursor jumped to
+// its first match — this is what turns a search result into "taken to
+// the exact place", reusing 100% of the existing find/jump machinery
+// (recomputeMatches/jumpMatch/moveCursorTo) instead of a second
+// implementation of it.
+func newFileScreenAtQuery(app *tuiApp, title, path string, editable bool, query string) *fileScreen {
+	f := newFileScreen(app, title, path, editable)
+	f.pendingQuery = query
+	return f
+}
+
 func (f *fileScreen) Init() tea.Cmd {
 	data, err := os.ReadFile(f.path)
 	if err != nil {
@@ -78,6 +97,14 @@ func (f *fileScreen) Init() tea.Cmd {
 		f.area.SetValue(string(data))
 	}
 	f.area.Focus()
+	if f.pendingQuery != "" {
+		f.searchMode = true
+		f.search.SetValue(f.pendingQuery)
+		f.search.Focus()
+		f.recomputeMatches()
+		f.jumpMatch(1)
+		f.pendingQuery = ""
+	}
 	return textarea.Blink
 }
 
@@ -207,7 +234,12 @@ func (f *fileScreen) jumpMatch(dir int) {
 		f.matchIdx = (f.matchIdx + dir + len(f.matches)) % len(f.matches)
 	}
 	f.moveCursorTo(f.matches[f.matchIdx])
-	f.searchNote = ""
+	// Bubbles' textarea has no inline text-highlighting API (it's a
+	// plain-text edit widget, not a syntax-highlighted viewer) — this
+	// status line is the honest substitute: exact match number and
+	// line, always visible, so a jump is never silently ambiguous even
+	// without colored highlighting of the matched text itself.
+	f.searchNote = fmt.Sprintf("match %d/%d — line %d", f.matchIdx+1, len(f.matches), f.matches[f.matchIdx].row+1)
 }
 
 // moveCursorTo positions the textarea's cursor at (row, col) using only

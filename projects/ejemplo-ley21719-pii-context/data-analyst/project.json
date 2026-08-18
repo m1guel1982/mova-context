@@ -1,0 +1,49 @@
+{
+  "project": "ejemplo-ley21719-pii-context/data-analyst",
+  "description": "Agente del grupo 'ejemplo-ley21719-pii-context' — identifica qué datos personales existen realmente en el dataset ficticio de clientes (JSON+PDF+DOCX+log), citando siempre la fuente. Primer paso del análisis multiagente de Ley 21.719.",
+  "repo": "examples/ejemplo-ley21719-pii-context-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "analizar",
+
+  "agents": { "domain": "base", "use": ["data-analyst"], "custom": [] },
+  "skills": { "domain": "base", "use": ["pii-context-reduction"], "custom": [] },
+
+  "tasks": {
+    "analizar": {
+      "prompt": "analizar-contexto-clientes-ia",
+      "variables": {
+        "query": "Busca la información relevante de los clientes y dime qué datos personales tenemos, para qué los usamos y qué sistemas o procesos están involucrados.",
+        "regulation": "Ley 21.719 (Chile)"
+      },
+      "focus": [
+        "data/customers.json",
+        "data/customer-profile.pdf",
+        "data/privacy-policy.docx"
+      ]
+    }
+  },
+
+  "llm_profile": {
+    "config": "llama3.2.3b"
+  },
+
+  "budget": {
+    "max_tokens": 20000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true
+  },
+
+  "budget_path": "projects/ejemplo-ley21719-pii-context/data-analyst/mova-budget-report.md",
+  "token_history_path": "projects/ejemplo-ley21719-pii-context/data-analyst/mova-token-history.json",
+
+  "jobs": [
+    {
+      "comment": "Genera el informe narrativo diario de este agente — corre a las 2 AM, ver README del ejemplo para dónde queda guardado",
+      "schedule": "0 2 * * *",
+      "tasks": ["analizar"],
+      "save": "reports/analisis-ley21719-datos_{date}.md",
+      "budget": { "focus": true }
+    }
+  ]
+}

@@ -32,6 +32,7 @@ func RenderMarkdown(r *Report) string {
 
 	b.WriteString(deduplicationSection(r))
 	b.WriteString(sanitizerSection(r))
+	b.WriteString(piiMaskingSection(r))
 	b.WriteString(firewallSummarySection(r))
 
 	b.WriteString("## Token & Cost Breakdown\n\n")

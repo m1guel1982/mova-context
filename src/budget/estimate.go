@@ -101,6 +101,13 @@ type Report struct {
 	CircuitBreaker CircuitBreakerResult
 	CacheLayout    *CacheLayout // nil unless Cache Guard is enabled (default) — see core.CacheGuardEnabled
 
+	// PIIStats: PII Masking stage result — zero value unless the
+	// project explicitly opted in (core.PIIMaskingEnabled). See
+	// mova.local/sanitize/pii.go's header for the disclaimer this
+	// stage carries; report_pipeline.go's piiMaskingSection renders
+	// this only when TokensMasked > 0.
+	PIIStats sanitize.PIIStats
+
 	// RawTokens/RawCosts: the total BEFORE the Sanitizer ran — only
 	// populated when core.DetailedReportsEnabled(cfg), since it costs
 	// one extra tokenization pass over the unsanitized text purely for
@@ -157,6 +164,12 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 
 	sanitizeStats := SanitizeCached(root, projectName, sections, sanitizeConfigFrom(cfg), core.ContextCacheEnabled(cfg))
 
+	// PII Masking preview — same optional, off-by-default stage
+	// BuildGatedContext runs (see gated_context.go's applyPIIMasking);
+	// `mova budget` never sends anything to a model, but the report
+	// should show real numbers when the project has this enabled.
+	piiStats := applyPIIMasking(root, sections, cfg)
+
 	prices, err := LoadPrices(root)
 	if err != nil {
 		return nil, err
@@ -209,6 +222,7 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 	report.MaxTokens, report.OverBudget = CheckLimit(proj, &task, report.TotalTokens)
 	report.HistoricalAccuracy = buildHistoricalAccuracy(root, projectName, proj, prices)
 	report.SanitizeStats = sanitizeStats
+	report.PIIStats = piiStats
 
 	// Token Firewall stages [2]/[3] preview — `mova budget` never sends
 	// anything to a model, so a Circuit Breaker "abort" here is purely

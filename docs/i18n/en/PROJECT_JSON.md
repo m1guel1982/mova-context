@@ -1,6 +1,6 @@
 # PROJECT.JSON — field reference
 
-Every project lives in `projects/<name>/project.json`. This is the single source of configuration for that project — model prices are the only thing that lives elsewhere (`config/prices.json`; see [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget)).
+Every project lives in `projects/<name>/project.json`. This is the single source of configuration for that project — model prices (`config/prices.json`) and the optional PII Masking thresholds (`config/policy.json`) are the only things that live elsewhere, since both are global configuration shared by every project (see [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget) and [COMMANDS.md §20](COMMANDS.md#20-token-firewall)).
 
 ## Minimal example
 
@@ -181,8 +181,9 @@ project's, same rule as `focus`) always accepted `max_tokens`, a hard
 content-size ceiling. Since the Token Firewall, it also accepts every
 field below — a set of deterministic, zero-AI stages that reduce what
 gets sent to a model and govern what it costs, running automatically
-before that gate. **Every stage is enabled by default** — set the
-matching field to `false` to opt out of just that one:
+before that gate. **Every stage is enabled by default, EXCEPT
+`pii_masking`** — set the matching field to `false` (or, for
+`pii_masking`, to `true` to opt in) to change just that one:
 
 ```json
 {
@@ -192,6 +193,7 @@ matching field to `false` to opt out of just that one:
     "max_monthly_usd": 15.00,
     "on_exceed": "warn",
     "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "pii_masking": { "enabled": false },
     "cache_hint": true,
     "circuit_breaker": true,
     "token_estimation": true,
@@ -208,6 +210,7 @@ matching field to `false` to opt out of just that one:
 | `max_monthly_usd` | number | none (0 = no ceiling) | Circuit Breaker: aborts/warns if this project's tracked spend for the current calendar month reaches this |
 | `on_exceed` | `"warn"` \| `"abort"` | `"warn"` | What the Circuit Breaker does when a ceiling above is hit |
 | `sanitize` | object | enabled, conservative | The Sanitizer's own settings — see below |
+| `pii_masking` | object | **disabled** (`{"enabled": false}` or absent) | OPTIONAL structural PII pseudonymization stage (word shape + Shannon entropy, no word lists) — set `{"enabled": true}` to explicitly opt this project in. Its thresholds/weights live in `config/policy.json`, not here. See [COMMANDS.md § Token Firewall § PII Masking](COMMANDS.md#token-firewall) and `skills/base/i18n/en/compliance/pii-context-reduction.md` — **not** a legal anonymization or Ley 21.719/GDPR compliance guarantee |
 | `cache_hint` | boolean | `true` | Enables the Cache Layout Guard (reorders the system prompt for provider prompt-caching) — set `false` to disable |
 | `circuit_breaker` | boolean | `true` | Enables the Circuit Breaker mechanism itself, independent of whether a ceiling is configured — set `false` to disable even with ceilings still set |
 | `token_estimation` | boolean | `true` | Uses the real tiktoken tokenizer — set `false` for a fast chars/4 approximation instead (a performance trade-off, not a savings feature) |
@@ -328,3 +331,24 @@ ventas_online/vendedor`, `mova budget ventas_online/vendedor`, `mova
 jobs run ventas_online/vendedor`, ...). `mova agents run ventas_online`
 runs every agent sequentially through the same assemble+Budget-gate
 pipeline `mova run` uses for any project — see COMMANDS.md § Multiagent.
+
+## Diagram (optional)
+
+Visual diagram preferences (`mova run <project> --diagram`) — see
+[COMMANDS.md § Visual diagrams](COMMANDS.md#21-visual-diagrams--mova-run-project---diagram)
+for the full command. Absent = defaults apply (`verbose`, export to
+`svg`).
+
+```json
+{
+  "diagram": {
+    "detail_level": "simple",
+    "export_formats": ["svg", "png"]
+  }
+}
+```
+
+| Field | Type | Default | What it does |
+|---|---|---|---|
+| `detail_level` | `"simple"` \| `"verbose"` | `"verbose"` | Diagram detail level — the CLI's `--diagram` can override this per run |
+| `export_formats` | array of strings | `["svg"]` | Default formats when `mova run --diagram` is called without `--export` |

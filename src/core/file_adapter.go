@@ -284,6 +284,7 @@ func (a *fileAdapter) Search(query, domain string) ([]SearchResult, error) {
 				results = append(results, SearchResult{
 					Kind: kind, Domain: domainFound, Lang: lang,
 					Name: name, Excerpt: excerpt(content, q), Score: score(name, content, q),
+					Path: path, Line: firstMatchLine(content, q),
 				})
 			}
 			return nil

@@ -1,0 +1,5 @@
+{
+  "group": "ejemplo-ley21719-pii-context",
+  "description": "Tres agentes de compliance (data-analyst, purpose-analyst, ai-privacy-reviewer) analizan el mismo dataset ficticio de clientes (JSON+PDF+DOCX) para responder: qué datos personales existen, para qué se usan, qué sistemas los procesan, y qué información no sería necesario enviar a un LLM externo. Cada uno es un proyecto Mova normal con su propio project.json, memoria y budget, orquestados desde este config.json (mismo mecanismo multiagente que examples/ejemplo-jobs-multiagente-repo).",
+  "agents": ["data-analyst", "purpose-analyst", "ai-privacy-reviewer"]
+}

@@ -1,78 +1,172 @@
 # Mova Context
 
-> **Operational knowledge belongs to the project. Reasoning belongs to the model.**
+> **The universal context engine for AI: audit, protect, and visualize what actually reaches your LLM — local or cloud, in one command.**
 
-Docs: **[Español](README.md)** · **[English](README.en.md)**
+Docs: **[Español](../es/README.md)** · **[English](README.md)**
+
+---
+
+```text
+Sources  ──▶  Privacy Firewall (PII)  ──▶  Agents  ──▶  Auditable diagram
+(data)          (Sanitizer + PII Masking)  (your logic)   (SVG / PNG / PDF)
+```
+
+- ✅ **Know exactly what data leaves your machine** — before it leaves, not after a leak.
+- ✅ **One command generates a real diagram of your context architecture** — living auto-documentation, not a drawing someone made once and let go stale.
+- ✅ **Works the same from CLI, Chat, MCP, or HTTP** — same engine, same result, zero integration friction.
 
 ---
 
 ## Index
 
-1. [The convention](#1-the-convention) — the 6 pieces everything depends on
-2. [Why Mova Context exists](#2-why-mova-context-exists) — the short story
-3. [How it works](#3-how-it-works) — the whole picture in one diagram
-4. [Do I need the CLI?](#4-do-i-need-the-cli) — a quick decision table
-5. [Tokenomics](#5-tokenomics--the-main-course) — why every token counts, and how Mova controls it
-6. [What the CLI brings](#6-what-the-cli-brings) — a summary of what's new
-7. [Quick Installation & Test (2 Minutes)](#7-quick-installation--test-2-minutes)
-8. [Go deeper](#8-go-deeper)
-9. [Job Engine, Cron & Multiagent](#9-job-engine-cron--multiagent)
-10. [Visual interface — `mova ui`](#10-visual-interface--mova-ui)
+1. [The diagram, in action](#1-the-diagram-in-action) — the artifact that summarizes the whole project
+2. [Why Mova Context exists](#2-why-mova-context-exists) — the two problems it solves
+3. [Quick installation & test (2 minutes)](#3-quick-installation--test-2-minutes)
+4. [The four doors](#4-the-four-doors) — CLI, Chat, MCP, HTTP
+5. [How it works](#5-how-it-works) — the complete map in one diagram
+6. [The convention](#6-the-convention) — the 6 pieces everything depends on
+7. [Token Firewall & Tokenomics](#7-token-firewall--tokenomics) — the protection and cost-control layer
+8. [Job Engine, Cron & Multiagent](#8-job-engine-cron--multiagent)
+9. [Visual interface — `mova ui`](#9-visual-interface--mova-ui)
+10. [Do I need the CLI?](#10-do-i-need-the-cli) — decision table
+11. [Go deeper](#11-go-deeper)
 
 ---
 
-## 1. The convention
+## 1. The diagram, in action — Cloud & Local in the same multi-agent group
 
-**Mova Context is a file convention, not a tool.** Everything you need fits in this structure, and it works with zero installation:
+This is the actual output of running `mova run <project> --diagram` in this repository — a customer-data audit scenario (Chile's Ley 21.719) featuring three parallel agents (`data-analyst`, `purpose-analyst`, and `ai-privacy-reviewer`).
 
-```text
-workflow.md                       ← the spec: how the context gets built
+The diagram demonstrates how Mova Context combines local and cloud-based models within a single execution pipeline:
 
-agents/[domain]/                  ← who reasons (role, experience)
-skills/[domain]/                  ← what it knows (technical or business knowledge)
-prompts/[domain]/                 ← what it must do (the task)
+![Multi-agent diagram example mixing Cloud and Local models](../assets/example-cloud-local.png)
 
-projects/[project]/
-├── project.json                  ← which agents, skills and prompts to use
-└── memory.md                     ← the project's session history
+- **Hybrid execution per agent:** While `data-analyst` and `purpose-analyst` run locally via Ollama (`llama3.2:3b`), `ai-privacy-reviewer` operates via Google Cloud (`gemini-3-flash-preview`).
+- **Targeted PII protection:** The Token Firewall enables `PII Masking: true` specifically for the agent transmitting data externally (`ai-privacy-reviewer`), pseudonymizing sensitive details (`78/1694 token(s) pseudonymized`) before leaving the machine, whereas local agents keep `PII Masking: false`.
+- **Detailed cost breakdown in `FINAL SUMMARY`:**
+  - **Local agents:** Display `(local — no cost)`, confirming zero-billed on-premise execution.
+  - **Cloud agent:** Computes exact API usage and costs (`ai-privacy-reviewer: 7503 tok, cheapest: google/gemini $0.0094`).
+```bash
+# Cloud
+mova run ejemplo-ley21719-pii-context --diagram --export svg,png,pdf --path ./diagrams
+
+# Local — same command, same project, only project.json changes
 ```
 
-With any agent that can read your repository (Claude Code, Cursor, Gemini CLI, Claude Desktop...), all you need is:
+The example project ships both variants ready to test: `projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/project.json` (local, active by default) and `project_cloud.json` (the Cloud alternative) — switching between the two only requires renaming the active file to `project_local.json` and renaming `project_cloud.json` to `project.json`, without touching any other file or a single line of code.
 
-```text
-Read workflow.md, resolve the project [name], run task [task] and build the context.
-```
+**Read in three parts, in either diagram:**
 
-The agent follows `workflow.md`, resolves `project.json`, loads `agents`/`skills`/`prompts`, injects variables, adds `memory.md`, and assembles the final context. If you're working from a web chat that can't touch your repo (ChatGPT, Claude.ai, Gemini), **`mova run`** produces that exact same context, ready to copy and paste.
+- **`SOURCES` (what goes in):** the real files that build the context — a customer JSON, a PDF, a DOCX, a technical log. Every source is a real project file, never invented data.
+- **`TOKEN FIREWALL` (what gets cleaned):** the Sanitizer removes repeated noise before counting a single token; PII Masking, when enabled, replaces personal-data-shaped tokens with deterministic pseudonyms (`[PII_a1b2c3d4]`) before anything leaves the machine.
+- **`AGENTS` & `METRICS` (what gets delivered):** each agent shows its real model, whether it's local or cloud, and whether PII protection is on — and at the end, the summary: tokens before, tokens after, reduction percentage, and real cost (only if the model is billed; a local model never shows a cost figure).
 
-**If the `mova` binary vanished tomorrow, the project would keep working exactly the same** — because the knowledge lives in the repository, never in the tool. The CLI only automates tasks: assembling context, managing memory, or exposing it over HTTP/MCP.
+One command. No extra code. The result is a file that can be attached to an audit ticket, shown in a compliance meeting, or committed to the repository itself as proof of what the system does, refreshed on every run.
 
 ---
 
 ## 2. Why Mova Context exists
 
-This came from writing the same prompt a thousand times. From re-explaining the project to a model on Monday, and again on Tuesday just because I opened a new chat. From switching from GPT to Claude and feeling a week of context evaporate. At some point I got tired and needed order.
+Anyone integrating a language model into a real system eventually runs into two questions without a simple answer:
 
-A project's operational knowledge — conventions, business rules, decisions already made, memory of work done — ends up **trapped inside the chat**. And over time the same symptoms always show up:
+**a) What sensitive data is being sent to an external model (or even a local one)?**
+Names, emails, ID numbers, histories — they often end up inside a prompt without anyone reviewing them one by one. There's no simple way to know, before sending, what personal-data-shaped information is traveling in that context.
 
-```text
-BEFORE                               MOVA CONTEXT
+**b) How do you document and show someone else how context flows through an AI system?**
+A hand-drawn architecture diagram goes stale the following week. Explaining it in a meeting from configuration files is slow and unreliable.
 
-Context lives in the chat      →      Context lives in the repository
-Switching models means          →      Change one line in project.json
-  starting over
-Every dev explains it           →      A single source of truth
-  differently
-Decisions get lost              →      memory.md keeps the history
-Knowledge depends on            →      Knowledge belongs to the project,
-  the provider                          not the provider
-```
+Mova Context solves both with the same mechanism: a context pipeline that always passes through a sanitization and data-protection layer before reaching the model, and that can turn into an auditable image with a single command, no matter how large the project gets.
 
-This isn't magic or an overblown promise: it's simply moving that knowledge from the conversation into the repository, so any model — Claude, GPT, Gemini, Ollama — can read it without you having to explain it all over again.
+This doesn't replace a privacy policy or a legal review — it's a technical tool that makes visible and auditable what, in most AI systems today, stays hidden inside an API call.
 
 ---
 
-## 3. How it works
+## 3. Quick installation & test (2 minutes)
+
+### Option A — Automatic installer (recommended)
+
+1. Go to the `installers/` folder in the repository.
+2. Run the installer for your operating system:
+
+| OS | Installer |
+|---|---|
+| Windows | `install.bat` |
+| macOS | `install.command` |
+| Linux | `install.sh` |
+
+The installer compiles the executable, installs it, and configures `PATH` automatically. Once done, from any terminal:
+
+```bash
+mova run pruebas-locales --diagram --export png
+```
+
+You can also open the interactive interface with `mova ui`, or just run `mova` to see available commands.
+
+### Option B — Makefile (if you already have Go)
+
+```bash
+make install
+mova run pruebas-locales
+```
+
+Or just build locally without installing:
+
+```bash
+make build
+./dist/mova run pruebas-locales
+```
+
+### Option C — Manual build
+
+```bash
+go build -o mova ./src/cli
+./mova run pruebas-locales
+```
+
+### Working with projects in any folder
+
+A project doesn't need to live inside the Mova repository. `project.json`'s `"repo"` field accepts an absolute path to anywhere (another drive on Windows, another mount point on Linux/macOS) — double-click installers already configure everything for this to work with no extra steps. See [COMMANDS.md § Working across different drives/locations](COMMANDS.md#working-across-different-driveslocations-windowslinuxmacos).
+
+---
+
+## 4. The four doors
+
+The same auditing and context-protection logic works exactly the same regardless of how you reach it — one engine behind four different ways to use it.
+
+### MCP Server — for Cursor, VS Code, Claude Desktop
+
+One configuration step. From then on, every context your editor builds for the model passes through Mova's privacy firewall first, in real time, while you code — without changing your usual workflow. See [COMMANDS.md § MCP Server](COMMANDS.md#13-mcp-server--mova-mcp-start).
+
+### HTTP API — the ultralight Go middleware
+
+Sits in front of calls to any LLM. No heavy dependencies, starts in milliseconds. It's the missing piece for a team that already has an AI pipeline in production and needs to audit it without rewriting it — one `POST` call is enough to sanitize and diagram a request.
+
+```bash
+curl -X POST http://localhost:3000/diagram -d '{"project": "my-project", "export": "svg"}'
+```
+
+### CLI — the terminal copilot
+
+One command generates the architecture diagram for the context system. Drops straight into CI/CD: every commit can automatically leave behind an updated snapshot of what data flows where — auto-documentation that never goes stale because it regenerates itself.
+
+```bash
+mova run my-project --diagram --export png --path ./docs/diagrams
+```
+
+### Chat — the diagnostic console
+
+Before taking a prompt to production, test it here: see the assembled context exactly as it would reach the model, check whether the privacy firewall flagged anything, tune parameters instantly — without leaving the terminal.
+
+```bash
+mova chat my-project
+> /diagram
+```
+
+All four channels share the same assembly engine, the same privacy firewall, and the same diagram generator — only the door changes. See [COMMANDS.md § Visual diagrams](COMMANDS.md#21-visual-diagrams--mova-run-project---diagram) for a one-line example per channel.
+
+---
+
+## 5. How it works
 
 ```text
                      Mova Context
@@ -82,385 +176,189 @@ This isn't magic or an overblown promise: it's simply moving that knowledge from
                  │
                  ▼
            workflow.md
-          (the spec)
+        (the specification)
                  │
       ┌──────────┴──────────┐
       ▼                     ▼
 An agent reading         mova run (CLI,
-your repository            optional)
+your repository           Chat, MCP, HTTP)
       │                     │
       └──────────┬──────────┘
                  ▼
-        Assembled context
+      Token Firewall (Sanitizer,
+      PII Masking, Cache Guard)
+                 │
+                 ▼
+        Audited context
                  │
                  ▼
  Claude · GPT · Gemini · Ollama
-        or any other LLM
+      or any other LLM
 ```
 
 ---
 
-## 4. Do I need the CLI?
+## 6. The convention
 
-| Situation | Need the CLI? |
-|---|---|
-| You already use Claude Code, Cursor, or an agent that reads the repo | **No.** The agent follows `workflow.md` directly. |
-| You want to paste the context into a web chat (Claude.ai, ChatGPT, Gemini) | **Yes.** `mova run` gives it to you ready to paste. |
-| You want to call a model's API from a script | **Yes.** Faster than having the model read every file. |
-| You want to run a local model (Ollama) | **Yes.** `mova run ... \| ollama run model` in one line. |
-| You want to save a session's memory without editing `memory.md` by hand | **Yes.** `mova memory` does it for you. |
-| You want to expose the context over HTTP or as an MCP server | **Yes.** `mova http` or `mova mcp start`. |
+**At its core, Mova Context is a file convention — not a mandatory tool.** Everything it needs fits into this structure, and works with nothing installed:
 
-With or without the CLI, the source of truth never changes: `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, `memory.md`. Skip the CLI and you lose convenience; use it and you gain speed and automation — never the other way around.
+```text
+workflow.md                       ← specification: how context gets built
+
+agents/[domain]/                  ← who reasons (role, expertise)
+skills/[domain]/                  ← what it knows (technical or business knowledge)
+prompts/[domain]/                 ← what it must do (the task)
+
+projects/[project]/
+├── project.json                  ← which agents, skills, and prompts to use
+└── memory.md                     ← the project's session history
+```
+
+With any agent that can read a repository (Claude Code, Cursor, Gemini CLI, Claude Desktop...), it's enough to ask:
+
+```text
+Read workflow.md, resolve project [name], run task [task], and build the context.
+```
+
+The agent follows `workflow.md`, resolves `project.json`, loads `agents`/`skills`/`prompts`, injects variables, adds `memory.md`, and assembles the final context. When working from a web chat that can't touch the repository (ChatGPT, Claude.ai, Gemini), **`mova run`** generates that exact same context, ready to copy and paste.
+
+**If the `mova` binary disappeared tomorrow, the project would keep working exactly the same** — because the knowledge lives in the repository, never in the tool. The CLI only automates tasks: assembling context, auditing and protecting data, generating diagrams, managing memory, or exposing everything over HTTP/MCP.
+
+This started from writing the same prompt a thousand times, from explaining a project to a model on Monday and explaining it again on Tuesday in a different chat, from switching providers and feeling a week of work vanish. A project's operational knowledge — conventions, business rules, decisions already made — shouldn't stay trapped inside a conversation:
+
+```text
+BEFORE                               MOVA CONTEXT
+
+Context lives in the chat      →      Context lives in the repository
+Switching models                →      Changing one line in project.json
+  means starting over
+Every person explains it        →      One single source of truth
+  differently
+Decisions get lost               →      memory.md keeps the history
+No one knows what data left      →      The diagram always shows it
+```
 
 ---
 
-## 5. Tokenomics 
+## 7. Token Firewall & Tokenomics
 
-### The analogy: the airport scale
+Beyond auditing and protecting data, Mova Context also controls — deterministically, with no AI involved — how much context gets sent and what it costs.
 
-Before a flight, you weigh your suitcase at home on a bathroom scale. It gives you a rough idea, but it isn't the official scale. At the airport, the suitcase gets weighed for real — and that's when the gap between your guess and the actual weight shows up. If you knew in advance how far off your home scale usually is (say, "it always reads 3% under the real weight"), you could adjust your packing next time and stop getting surprised at the counter.
+### The Token Firewall
 
-**Mova Tokenomics does exactly that, but with tokens instead of kilos:**
+Three automatic stages that run ahead of every execution (`mova run`, `mova chat`, jobs, MCP, HTTP, the TUI itself), with no extra command:
 
-| In the analogy | In Mova |
-|---|---|
-| Bathroom scale at home | Local estimate computed with `tiktoken-go`, before anything is sent to any provider |
-| Official scale at the airport | Real token count returned by the provider (Anthropic, OpenAI, Google) when the API is actually called |
-| Airline's weight limit | `budget.max_tokens` in your `project.json` |
-| The notebook where you write "home said X, airport said Y" | The `mova-token-history.json` file that lives in your project |
-
-And because that notebook is yours — not a generic average from thousands of other people's suitcases — the calibration Mova learns is specific to **your project**: its language mix, its code, its documents.
-
-**Why this matters for your wallet (and your sanity):** every token you send to a Cloud model costs money; if the model is local, a context that doesn't fit the window silently truncates or degrades. Mova attacks both problems with the same mechanism: **measure before spending, stop if it's over, and learn from every real call.**
-
-### The Token Firewall — the newest, biggest lever
-
-Everything below in this section was already true before this feature
-existed. The Token Firewall adds three more deterministic, zero-AI
-stages that run automatically, in front of every one of them — same
-`mova run`, `mova chat`, jobs, MCP, the TUI, no new command:
-
-| Stage | What it does | Real, measured result (shipped example) |
+| Stage | What it does | Real, measured result (example included) |
 |---|---|---|
-| **Sanitizer** | Collapses repeated log lines, blank-line runs, and duplicated file headers — before anything is counted | 2,737 → 1,764 tokens: **35.6% fewer tokens, same information** |
-| **Cache Layout Guard** | Reorders the prompt so its first tokens are a byte-stable prefix, which is what lets Claude/GPT/Gemini's own prompt caching actually trigger | ~1,050 of 1,167 static-prefix tokens estimated reusable on a cache hit (~90%, Anthropic's own published discount) |
-| **Circuit Breaker** | Per-run and monthly USD ceilings, checked BEFORE anything is sent — `"on_exceed": "abort"` stops execution, not just a warning after the bill arrives | Verified: a run that would exceed its ceiling never reaches the model |
+| **Sanitizer** | Collapses repeated log lines, runs of blank lines, and duplicated file headers — before counting anything | 2,737 → 1,764 tokens: **35.6% fewer tokens, same information** |
+| **PII Masking** (optional) | Replaces structurally personal-data-shaped tokens with deterministic pseudonyms, before counting or sending anything | See section 1 — the diagram itself shows how many tokens were protected |
+| **Cache Layout Guard** | Reorders the prompt so its first tokens form a stable, byte-for-byte prefix — what actually triggers Claude/GPT/Gemini's prompt caching | ~1,050 of 1,167 static-prefix tokens estimated reusable on a cache hit |
+| **Circuit Breaker** | Per-run and monthly USD limits, checked **before** anything is sent | A run that would exceed its limit never reaches the model |
 
-**Every stage is on by default**, independently toggleable in
-`project.json`, and every number above is real — measured by actually
-running the example shipped in this repository
-(`projects/ejemplo-token-firewall/`), not projected for documentation.
-See [COMMANDS.md § Token Firewall](COMMANDS.md#token-firewall) for the
-full mechanics, how caching behaves per provider, and the complete
-walkthrough.
+Every stage is on by default (except PII Masking, which requires explicit per-project opt-in — see [PROJECT_JSON.md § Budget](PROJECT_JSON.md#budget-and-the-token-firewall)), can be turned off independently, and every number in the table is real, measured by actually running the example included in this repository. See [COMMANDS.md § Token Firewall](COMMANDS.md#20-token-firewall) for the full mechanics.
 
-### The gate: `budget.max_tokens` stops the run, not just warns
+### The gate: `budget.max_tokens`
 
 ```json
-// project.json
 { "budget": { "max_tokens": 8000 } }
 ```
 
-If the assembled context exceeds that limit, **Mova stops execution before a single token reaches the model** — from `mova chat`, the `chat_completion` MCP tool, or HTTP, always the same way:
-
-```text
-ERROR
-Current context (14,250 tokens) exceeds the configured limit (8,000).
-Suggestion: Use --focus to reduce the included files.
-```
-
-This turns cost control into an architectural rule, not a habit someone can forget.
+If the assembled context exceeds that limit, Mova stops execution before a single token goes out to the model — from `mova chat`, the `chat_completion` MCP tool, or HTTP, always the same. Cost control becomes an architectural rule, not a habit someone can forget.
 
 ### The report: `mova budget`, zero calls to any provider
 
-`mova budget my-project` calculates, **100% on your machine**, how many tokens the real context (agents + skills + prompt + focus + memory) would use, and how much it would cost across OpenAI, Anthropic, and Google, based on the prices you configure yourself in `config/prices.json`. The report breaks the cost down piece by piece so you know exactly what to trim first:
+`mova budget my-project` calculates, 100% on your own machine, how many tokens the real context would use and what it would cost on OpenAI, Anthropic, and Google, based on `config/prices.json`. It's an estimate computed with [tiktoken-go](https://github.com/tiktoken-go/tokenizer), cross-checked against manually maintained prices — it doesn't replace the real invoice, it's a compass for deciding what to optimize.
 
-```text
-mova budget my-project my-task --focus
-→ mova-budget-report.md
-```
+### The learning loop: every real call refines the estimate
 
-**To be clear:** this is an estimate computed with [tiktoken-go](https://github.com/tiktoken-go/tokenizer) (OpenAI's tokenizer), cross-referenced against manual prices. It doesn't replace the real invoice — it's a compass for deciding what to optimize, and the report itself says so three times.
-
-#### The report, explained simply
-
-When you run the command above, you get a `mova-budget-report.md` file. In plain terms, it tells you three things:
-
-| Report section | What it tells you |
-|---|---|
-| **Token & Cost Breakdown** | How much each piece of your context (agents, skills, prompt, focus, memory) weighs, in tokens and in dollars — so you know what to trim first. |
-| **Budget Limit** | Your configured limit vs. what you're actually using, in tokens and as a percentage. |
-| **Historical Token Accuracy** | How close your local estimator gets to reality, measured against your own past real calls to each provider. |
-
-Real example (trimmed from an actual case): a project with a 5,000-token limit uses 1,207 tokens (24.1% of the limit) and would cost between USD 0.0015 and USD 0.0060 depending on the provider — a fraction of a cent. With that, you already know, **before spending anything**, whether to send it to OpenAI, Anthropic, or Google, and how much headroom you have before hitting the limit.
-
-### The learning loop: every real call sharpens the estimate
-
-This is likely the single most important feature in Tokenomics — and the one most worth understanding in depth.
-
-**What gets saved, and where.** Every time `mova chat` or the `chat_completion` MCP tool makes a real call to a Cloud provider (Anthropic, OpenAI, or Google), the API response comes back with a usage field indicating how many tokens the provider actually counted — not an estimate, the exact number you get billed for. Mova takes that real number, together with the local estimate it had computed with `tiktoken-go` *before* the request was sent, and adds both to two running totals stored in a local file inside your project: `mova-token-history.json`. **It never stores the content, the prompts, or the responses** — only two numbers per provider:
-
-```json
-{ "anthropic": { "total_local_tokens": 120000, "total_api_tokens": 122760 } }
-```
-
-**How the deviation is calculated.** With those two running totals, the formula is simple and fully transparent — no black box:
-
-```text
-deviation % = (total_api_tokens − total_local_tokens) / total_local_tokens × 100
-```
-
-With the numbers above: `(122,760 − 120,000) / 120,000 × 100 = +2.3%`. In other words: for *this specific project*, Mova's local estimator underestimates real Anthropic usage by 2.3%, on average.
-
-**Why it's a running total instead of a call-by-call log.** Every real call you make adds to those two totals, so the deviation shown isn't based on the last request alone (which can be noisy: a very short prompt, an unusual case), but is a weighted average across all your accumulated real usage. The more real calls you make, the sharper — and more reliable — the number becomes for that specific project, with its own language mix, code, and context density.
-
-**Example with Google (taken straight from this project's own report):**
-
-```json
-{ "google": { "total_local_tokens": 1205, "total_api_tokens": 1201 } }
-```
-
-`(1,201 − 1,205) / 1,205 × 100 = −0.33%` → that's exactly how `mova budget` arrives at the **"−0.3%"** shown in the *Historical Token Accuracy* section of the report. It's not a made-up figure or a generic benchmark pulled from the internet: it's direct math on your own calls.
-
-**How the file evolves over time.** As more real calls accumulate, the deviation stops jumping around and settles into a reliable number:
-
-| After... | `total_local_tokens` | `total_api_tokens` | Accumulated deviation |
-|---|---|---|---|
-| 1st real call | 1,000 | 1,030 | +3.0% |
-| 5 real calls | 5,400 | 5,505 | +1.9% |
-| 20 real calls | 21,800 | 22,190 | +1.8% |
-
-**What Mova does with that number.** `mova budget` uses this accumulated deviation to show you, alongside every new estimate, how far off it might be from reality — and over time it tells you, for that specific project, whether your estimator tends to run low or high with each provider, so you can set `budget.max_tokens` with a real margin instead of guessing blind.
-
-**What happens if you've never called a real provider.** If `total_local_tokens` is 0 (you've never made a real call with `mova chat` to that provider), the report shows `No historical data` — Mova doesn't invent a deviation without real data behind it.
-
-### The automatic cleanup: deduplication across the whole context
-
-If a paragraph got copy-pasted into two agents, or repeats between a skill and a prompt, Mova detects it (identical text only, never code/SQL/JSON) and keeps it just once:
-
-```text
-[Dedup] Removed 3 duplicated paragraphs (~450 tokens saved).
-```
-
-### In one sentence
-
-In the cloud, excess context means a bigger bill. Locally, excess context means the model silently truncates or degrades. Same problem, two different costs — and Mova applies the same control mechanism to both: measure before spending, stop if it's over, and learn from every real call.
-
-More detail and full examples in [COMMANDS.en.md § mova budget](COMMANDS.en.md#mova-budget--local-token-and-cost-estimation).
+Every time a real call reaches a provider, Mova compares the local estimate against the real count the API returns, and stores that deviation in `mova-token-history.json` — never the content, just two numbers per provider. Over time, the estimate calibrates specifically to each project: its language mix, its code, its documents. See [COMMANDS.md § mova budget](COMMANDS.md#15-tokenomics--mova-budget) for the full mechanics with real examples.
 
 ---
 
-## 6. What the CLI brings
-
-- **`/save`** — one single command to create or edit any file or folder from the chat. `/save "report.docx"` saves the model's last reply there; the real format (`.md`, `.docx`, `.pdf`, `.xlsx`, `.svg`, source code, ~20 more extensions) is chosen purely by the extension. Same behavior via MCP (`save`) and HTTP (`POST /save`).
-- **Natural language in chat** — type *"generate the report at docs/output.pdf"* and it just happens, no commands needed. See [COMMANDS.en.md § natural language](COMMANDS.en.md#creating-files-by-talking-natural-language-in-chat).
-- **Office documents and media** — real `.docx`, `.xlsx`, `.pdf` (no external dependencies, just Go's standard library), native SVG, and images via a local diffusion model.
-- **`mova chat`** — talk to Ollama, LM Studio, vLLM, OpenAI, Anthropic, or Google from the terminal, with the same context always injected as the system prompt.
-- **`mova budget`** — see section 5.
-
----
-
-## 7. Quick Installation & Test (2 Minutes)
-
-You can install and start using **mova** in just a few minutes using whichever method you prefer.
-
-### Option A — Automatic Installer (Recommended)
-
-1. Go to the `installers/` folder in the repository.
-2. Run the installer for your operating system:
-
-| Operating System | Installer |
-|------------------|-----------|
-| Windows | `install.bat` |
-| macOS | `install.command` |
-| Linux | `install.sh` |
-
-The installer will:
-
-- Build the executable.
-- Install it on your system.
-- Automatically configure your **PATH**.
-
-Once the installation is complete, open any terminal (CMD, PowerShell, Git Bash, Bash, Zsh, etc.) and run:
-
-```bash
-mova run local-tests
-```
-
-You can also run:
-
-```bash
-mova
-```
-
-or launch the interactive interface:
-
-```bash
-mova ui
-```
-
----
-
-### Option B — Using the Makefile (Developers)
-
-If you already have **Go** and **make** installed:
-
-**Install globally:**
-
-```bash
-make install
-mova run local-tests
-```
-
-**Build locally only (`dist/`):**
-
-```bash
-make build
-./dist/mova run local-tests
-```
-
-**Build binaries for all supported platforms:**
-
-```bash
-make build-all
-```
-
----
-
-### Option C — Manual Build
-
-If you prefer to build directly with Go:
-
-```bash
-go build -o mova ./src/cli
-./mova run local-tests
-```
-
----
-
-### Working with Projects Located Anywhere
-
-Your project does **not** need to be inside the **mova** repository.
-
-The `repo` command accepts absolute paths, allowing you to work with projects located on:
-
-- Another drive (Windows).
-- Another mount point (Linux/macOS).
-- Any directory on your system.
-
-The installers automatically configure everything so **mova** works from any project location without additional setup.
-
-> See **COMMANDS.md** → **Working Across Different Drives/Locations** for more details.
----
-
-## 8. Go deeper
-
-| I want to... | Document |
-|---|---|
-| See every command (memory, Focus, MCP, HTTP, tokenomics) | [COMMANDS.en.md](COMMANDS.en.md) |
-| Read the full spec that models follow | [workflow.md](../../../workflow.md) |
-| Understand the source code (Resolvers, Adapters, how to extend it) | [SOURCE.md](../SOURCE.md) |
-
----
-
----
-
-## 9. Job Engine, Cron & Multiagent
+## 8. Job Engine, Cron & Multiagent
 
 ### Scheduling work: the Job Engine
 
-A project can declare **jobs** in its `project.json` — scheduled,
-unattended runs that build context, save reports, update memory, clean
-up files, and produce budget reports, all on a cron schedule:
+A project can declare **jobs** in its `project.json` — scheduled, unattended runs that assemble context, audit data, save reports, update memory, and generate diagrams, all on a cron schedule:
 
 ```json
 {
   "jobs": [
     {
       "schedule": "0 2 * * *",
-      "tasks": ["auditar-checkout", "auditar-cookies"],
-      "save": "reports/auditoria_{date}.pdf",
+      "tasks": ["audit-checkout", "audit-cookies"],
+      "save": "reports/audit_{date}.pdf",
       "budget": { "focus": true },
-      "memory": "Auditoría de checkout y cookies realizada"
+      "memory": "Checkout and cookies audit completed"
     }
   ]
 }
 ```
 
-Run it on demand with `mova jobs run <project>`, or start the daemon
-that checks every project once a minute with `mova jobs start`. See
-[PROJECT_JSON.md § Jobs](PROJECT_JSON.md#jobs) for every field and
-[COMMANDS.en.md § Jobs](COMMANDS.en.md) for every command.
+Runs on demand with `mova jobs run <project>`, or the daemon that checks every project once a minute starts with `mova jobs start`. See [PROJECT_JSON.md § Jobs](PROJECT_JSON.md#jobs) for every field.
 
-### Understanding `schedule` (Cron)
-
-`schedule` uses standard 5-field cron syntax:
-
-```text
-schedule: "0 2 * * *"
-           │ │ │ │ │
-           │ │ │ │ └─ day of week (0-6, 0 = Sunday, * = every day)
-           │ │ │ └─── month (1-12, * = every month)
-           │ │ └───── day of month (1-31, * = every day)
-           │ └─────── hour (0-23)
-           └───────── minute (0-59)
-```
-
-A few easy examples:
-
-| `schedule` | Runs... |
-|---|---|
-| `"0 2 * * *"` | every day at 2:00 AM |
-| `"30 8 * * 1"` | every Monday at 8:30 AM |
-| `"0 0 1 * *"` | at midnight on the 1st of every month |
-| `"*/15 * * * *"` | every 15 minutes |
-| `"0 9-17 * * 1-5"` | every hour, 9 AM to 5 PM, Monday through Friday |
+`schedule` uses standard 5-field cron syntax (minute, hour, day of month, month, day of week) — for example, `"0 2 * * *"` runs daily at 2:00 AM, and `"*/15 * * * *"` runs every 15 minutes.
 
 ### Multiagent: several agents under one group
 
-A directory under `projects/` can hold several independent agents,
-each an ordinary project, orchestrated by a parent `config.json`:
+A directory under `projects/` can hold several independent agents, each an ordinary project, orchestrated by a parent `config.json`:
 
 ```text
 projects/
-    ventas_online/
+    online_sales/
         config.json          ← the orchestrator
-        vendedor/project.json
-        atencionCliente/project.json
-        soporte/project.json
+        salesperson/project.json
+        customerCare/project.json
+        support/project.json
 ```
 
 ```bash
-mova agents run ventas_online          # every agent, sequentially
-mova agents run ventas_online vendedor # just one agent
+mova agents run online_sales          # every agent, in sequence
+mova agents run online_sales salesperson  # a single agent
+mova run online_sales --diagram       # the whole group's diagram
 ```
 
-Each agent keeps its own memory, budget, focus, tasks, and jobs — see
-[PROJECT_JSON.md § Multiagent](PROJECT_JSON.md#multiagent-agent-groups).
+Each agent keeps its own memory, budget, focus, tasks, jobs, and — as shown in section 1 — its own data-protection status. See [PROJECT_JSON.md § Multiagent](PROJECT_JSON.md#multiagent-agent-groups).
 
 ---
 
-## 10. Visual interface — `mova ui`
+## 9. Visual interface — `mova ui`
 
-Everything above is also reachable from a simple, lightweight terminal
-interface:
+Everything above can also be used from a simple, lightweight terminal interface:
 
 ```bash
 mova ui
 ```
 
-One single command, navigated with the arrow keys and Enter: chat,
-`project.json`, `workflow.md`, model configuration, logging, memory,
-jobs, multiagent, reports, and logs, all from the same place — without
-adding a new command per feature. The interface replaces nothing: it
-calls the exact same components `mova chat`, `mova jobs run`, and
-`mova agents run` already use. See
-[COMMANDS.md § Visual interface](COMMANDS.md#19-visual-interface--mova-ui)
-for the full detail.
+One command, navigated with arrows and Enter: chat, `project.json`, `workflow.md`, model configuration, memory, jobs, multiagent groups, search with exact file/line navigation, and diagrams — all from the same place, no new command per feature. The interface replaces nothing: it calls the exact same components `mova chat`, `mova jobs run`, and `mova run --diagram` already use. See [COMMANDS.md § Visual interface](COMMANDS.md#19-visual-interface--mova-ui).
+
+---
+
+## 10. Do I need the CLI?
+
+| Situation | CLI? |
+|---|---|
+| Already using Claude Code, Cursor, or another agent that reads the repository | **No.** The agent follows `workflow.md` directly. |
+| Want to paste the context into a web chat (Claude.ai, ChatGPT, Gemini) | **Yes.** `mova run` delivers it ready to copy. |
+| Need to audit what personal data travels to the model | **Yes.** `mova run --diagram` shows it in one image. |
+| Want to call a model's API from a script | **Yes.** Faster than making the model read every file. |
+| Want to run a local model (Ollama) | **Yes.** `mova run ... \| ollama run model` in one line. |
+| Want to expose context over HTTP or as an MCP server | **Yes.** `mova http` or `mova mcp start`. |
+
+With or without the CLI, the source of truth never changes: `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, `memory.md`. Without the CLI, convenience is lost; with it, speed, automatic auditing, and data protection by default are gained — never the other way around.
+
+---
+
+## 11. Go deeper
+
+| Looking for... | Document |
+|---|---|
+| Every command (memory, Focus, MCP, HTTP, diagrams, tokenomics) | [COMMANDS.md](COMMANDS.md) |
+| The full specification models follow | [workflow.md](../../../workflow.md) |
+| The source code (Resolvers, Adapters, how to extend it) | [SOURCE.md](../SOURCE.md) |
 
 ---
 
 > **Operational knowledge belongs to the project. Reasoning belongs to the model.**
 >
-> Mova Context is the convention formed by `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, and `memory.md`. The CLI just automates work on top of that convention — it never replaces it.
+> Mova Context is the convention formed by `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, and `memory.md`. The CLI only automates working with that convention — it never replaces it.

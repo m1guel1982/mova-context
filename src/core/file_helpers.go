@@ -103,6 +103,19 @@ func excerpt(content, q string) string {
 	return "..." + content[s:e] + "..."
 }
 
+// firstMatchLine returns the 1-indexed line number of q's first
+// occurrence in content (both already lowercased by the caller), or 0
+// if q only matched the file's Name and never appears in the body —
+// see SearchResult.Line's own doc comment for what a 0 means to a
+// caller deciding whether there's a line to jump to at all.
+func firstMatchLine(content, q string) int {
+	idx := strings.Index(content, q)
+	if idx < 0 {
+		return 0
+	}
+	return strings.Count(content[:idx], "\n") + 1
+}
+
 func score(name, content, q string) float64 {
 	s := 0.0
 	if strings.Contains(name, q) {

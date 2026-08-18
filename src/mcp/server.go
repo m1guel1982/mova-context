@@ -174,6 +174,8 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 		result, err = chatCompletionTool(adapter, root, args)
 	case "estimate_budget":
 		result, err = budgetTool(adapter, root, args)
+	case "generate_diagram":
+		result, err = diagramTool(adapter, root, args)
 	case "list_jobs":
 		result, err = listJobsTool(root, args)
 	case "run_job":

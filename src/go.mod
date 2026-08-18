@@ -14,6 +14,15 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 )
 
+// PNG diagram export (mova.local/diagram, see COMMANDS.md § Diagram):
+// pure-Go SVG rasterization, no cgo, added specifically for this
+// feature — see diagram/png.go's header for why this pair and not
+// something else.
+require (
+	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
+	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
+)
+
 require (
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
@@ -47,3 +56,5 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.22.0 // indirect
 )
+
+require golang.org/x/image v0.0.0-20260811175644-3ebddc7c54bd // indirect (github.com/srwiley/oksvg's math/fixed + colornames)
