@@ -47,10 +47,6 @@ jobs:
           echo "Trigger: ${{ github.event_name }}"
           echo "==================================================="
 
-          # Asegura traer la última versión del historial desde git remoto antes de ejecutar Python
-          git fetch origin main || true
-          git checkout origin/main -- .github/metrics/clones_history.json || true
-
           ENDPOINT="${TARGET_URL:-https://api.github.com/repos/${{ github.repository }}/traffic/clones}"
           echo "Endpoint a consultar: $ENDPOINT"
           HTTP_STATUS=$(curl -s -o temp_metrics.json -w "%{http_code}" \
@@ -199,7 +195,7 @@ jobs:
           while [ $attempt -le $MAX_RETRIES ]; do
             echo "Intento de sincronización/push #$attempt de $MAX_RETRIES..."
 
-            if git pull --rebase origin main && git push origin HEAD:main; then
+            if git pull --rebase -X ours origin main && git push origin HEAD:main; then
               echo "Push exitoso en el intento #$attempt."
               success=true
               break
