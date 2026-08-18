@@ -170,7 +170,7 @@ jobs:
             echo "Sin cambios para subir."
           else
             git commit -m "chore: update traffic metrics [skip ci]"
-            git pull --rebase 
-            git push
+            git pull --rebase public main
+            git push public main
           fi
 Footer
