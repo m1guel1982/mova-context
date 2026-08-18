@@ -1,80 +1,80 @@
 {
-  "total_clones": 207,
-  "total_uniques": 134,
+  "total_clones": 148,
+  "total_uniques": 94,
   "days_tracked": 14,
   "first_recorded": "2026-08-04T00:00:00Z",
-  "last_updated": "2026-08-18T15:26:07Z",
-  "last_sync_status": "success at 2026-08-18T15:26:07Z",
+  "last_updated": "2026-08-18T15:31:58Z",
+  "last_sync_status": "success at 2026-08-18T15:31:58Z",
   "clones": {
     "2026-08-04": {
       "count": 0,
       "uniques": 0,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-05": {
       "count": 33,
       "uniques": 21,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-06": {
       "count": 16,
       "uniques": 8,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-07": {
       "count": 16,
       "uniques": 8,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-08": {
       "count": 38,
       "uniques": 21,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-09": {
       "count": 6,
       "uniques": 5,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-10": {
       "count": 5,
       "uniques": 5,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-11": {
       "count": 6,
       "uniques": 5,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-12": {
       "count": 6,
       "uniques": 5,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-13": {
       "count": 4,
       "uniques": 3,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-14": {
       "count": 5,
       "uniques": 4,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-15": {
       "count": 6,
       "uniques": 4,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-16": {
       "count": 4,
       "uniques": 3,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     },
     "2026-08-17": {
       "count": 3,
       "uniques": 2,
-      "synced_at": "2026-08-18T15:26:07Z"
+      "synced_at": "2026-08-18T15:31:58Z"
     }
   }
 }
