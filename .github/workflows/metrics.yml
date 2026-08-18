@@ -8,7 +8,7 @@ name: Metrics Sync & Diagnostics
 
 on:
   schedule:
-    - cron: '17 10 * * *'   # 07:17 America/Santiago = 10:17 UTC (CLT, UTC-3). Ver nota abajo sobre horario de verano.
+    - cron: '17 10 * * *'   # 07:17 America/Santiago = 10:17 UTC (CLT, UTC-3).
   workflow_dispatch:
 
 concurrency:
@@ -185,30 +185,20 @@ jobs:
 
           git commit -m "chore: update traffic metrics [skip ci]"
 
-          # Reintenta en caso de que otro push (manual o de otro run) haya
-          # llegado antes al remoto entre el checkout y este push.
           MAX_RETRIES=6
           attempt=1
           success=false
 
           while [ $attempt -le $MAX_RETRIES ]; do
             echo "Intento de sincronización/push #$attempt de $MAX_RETRIES..."
-            git fetch origin main
 
-            if git rebase origin/main; then
-              if git push origin HEAD:main; then
-                echo "Push exitoso en el intento #$attempt."
-                success=true
-                break
-              else
-                echo "Push rechazado (probable carrera con otro push). Reintentando..."
-              fi
-            else
-              echo "Rebase falló (conflicto real), abortando rebase."
-              git rebase --abort || true
-              # Un conflicto real de merge no se arregla reintentando igual;
-              # se corta el loop para que quede visible en Actions.
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              echo "Push exitoso en el intento #$attempt."
+              success=true
               break
+            else
+              echo "Rebase o push rechazado. Reintentando..."
+              git rebase --abort || true
             fi
 
             attempt=$((attempt + 1))
@@ -216,7 +206,7 @@ jobs:
           done
 
           if [ "$success" != "true" ]; then
-            echo "No se pudo pushear tras $MAX_RETRIES intentos (o hubo un conflicto real)."
+            echo "No se pudo pushear tras $MAX_RETRIES intentos."
             echo "El próximo run programado volverá a recalcular el historial completo, así que no se pierden datos."
             exit 1
           fi
