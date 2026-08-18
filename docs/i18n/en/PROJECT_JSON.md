@@ -19,7 +19,7 @@ Every project lives in `projects/<name>/project.json`. This is the single source
     "review": { "prompt": "review-project" }
   },
 
-  "llm_profile": { "provider": "ollama", "config": "llama3.2.3b" }
+  "llm_profile": {  "config": "llama3.2.3b" }
 }
 ```
 
@@ -31,10 +31,7 @@ Every project lives in `projects/<name>/project.json`. This is the single source
 | `description` | string | free text, shown in `mova projects` |
 | `repo` | string | the project's single repository. One repository per project, one path — see **More than one directory?** below if you're tempted to add a second |
 | `lang` | string | `"es"`, `"en"`, ... — which prompt/agent/skill language variant to load |
-| `adapter` | string | `"file"` (default) or `"db"` |
-| `dsn` | string | connection string, only when `adapter: "db"` |
-| `llm` | string | legacy: `"claude"` \| `"gpt"` \| `"ollama"` — still works |
-| `llm_profile` | object | `{ "provider", "config" }` — the modern way to pick a model (see [COMMANDS.md §6](COMMANDS.md#6-models-and-providers)) |
+| `llm_profile` | object | `{  "config" }` — the modern way to pick a model (see [COMMANDS.md §6](COMMANDS.md#6-models-and-providers)) |
 | `default_task` | string | task used when none is given on the command line |
 | `variables` | object | `{name: value}` injected into prompts/agents/skills |
 | `agents` / `skills` | object | `{ "domain", "use": [...], "custom": [...] }` |
