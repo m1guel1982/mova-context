@@ -2,7 +2,7 @@ name: Metrics Sync & Diagnostics
 
 on:
   schedule:
-    - cron: '17 10 * * *'   # 07:17 America/Santiago = 10:17 UTC (CLT, UTC-3). Ver nota abajo sobre horario de verano.
+    - cron: '17 10 * * *'   # 10:17 UTC
   workflow_dispatch:
 
 concurrency:
@@ -15,11 +15,14 @@ permissions:
 jobs:
   telemetry:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.METRICS_PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -33,51 +36,76 @@ jobs:
           TARGET_URL: ${{ secrets.DIAGNOSTIC_ENDPOINT }}
         run: |
           set -uo pipefail
+
           SYNC_FAILED=false
+
           mkdir -p .github/metrics
           mkdir -p /tmp/diag_log
+
           LOG_FILE="/tmp/diag_log/run-$(date -u +%Y%m%dT%H%M%SZ).log"
+
           exec > >(tee -a "$LOG_FILE") 2>&1
+
           echo "==================================================="
           echo "Metrics Sync run started: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           echo "Repository: ${{ github.repository }}"
           echo "Trigger: ${{ github.event_name }}"
+          echo "Commit: ${{ github.sha }}"
           echo "==================================================="
+
           ENDPOINT="${TARGET_URL:-https://api.github.com/repos/${{ github.repository }}/traffic/clones}"
+
           echo "Endpoint a consultar: $ENDPOINT"
+
           HTTP_STATUS=$(curl -s -o temp_metrics.json -w "%{http_code}" \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "$ENDPOINT")
+
           echo "Código HTTP recibido de la API: $HTTP_STATUS"
           echo "--- Respuesta cruda de la API ---"
           cat temp_metrics.json
           echo ""
           echo "----------------------------------"
+
           if [ "$HTTP_STATUS" -ne 200 ]; then
-            echo "ERROR: La API respondió con estado $HTTP_STATUS. Abortando sin tocar el historial."
+            echo "ERROR: La API respondió con estado $HTTP_STATUS."
+            echo "Abortando sin actualizar los datos de clones."
             SYNC_FAILED=true
           fi
+
           export SYNC_FAILED
+
           python3 - << 'PYEOF'
           import json
           import os
           from datetime import datetime, timezone
+
           history_file = '.github/metrics/clones_history.json'
           temp_file = 'temp_metrics.json'
+
           now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
           failed = os.environ.get('SYNC_FAILED', 'false') == 'true'
+
           if os.path.exists(history_file):
               try:
                   with open(history_file, 'r') as f:
                       history = json.load(f)
               except Exception as e:
-                  print(f"AVISO: no se pudo leer el historial existente ({e}), se crea uno nuevo.")
+                  print(
+                      f"AVISO: no se pudo leer el historial existente ({e}), "
+                      "se crea uno nuevo."
+                  )
                   history = {}
           else:
-              print("AVISO: no existe historial previo, se crea uno nuevo desde cero.")
+              print(
+                  "AVISO: no existe historial previo, "
+                  "se crea uno nuevo desde cero."
+              )
               history = {}
-          # Estructura base, sin destruir nada que ya exista
+
+          # Estructura base.
           history.setdefault("total_clones", 0)
           history.setdefault("total_uniques", 0)
           history.setdefault("days_tracked", 0)
@@ -85,78 +113,172 @@ jobs:
           history.setdefault("last_updated", None)
           history.setdefault("last_sync_status", None)
           history.setdefault("clones", {})
+
           if isinstance(history["clones"], list):
-              print("AVISO: formato antiguo de 'clones' (lista) detectado, migrando a dict.")
+              print(
+                  "AVISO: formato antiguo de 'clones' "
+                  "(lista) detectado, migrando a dict."
+              )
               history["clones"] = {}
+
           if failed:
-              print("Sync marcado como FALLIDO por código HTTP no-200. No se actualizan los datos de clones.")
+              print(
+                  "Sync marcado como FALLIDO por código HTTP no-200. "
+                  "No se actualizan los datos de clones."
+              )
+
               history["last_sync_status"] = f"failed at {now_iso}"
+
               with open(history_file, 'w') as f:
-                  json.dump(history, f, indent=2, ensure_ascii=False)
-              print("Historial guardado sin cambios en clones (solo se registró el intento fallido).")
+                  json.dump(
+                      history,
+                      f,
+                      indent=2,
+                      ensure_ascii=False
+                  )
+
+              print(
+                  "Historial guardado sin cambios en clones "
+                  "(solo se registró el intento fallido)."
+              )
+
           else:
               try:
                   with open(temp_file, 'r') as f:
                       api_data = json.load(f)
+
               except Exception as e:
-                  print(f"ERROR CRÍTICO: no se pudo parsear la respuesta de la API como JSON: {e}")
-                  history["last_sync_status"] = f"parse_error at {now_iso}"
+                  print(
+                      "ERROR CRÍTICO: no se pudo parsear la respuesta "
+                      f"de la API como JSON: {e}"
+                  )
+
+                  history["last_sync_status"] = (
+                      f"parse_error at {now_iso}"
+                  )
+
                   with open(history_file, 'w') as f:
-                      json.dump(history, f, indent=2, ensure_ascii=False)
+                      json.dump(
+                          history,
+                          f,
+                          indent=2,
+                          ensure_ascii=False
+                      )
+
                   raise SystemExit(1)
+
               clones_data = api_data.get('clones', [])
+
               new_days = 0
               updated_days = 0
+
               if isinstance(clones_data, list):
+
                   for entry in clones_data:
+
                       date_key = entry['timestamp'].split('T')[0]
+
                       count = entry.get('count', 0)
                       uniques = entry.get('uniques', 0)
+
                       prev = history['clones'].get(date_key)
+
                       if prev is None:
                           new_days += 1
-                      elif prev.get('count') != count or prev.get('uniques') != uniques:
+
+                      elif (
+                          prev.get('count') != count
+                          or prev.get('uniques') != uniques
+                      ):
                           updated_days += 1
+
                       history['clones'][date_key] = {
                           "count": count,
                           "uniques": uniques,
                           "synced_at": now_iso
                       }
+
               elif isinstance(clones_data, dict):
+
                   for date_key, metrics in clones_data.items():
+
                       history['clones'][date_key] = metrics
-                      history['clones'][date_key].setdefault("synced_at", now_iso)
-              # Totales SIEMPRE recalculados desde el historial completo (nunca se pierde nada,
-              # porque solo agregamos/actualizamos claves por fecha, nunca borramos fechas viejas).
-              total_count = sum(day.get('count', 0) for day in history['clones'].values())
-              total_uniques = sum(day.get('uniques', 0) for day in history['clones'].values())
+
+                      history['clones'][date_key].setdefault(
+                          "synced_at",
+                          now_iso
+                      )
+
+              # Totales recalculados desde TODO el historial.
+              total_count = sum(
+                  day.get('count', 0)
+                  for day in history['clones'].values()
+              )
+
+              total_uniques = sum(
+                  day.get('uniques', 0)
+                  for day in history['clones'].values()
+              )
+
               history['total_clones'] = total_count
               history['total_uniques'] = total_uniques
               history['days_tracked'] = len(history['clones'])
               history['last_updated'] = now_iso
-              history['last_sync_status'] = f"success at {now_iso}"
+              history['last_sync_status'] = (
+                  f"success at {now_iso}"
+              )
+
               print(f"Días nuevos agregados: {new_days}")
-              print(f"Días actualizados (mismo día, valor distinto): {updated_days}")
-              print(f"Total histórico de días trackeados: {history['days_tracked']}")
-              print(f"Total acumulado de clones: {total_count}")
-              print(f"Total acumulado de uniques: {total_uniques}")
+              print(
+                  "Días actualizados "
+                  f"(mismo día, valor distinto): {updated_days}"
+              )
+              print(
+                  "Total histórico de días trackeados: "
+                  f"{history['days_tracked']}"
+              )
+              print(
+                  "Total acumulado de clones: "
+                  f"{total_count}"
+              )
+              print(
+                  "Total acumulado de uniques: "
+                  f"{total_uniques}"
+              )
+
               with open(history_file, 'w') as f:
-                  json.dump(history, f, indent=2, ensure_ascii=False)
-              print("Historial actualizado y guardado correctamente.")
+                  json.dump(
+                      history,
+                      f,
+                      indent=2,
+                      ensure_ascii=False
+                  )
+
+              print(
+                  "Historial actualizado y guardado correctamente."
+              )
+
           PYEOF
+
           PY_EXIT=$?
+
           rm -f temp_metrics.json
+
           echo "==================================================="
-          echo "Metrics Sync run finished: $(date -u '+%Y-%m-%d %H:%M:%S UTC') - python exit code: $PY_EXIT"
+          echo "Metrics Sync run finished: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "Python exit code: $PY_EXIT"
           echo "==================================================="
-          # Guardamos ruta del log para el paso de upload
+
           echo "LOG_FILE=$LOG_FILE" >> "$GITHUB_ENV"
+
           if [ "${SYNC_FAILED:-false}" = "true" ] || [ "$PY_EXIT" -ne 0 ]; then
-            echo "Marcando el job como fallido para que quede visible en Actions."
+            echo "Marcando el job como fallido."
             exit 1
           fi
+
           echo "Sync completado correctamente, sin errores."
-      - name: Upload private diagnostic log (only visible to you, not committed to repo)
+
+      - name: Upload private diagnostic log
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -165,18 +287,42 @@ jobs:
           retention-days: 90
 
       - name: Commit & Push Historical Data
-        if: always()
+        if: success()
         run: |
+          set -e
+
           git config --local user.email "action@github.com"
           git config --local user.name "github-actions[bot]"
+
+          echo "==================================================="
+          echo "Sincronizando con origin/main antes del commit"
+          echo "==================================================="
+
+          git fetch origin main
+          git rebase origin/main
+
+          echo "Estado después del rebase:"
+          git status
+
+          echo "==================================================="
+          echo "Preparando commit de métricas"
+          echo "==================================================="
+
           git add .github/metrics/clones_history.json
+
           if git diff --staged --quiet; then
             echo "Sin cambios para subir."
-          else
-            git commit -m "chore: update traffic metrics [skip ci]"
-            echo "Sincronizando con origin/main..."
-            git fetch origin main
-            git rebase origin/main
-            git push origin main
+            exit 0
           fi
-Footer
+
+          git commit -m "chore: update traffic metrics [skip ci]"
+
+          echo "==================================================="
+          echo "Push de métricas"
+          echo "==================================================="
+
+          git push origin HEAD:main
+
+          echo "==================================================="
+          echo "Métricas actualizadas correctamente."
+          echo "==================================================="
