@@ -1,7 +1,5 @@
 name: Metrics Sync & Diagnostics
 
-# IMPORTANTE: este archivo debe vivir en .github/workflows/metrics.yml
-
 on:
   schedule:
     - cron: '17 10 * * *'   # 07:17 America/Santiago = 10:17 UTC
@@ -73,24 +71,27 @@ jobs:
           now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
           failed = os.environ.get('SYNC_FAILED', 'false') == 'true'
 
-          history = {}
+          history = {
+              "total_clones": 0,
+              "total_uniques": 0,
+              "days_tracked": 0,
+              "first_recorded": now_iso,
+              "last_updated": None,
+              "last_sync_status": None,
+              "clones": {}
+          }
+
           if os.path.exists(history_file):
               try:
                   with open(history_file, 'r') as f:
-                      history = json.load(f)
-                  print(f"Historial previo cargado exitosamente. Días registrados actualmente: {len(history.get('clones', {}))}")
+                      loaded_history = json.load(f)
+                      if isinstance(loaded_history, dict):
+                          history.update(loaded_history)
+                  print(f"Historial previo cargado exitosamente. Días registrados antes del sync: {len(history.get('clones', {}))}")
               except Exception as e:
                   print(f"AVISO: no se pudo leer el historial existente ({e}), se mantendrá estructura base.")
 
-          history.setdefault("total_clones", 0)
-          history.setdefault("total_uniques", 0)
-          history.setdefault("days_tracked", 0)
-          history.setdefault("first_recorded", now_iso)
-          history.setdefault("last_updated", None)
-          history.setdefault("last_sync_status", None)
-          history.setdefault("clones", {})
-
-          if isinstance(history["clones"], list):
+          if isinstance(history.get("clones"), list):
               print("AVISO: formato antiguo de 'clones' (lista) detectado, migrando a dict.")
               history["clones"] = {}
 
@@ -114,24 +115,29 @@ jobs:
               new_days = 0
               updated_days = 0
 
-              # PURE MERGE: Se preservan las llaves históricas y solo se actualizan/agregan las de la API
+              # MERGE ACUMULATIVO: Preserva todos los días anteriores y actualiza/agrega los nuevos
+              existing_clones = history.get('clones', {})
+
               if isinstance(clones_data, list):
                   for entry in clones_data:
                       date_key = entry['timestamp'].split('T')[0]
                       count = entry.get('count', 0)
                       uniques = entry.get('uniques', 0)
-                      prev = history['clones'].get(date_key)
+                      prev = existing_clones.get(date_key)
                       if prev is None:
                           new_days += 1
                       elif prev.get('count') != count or prev.get('uniques') != uniques:
                           updated_days += 1
-                      history['clones'][date_key] = {
+
+                      existing_clones[date_key] = {
                           "count": count,
                           "uniques": uniques,
                           "synced_at": now_iso
                       }
 
-              # Recalcular totales sobre la totalidad de claves preservadas
+              history['clones'] = existing_clones
+
+              # Recalcular totales sobre TODOS los días acumulados
               total_count = sum(day.get('count', 0) for day in history['clones'].values())
               total_uniques = sum(day.get('uniques', 0) for day in history['clones'].values())
 
