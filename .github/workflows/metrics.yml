@@ -115,24 +115,35 @@ jobs:
               new_days = 0
               updated_days = 0
 
-              # MERGE ACUMULATIVO: Preserva todos los días anteriores y actualiza/agrega los nuevos
               existing_clones = history.get('clones', {})
 
               if isinstance(clones_data, list):
                   for entry in clones_data:
                       date_key = entry['timestamp'].split('T')[0]
-                      count = entry.get('count', 0)
-                      uniques = entry.get('uniques', 0)
+                      api_count = entry.get('count', 0)
+                      api_uniques = entry.get('uniques', 0)
+
                       prev = existing_clones.get(date_key)
+
                       if prev is None:
                           new_days += 1
-                      elif prev.get('count') != count or prev.get('uniques') != uniques:
-                          updated_days += 1
+                          final_count = api_count
+                          final_uniques = api_uniques
+                          synced_timestamp = now_iso
+                      else:
+                          # ESTRATEGIA MONOTÓNICA: Preserva el valor máximo histórico alcanzado para esa fecha
+                          final_count = max(prev.get('count', 0), api_count)
+                          final_uniques = max(prev.get('uniques', 0), api_uniques)
+                          synced_timestamp = prev.get('synced_at', now_iso)
+
+                          if final_count != prev.get('count') or final_uniques != prev.get('uniques'):
+                              updated_days += 1
+                              synced_timestamp = now_iso
 
                       existing_clones[date_key] = {
-                          "count": count,
-                          "uniques": uniques,
-                          "synced_at": now_iso
+                          "count": final_count,
+                          "uniques": final_uniques,
+                          "synced_at": synced_timestamp
                       }
 
               history['clones'] = existing_clones
@@ -201,7 +212,8 @@ jobs:
           while [ $attempt -le $MAX_RETRIES ]; do
             echo "Intento de sincronización/push #$attempt de $MAX_RETRIES..."
 
-            if git pull --rebase -X ours origin main && git push origin HEAD:main; then
+            # Rebase limpio sin banderas competitivas (-X ours) que destruyan el archivo local
+            if git pull --rebase origin main && git push origin HEAD:main; then
               echo "Push exitoso en el intento #$attempt."
               success=true
               break
