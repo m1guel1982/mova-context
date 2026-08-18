@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"mova.local/core/focus"
+	"mova.local/documents"
 )
 
 type dirEntry struct {
@@ -120,6 +121,36 @@ func readFile(path string) string {
 		return ""
 	}
 	return string(data)
+}
+
+// binaryDocExts are the extensions readFile must NOT return as raw
+// bytes — .docx/.xlsx/.pdf are ZIP/PDF containers, not text, so dumping
+// them verbatim into a focus block previously produced binary garbage
+// in the context instead of the document's actual text. Kept as a
+// small, explicit set (not a general "is this binary?" heuristic) so
+// every plain-text extension (.txt/.md/.json/.log/...) keeps behaving
+// exactly as before.
+var binaryDocExts = map[string]bool{".docx": true, ".xlsx": true, ".pdf": true}
+
+// readFileText is what FileResolver/GlobResolver call instead of
+// readFile for the actual block CONTENT (never for existence checks,
+// which only need "is this readable at all" and stay on readFile) —
+// for .docx/.xlsx/.pdf it extracts the real text layer via
+// mova.local/documents.ReadDocumentLayer (the exact same extraction
+// `read_document_layer`/`mova chat` already use), falling back to
+// readFile for every other extension. A document that fails to extract
+// (corrupted, password-protected, scanned image PDF) returns "" rather
+// than raw bytes, same "never less than empty string" contract readFile
+// already follows.
+func readFileText(path string) string {
+	if binaryDocExts[strings.ToLower(filepath.Ext(path))] {
+		text, err := documents.ReadDocumentLayer(path)
+		if err != nil {
+			return ""
+		}
+		return text
+	}
+	return readFile(path)
 }
 
 // WalkAllFiles expone walkFiles fuera del paquete — usado por el

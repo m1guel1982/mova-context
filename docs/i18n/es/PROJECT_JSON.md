@@ -1,6 +1,6 @@
 # PROJECT.JSON — referencia de campos
 
-Cada proyecto vive en `projects/<nombre>/project.json`. Esta es la única fuente de configuración de ese proyecto — los precios de modelos son lo único que vive en otro lado (`config/prices.json`; ver [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget)).
+Cada proyecto vive en `projects/<nombre>/project.json`. Esta es la única fuente de configuración de ese proyecto — los precios de modelos (`config/prices.json`) y los umbrales del PII Masking opcional (`config/policy.json`) son lo único que vive en otro lado, ya que son configuración global compartida por todos los proyectos (ver [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget) y [COMMANDS.md §20](COMMANDS.md#20-token-firewall)).
 
 ## Ejemplo mínimo
 
@@ -182,8 +182,9 @@ task reemplaza el del proyecto, misma regla que `focus`) siempre aceptó
 Firewall, también acepta cada campo de abajo — un conjunto de etapas
 determinísticas, sin IA, que reducen lo que se envía a un modelo y
 gobiernan cuánto cuesta, corriendo automáticamente antes de ese gate.
-**Cada etapa está habilitada por defecto** — poné el campo
-correspondiente en `false` para desactivar solo esa:
+**Cada etapa está habilitada por defecto, EXCEPTO `pii_masking`** —
+poné el campo correspondiente en `false` (o, en el caso de
+`pii_masking`, en `true` para activarla) para cambiar solo esa etapa:
 
 ```json
 {
@@ -193,6 +194,7 @@ correspondiente en `false` para desactivar solo esa:
     "max_monthly_usd": 15.00,
     "on_exceed": "warn",
     "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "pii_masking": { "enabled": false },
     "cache_hint": true,
     "circuit_breaker": true,
     "token_estimation": true,
@@ -209,6 +211,7 @@ correspondiente en `false` para desactivar solo esa:
 | `max_monthly_usd` | number | ninguno (0 = sin techo) | Circuit Breaker: aborta/avisa si el gasto registrado de este proyecto en el mes calendario actual llega a este monto |
 | `on_exceed` | `"warn"` \| `"abort"` | `"warn"` | Qué hace el Circuit Breaker cuando se supera un límite de arriba |
 | `sanitize` | object | habilitado, conservador | Configuración propia del Sanitizer — ver abajo |
+| `pii_masking` | object | **desactivado** (`{"enabled": false}` o ausente) | Etapa OPCIONAL de pseudonimización estructural de PII (forma de palabra + entropía de Shannon, sin listas de palabras) — poné `{"enabled": true}` para activarla explícitamente en este proyecto. Sus umbrales/pesos viven en `config/policy.json`, no acá. Ver [COMMANDS.md § Token Firewall § PII Masking](COMMANDS.md#token-firewall) y `skills/base/i18n/es/compliance/pii-context-reduction.md` — **no** es una garantía de anonimización legal ni de cumplimiento de la Ley 21.719/GDPR |
 | `cache_hint` | boolean | `true` | Habilita el Cache Layout Guard (reordena el system prompt para el prompt-caching del proveedor) — poné `false` para desactivarlo |
 | `circuit_breaker` | boolean | `true` | Habilita el mecanismo del Circuit Breaker en sí, independiente de si hay un límite configurado — poné `false` para desactivarlo aunque los límites sigan configurados |
 | `token_estimation` | boolean | `true` | Usa el tokenizador real (tiktoken) — poné `false` para una aproximación rápida de caracteres/4 (es una decisión de rendimiento, no de ahorro) |
@@ -330,3 +333,24 @@ jobs run ventas_online/vendedor`, ...). `mova agents run
 ventas_online` ejecuta todos los agentes secuencialmente, a través del
 mismo pipeline de ensamblado+Budget-gate que usa `mova run` para
 cualquier proyecto — ver COMMANDS.md § Multiagente.
+
+## Diagram (opcional)
+
+Preferencias del diagrama visual (`mova run <proyecto> --diagram`) —
+ver [COMMANDS.md § Diagramas visuales](COMMANDS.md#21-diagramas-visuales--mova-run-proyecto---diagram)
+para el comando completo. Ausente = se usan los valores por defecto
+(`verbose`, exportar a `svg`).
+
+```json
+{
+  "diagram": {
+    "detail_level": "simple",
+    "export_formats": ["svg", "png"]
+  }
+}
+```
+
+| Campo | Tipo | Por defecto | Qué hace |
+|---|---|---|---|
+| `detail_level` | `"simple"` \| `"verbose"` | `"verbose"` | Nivel de detalle del diagrama — `--diagram` en la CLI puede pisar este valor por corrida |
+| `export_formats` | array de strings | `["svg"]` | Formatos por defecto cuando `mova run --diagram` se llama sin `--export` |

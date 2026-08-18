@@ -44,6 +44,22 @@ type Project struct {
 	// that reads this field and PROJECT_JSON.md § Jobs for the full
 	// spec. Empty/omitted = no scheduled jobs for this project.
 	Jobs []JobSpec `json:"jobs,omitempty"`
+	// Diagram: optional visual-diagram preferences (see
+	// mova.local/diagram and `mova run <project> --diagram`). Nil/
+	// absent = every default (verbose detail, svg export) applies —
+	// same "declare nothing, get the safe default" rule every other
+	// optional block in this struct follows.
+	Diagram *DiagramConfig `json:"diagram,omitempty"`
+}
+
+// DiagramConfig maps project.json's optional "diagram" object — see
+// mova.local/diagram.BuildDiagram, which reads DetailLevel (CLI's
+// --diagram flag can still override this per-run) and ExportFormats
+// (the default format list when `mova run <project> --diagram` is
+// given without --export).
+type DiagramConfig struct {
+	DetailLevel   string   `json:"detail_level,omitempty"`   // "simple" | "verbose" (default "verbose")
+	ExportFormats []string `json:"export_formats,omitempty"` // e.g. ["svg"], ["svg","png","pdf"] — default ["svg"] when both this and --export are absent
 }
 
 // JobSpec maps one entry of project.json's "jobs" array. Kept in package
@@ -149,6 +165,14 @@ type SearchResult struct {
 	Name    string
 	Excerpt string
 	Score   float64
+	// Path and Line let a caller navigate to the EXACT place a match
+	// was found, not just know that it exists — see mova.local/cli's
+	// tui_search.go, which opens Path in the same file viewer/jumper
+	// tui_fileview.go's ctrl+f already uses, landing directly on Line.
+	// Absolute path; Line is 1-indexed, 0 if the match was only in the
+	// file's Name (no in-content line to point to).
+	Path string
+	Line int
 }
 
 // ArchiveConfig maps project.json "archive" block.

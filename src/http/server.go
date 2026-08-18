@@ -175,6 +175,41 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 		w.Write(responseBytes)
 	})
 
+	mux.HandleFunc("/diagram", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			mcpErrorHTTP(w, -32700, "parse error", nil)
+			return
+		}
+		// Body: {"project": "...", "task": "...", "export": "svg,png,pdf",
+		// "path": "...", "detail": "simple"|"verbose"}. Same
+		// reexpressed-as-tools/call convention as every endpoint above —
+		// runs through mcp.Process → executeTool → "generate_diagram" →
+		// mova.local/diagram, the exact same engine `mova run --diagram`
+		// and MCP's own generate_diagram tool use. "origin" is set to
+		// "API HTTP" here, server-side, overriding anything the caller
+		// sent — see mcp/diagram_tool.go's own doc comment on why this
+		// is the one door that must inject it explicitly rather than
+		// rely on generate_diagram's default.
+		if args == nil {
+			args = map[string]any{}
+		}
+		args["origin"] = "API HTTP"
+		req := mcp.Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage("1"),
+			Method:  "tools/call",
+			Params:  map[string]any{"name": "generate_diagram", "arguments": args},
+		}
+		responseBytes := mcp.Process(adapter, root, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseBytes)
+	})
+
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3"})

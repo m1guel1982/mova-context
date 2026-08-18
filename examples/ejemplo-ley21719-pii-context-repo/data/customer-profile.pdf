@@ -1,0 +1,58 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2078 >>
+stream
+BT /F2 22 Tf 56 740 Td (Ficha ampliada de clientes - Sistema legado \(ejemplo ficticio\)) Tj ET
+BT /F1 11 Tf 56 710 Td (Este documento simula una ficha extendida que, en muchas empresas, vive en un) Tj ET
+BT /F1 11 Tf 56 695 Td (sistema legado separado del CRM principal \(por ejemplo, un modulo de atencion al) Tj ET
+BT /F1 11 Tf 56 680 Td (cliente o un antiguo ERP\). Complementa a customers.json con historial detallado) Tj ET
+BT /F1 11 Tf 56 665 Td (de tres clientes seleccionados. Todos los datos son FICTICIOS.) Tj ET
+BT /F2 16 Tf 56 646 Td (Cliente CLI-1001 - Andrea Fuentes Rojas) Tj ET
+BT /F1 11 Tf 56 622 Td (RUT: 18.234.567-9. Email: andrea.fuentes@correo-ejemplo.cl. Telefono: +56 9 8123) Tj ET
+BT /F1 11 Tf 56 607 Td (4567.) Tj ET
+BT /F1 11 Tf 56 588 Td (Notas de atencion: cliente activa desde 2023, consulto por cambio de plan y) Tj ET
+BT /F1 11 Tf 56 573 Td (reclamo de cobro duplicado ya resuelto. Prefiere contacto por correo. Finalidad) Tj ET
+BT /F1 11 Tf 56 558 Td (de uso: gestion comercial y facturacion.) Tj ET
+BT /F2 16 Tf 56 539 Td (Cliente CLI-1004 - Rodrigo Salinas Bravo) Tj ET
+BT /F1 11 Tf 56 515 Td (RUT: 12.345.678-5. Email: rodrigo.salinas@correo-ejemplo.cl. Telefono: +56 9) Tj ET
+BT /F1 11 Tf 56 500 Td (5123 7712.) Tj ET
+BT /F1 11 Tf 56 481 Td (Notas de atencion: solicito eliminacion de datos personales al amparo de la Ley) Tj ET
+BT /F1 11 Tf 56 466 Td (21.719 el 2025-07-22. Solicitud en curso en el area de cumplimiento. Finalidad) Tj ET
+BT /F1 11 Tf 56 451 Td (de uso: gestion comercial, facturacion y atencion de solicitudes de titulares.) Tj ET
+BT /F2 16 Tf 56 432 Td (Cliente CLI-1009 - Daniela Castro Yanez) Tj ET
+BT /F1 11 Tf 56 408 Td (RUT: 17.890.123-4. Email: daniela.castro@correo-ejemplo.cl. Telefono: +56 9 8890) Tj ET
+BT /F1 11 Tf 56 393 Td (2245.) Tj ET
+BT /F1 11 Tf 56 374 Td (Notas de atencion: consulto especificamente si sus datos serian enviados a un) Tj ET
+BT /F1 11 Tf 56 359 Td (proveedor de IA externo y bajo que finalidad. Pendiente de respuesta formal del) Tj ET
+BT /F1 11 Tf 56 344 Td (area de privacidad.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000002380 00000 n 
+0000002477 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+2579
+%%EOF

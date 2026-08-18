@@ -61,7 +61,7 @@ func (r *GlobResolver) Resolve(ctx focus.Context, target string) ([]focus.Contex
 		}
 
 		if matched {
-			content := readFile(path)
+			content := readFileText(path)
 			if content != "" {
 				blocks = append(blocks, focus.ContextBlock{
 					Source:  relOrBase(ctx.RepoPath, path),
@@ -121,7 +121,7 @@ func (r *FileResolver) Resolve(ctx focus.Context, target string) ([]focus.Contex
 	return []focus.ContextBlock{{
 		Source:  relOrBase(ctx.RepoPath, path),
 		Kind:    "file",
-		Content: readFile(path),
+		Content: readFileText(path),
 	}}, nil
 }
 

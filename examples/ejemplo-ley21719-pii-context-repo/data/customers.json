@@ -1,0 +1,323 @@
+{
+  "_nota": "Datos 100% FICTICIOS generados para este ejemplo. Ningún nombre, RUT, correo, teléfono o dirección corresponde a una persona real. Simula un export típico de CRM/ERP/sistema legado.",
+  "_note_en": "100% FICTIONAL data generated for this example. No name, RUT, email, phone, or address corresponds to a real person. Simulates a typical CRM/ERP/legacy-system export.",
+  "clientes": [
+    {
+      "id": "CLI-1001",
+      "nombre": "Andrea Fuentes Rojas",
+      "rut": "18.234.567-9",
+      "email": "andrea.fuentes@correo-ejemplo.cl",
+      "telefono": "+56 9 8123 4567",
+      "direccion": "Av. Los Alerces 1450, depto 302, Ñuñoa, Santiago",
+      "fecha_registro": "2023-03-11",
+      "historial_interacciones": [
+        "2023-03-11 - Alta de cuenta vía formulario web",
+        "2024-06-02 - Solicitud de cambio de plan (canal: call center)",
+        "2025-11-19 - Reclamo por cobro duplicado, resuelto en 3 días"
+      ],
+      "consentimiento": {
+        "marketing_directo": true,
+        "fecha_consentimiento": "2023-03-11",
+        "canal": "checkbox formulario web",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "facturación y cobranza",
+        "comunicaciones de marketing (con consentimiento)"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Facturación", "Call center"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_9f31ac02e7",
+        "session_id": "sess_77a1c4",
+        "integration_trace_id": "trace-88213-a"
+      }
+    },
+    {
+      "id": "CLI-1002",
+      "nombre": "Marcelo Iturra Peña",
+      "rut": "15.998.234-2",
+      "email": "marcelo.iturra@correo-ejemplo.cl",
+      "telefono": "+56 9 7345 1290",
+      "direccion": "Camino Real 220, La Serena",
+      "fecha_registro": "2022-08-27",
+      "historial_interacciones": [
+        "2022-08-27 - Alta de cuenta en sucursal física",
+        "2023-01-15 - Actualización de dirección postal",
+        "2025-02-04 - Consulta sobre portabilidad de datos"
+      ],
+      "consentimiento": {
+        "marketing_directo": false,
+        "fecha_consentimiento": "2022-08-27",
+        "canal": "formulario físico",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "atención de solicitudes de titulares (Ley 21.719)"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Portal de solicitudes de titulares"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_11cbe409f2",
+        "session_id": "sess_10bf22",
+        "integration_trace_id": "trace-88214-b"
+      }
+    },
+    {
+      "id": "CLI-1003",
+      "nombre": "Javiera Contreras Muñoz",
+      "rut": "20.456.789-1",
+      "email": "javiera.contreras@correo-ejemplo.cl",
+      "telefono": "+56 9 6234 8890",
+      "direccion": "Pasaje Las Dalias 88, Concepción",
+      "fecha_registro": "2024-01-05",
+      "historial_interacciones": [
+        "2024-01-05 - Alta de cuenta vía app móvil",
+        "2024-09-30 - Solicitud de soporte técnico",
+        "2025-05-14 - Encuesta de satisfacción respondida"
+      ],
+      "consentimiento": {
+        "marketing_directo": true,
+        "fecha_consentimiento": "2024-01-05",
+        "canal": "checkbox app móvil",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "soporte técnico",
+        "comunicaciones de marketing (con consentimiento)"
+      ],
+      "sistemas_procesos": ["App móvil", "Mesa de ayuda", "CRM ventas"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_5522dabc71",
+        "session_id": "sess_44ee90",
+        "integration_trace_id": "trace-88215-c"
+      }
+    },
+    {
+      "id": "CLI-1004",
+      "nombre": "Rodrigo Salinas Bravo",
+      "rut": "12.345.678-5",
+      "email": "rodrigo.salinas@correo-ejemplo.cl",
+      "telefono": "+56 9 5123 7712",
+      "direccion": "Av. Alemania 300, Temuco",
+      "fecha_registro": "2021-11-02",
+      "historial_interacciones": [
+        "2021-11-02 - Alta de cuenta vía convenio empresa",
+        "2022-04-18 - Cambio de método de pago",
+        "2025-07-22 - Solicitud de eliminación de datos (Ley 21.719)"
+      ],
+      "consentimiento": {
+        "marketing_directo": false,
+        "fecha_consentimiento": "2021-11-02",
+        "canal": "convenio corporativo",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "facturación y cobranza",
+        "atención de solicitudes de titulares (Ley 21.719)"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Facturación", "Portal de solicitudes de titulares"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_09aa11ef34",
+        "session_id": "sess_20cd67",
+        "integration_trace_id": "trace-88216-d"
+      }
+    },
+    {
+      "id": "CLI-1005",
+      "nombre": "Camila Ossandón Lagos",
+      "rut": "19.876.543-2",
+      "email": "camila.ossandon@correo-ejemplo.cl",
+      "telefono": "+56 9 4456 3321",
+      "direccion": "Calle Los Notros 77, Puerto Montt",
+      "fecha_registro": "2023-09-14",
+      "historial_interacciones": [
+        "2023-09-14 - Alta de cuenta vía formulario web",
+        "2024-03-01 - Renovación de plan anual",
+        "2025-10-08 - Consulta sobre finalidad de tratamiento de datos"
+      ],
+      "consentimiento": {
+        "marketing_directo": true,
+        "fecha_consentimiento": "2023-09-14",
+        "canal": "checkbox formulario web",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "comunicaciones de marketing (con consentimiento)",
+        "analítica interna de uso del servicio"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Plataforma de analítica interna"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_88bb22cd90",
+        "session_id": "sess_91ff03",
+        "integration_trace_id": "trace-88217-e"
+      }
+    },
+    {
+      "id": "CLI-1006",
+      "nombre": "Felipe Herrera Vidal",
+      "rut": "16.222.345-8",
+      "email": "felipe.herrera@correo-ejemplo.cl",
+      "telefono": "+56 9 3345 9987",
+      "direccion": "Av. Balmaceda 512, Antofagasta",
+      "fecha_registro": "2020-05-19",
+      "historial_interacciones": [
+        "2020-05-19 - Alta de cuenta en sucursal física",
+        "2021-12-10 - Actualización de teléfono de contacto",
+        "2025-01-27 - Reclamo por envío de publicidad sin consentimiento"
+      ],
+      "consentimiento": {
+        "marketing_directo": false,
+        "fecha_consentimiento": "2020-05-19",
+        "canal": "formulario físico",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "atención de solicitudes de titulares (Ley 21.719)"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Portal de solicitudes de titulares", "Call center"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_33cc44ab21",
+        "session_id": "sess_66gh12",
+        "integration_trace_id": "trace-88218-f"
+      }
+    },
+    {
+      "id": "CLI-1007",
+      "nombre": "Valentina Riquelme Soto",
+      "rut": "21.345.678-0",
+      "email": "valentina.riquelme@correo-ejemplo.cl",
+      "telefono": "+56 9 2456 6634",
+      "direccion": "Pasaje El Roble 45, Rancagua",
+      "fecha_registro": "2024-07-30",
+      "historial_interacciones": [
+        "2024-07-30 - Alta de cuenta vía app móvil",
+        "2025-02-11 - Solicitud de portabilidad de datos",
+        "2025-08-05 - Consulta sobre qué sistemas usan sus datos"
+      ],
+      "consentimiento": {
+        "marketing_directo": true,
+        "fecha_consentimiento": "2024-07-30",
+        "canal": "checkbox app móvil",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "comunicaciones de marketing (con consentimiento)",
+        "atención de solicitudes de titulares (Ley 21.719)"
+      ],
+      "sistemas_procesos": ["App móvil", "CRM ventas", "Portal de solicitudes de titulares"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_77dd55ef02",
+        "session_id": "sess_33jk88",
+        "integration_trace_id": "trace-88219-g"
+      }
+    },
+    {
+      "id": "CLI-1008",
+      "nombre": "Ignacio Pizarro Cárdenas",
+      "rut": "14.567.890-3",
+      "email": "ignacio.pizarro@correo-ejemplo.cl",
+      "telefono": "+56 9 1567 4423",
+      "direccion": "Av. Colón 990, Viña del Mar",
+      "fecha_registro": "2019-10-08",
+      "historial_interacciones": [
+        "2019-10-08 - Alta de cuenta en sucursal física",
+        "2020-06-22 - Migración a plan corporativo",
+        "2025-04-16 - Consulta sobre conservación de datos históricos"
+      ],
+      "consentimiento": {
+        "marketing_directo": false,
+        "fecha_consentimiento": "2019-10-08",
+        "canal": "formulario físico",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "facturación y cobranza"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Facturación"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_22ee66fa19",
+        "session_id": "sess_55lm40",
+        "integration_trace_id": "trace-88220-h"
+      }
+    },
+    {
+      "id": "CLI-1009",
+      "nombre": "Daniela Castro Yáñez",
+      "rut": "17.890.123-4",
+      "email": "daniela.castro@correo-ejemplo.cl",
+      "telefono": "+56 9 8890 2245",
+      "direccion": "Calle Las Camelias 63, Talca",
+      "fecha_registro": "2022-02-17",
+      "historial_interacciones": [
+        "2022-02-17 - Alta de cuenta vía formulario web",
+        "2023-05-09 - Solicitud de rectificación de datos (dirección errónea)",
+        "2025-09-01 - Consulta sobre transferencia de datos a proveedor de IA"
+      ],
+      "consentimiento": {
+        "marketing_directo": true,
+        "fecha_consentimiento": "2022-02-17",
+        "canal": "checkbox formulario web",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "comunicaciones de marketing (con consentimiento)",
+        "atención de solicitudes de titulares (Ley 21.719)"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Portal de solicitudes de titulares"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_44ff77gb28",
+        "session_id": "sess_88no51",
+        "integration_trace_id": "trace-88221-i"
+      }
+    },
+    {
+      "id": "CLI-1010",
+      "nombre": "Sebastián Molina Torres",
+      "rut": "13.456.789-6",
+      "email": "sebastian.molina@correo-ejemplo.cl",
+      "telefono": "+56 9 7789 3356",
+      "direccion": "Av. Argentina 145, Iquique",
+      "fecha_registro": "2021-06-25",
+      "historial_interacciones": [
+        "2021-06-25 - Alta de cuenta en sucursal física",
+        "2022-10-13 - Actualización de correo de contacto",
+        "2025-12-01 - Consulta por entrada en vigencia de la Ley 21.719"
+      ],
+      "consentimiento": {
+        "marketing_directo": false,
+        "fecha_consentimiento": "2021-06-25",
+        "canal": "formulario físico",
+        "puede_revocarse": true
+      },
+      "finalidad_tratamiento": [
+        "gestión de la relación comercial",
+        "facturación y cobranza",
+        "atención de solicitudes de titulares (Ley 21.719)"
+      ],
+      "sistemas_procesos": ["CRM ventas", "Facturación", "Portal de solicitudes de titulares"],
+      "metadata_tecnica_interna": {
+        "app_build": "mova-crm-v4.2.1",
+        "device_fingerprint": "fp_99gh88hc39",
+        "session_id": "sess_12pq73",
+        "integration_trace_id": "trace-88222-j"
+      }
+    }
+  ]
+}

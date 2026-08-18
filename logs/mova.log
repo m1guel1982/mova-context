@@ -1,1 +1,9 @@
 2026-08-05 13:10:24 [info] [cli] command: ui
+2026-08-05 14:16:38 [info] [cli] command: run ejemplo-token-firewall revisar-checkout
+2026-08-17 08:41:16 [info] [cli] command: ui
+2026-08-17 08:42:30 [info] [cli] command: run ejemplo-ley21719-pii-context --diagram --export png --path ./diagramas
+2026-08-17 08:58:31 [info] [cli] command: run ejemplo-ley21719-pii-context --diagram --export png --path ./diagramas
+2026-08-17 09:01:37 [info] [cli] command: run ejemplo-ley21719-pii-context --diagram --export png --path ./diagramas
+2026-08-17 09:14:52 [info] [cli] command: chat ejemplo-ley21719-pii-context
+2026-08-17 09:15:01 [info] [cli] command: chat ejemplo-ley21719-pii-context ai-privacy-reviewer
+2026-08-17 09:18:07 [info] [cli] command: chat ejemplo-ley21719-pii-context ai-privacy-reviewer

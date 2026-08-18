@@ -33,6 +33,10 @@ func newMainMenu(app *tuiApp) tuiScreen {
 			onSelect: func() tea.Cmd { return tuiPush(newGroupPicker(app)) },
 		},
 		{
+			title: "Search", desc: "Search agents, skills, and prompts — opens results at the exact file/line",
+			onSelect: func() tea.Cmd { return tuiPush(newSearchScreen(app)) },
+		},
+		{
 			title: "Models", desc: "config/models/*.json — view and edit provider settings",
 			onSelect: func() tea.Cmd { return tuiPush(newModelsMenu(app)) },
 		},

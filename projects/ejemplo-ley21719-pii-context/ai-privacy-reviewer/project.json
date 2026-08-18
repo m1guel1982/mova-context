@@ -1,0 +1,51 @@
+{
+  "project": "ejemplo-ley21719-pii-context/ai-privacy-reviewer",
+  "description": "Agente del grupo 'ejemplo-ley21719-pii-context' — evalúa qué información es realmente necesaria para responder la consulta y cuál debería evitarse enviar a un LLM externo. Tercer paso del análisis multiagente. Este es el ÚNICO sub-proyecto del ejemplo con PII Masking habilitado explícitamente (budget.pii_masking.enabled=true) — el resto del repositorio sigue con la función desactivada por defecto.",
+  "repo": "examples/ejemplo-ley21719-pii-context-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "analizar",
+
+  "agents": { "domain": "base", "use": ["ai-privacy-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": ["pii-context-reduction"], "custom": [] },
+
+  "tasks": {
+    "analizar": {
+      "prompt": "analizar-contexto-clientes-ia",
+      "variables": {
+        "query": "Busca la información relevante de los clientes y dime qué datos personales tenemos, para qué los usamos y qué sistemas o procesos están involucrados.",
+        "regulation": "Ley 21.719 (Chile)"
+      },
+      "focus": [
+        "data/customers.json",
+        "data/customer-profile.pdf",
+        "data/privacy-policy.docx",
+        "data/system-logs.txt"
+      ]
+    }
+  },
+
+  "llm_profile": {
+    "config": "llama3.2.3b"
+  },
+
+  "budget": {
+    "max_tokens": 20000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true,
+    "pii_masking": { "enabled": true }
+  },
+
+  "budget_path": "projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/mova-budget-report.md",
+  "token_history_path": "projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/mova-token-history.json",
+
+  "jobs": [
+    {
+      "comment": "Genera el informe narrativo diario de este agente (con PII Masking aplicado) — corre a las 2:20 AM, ver README del ejemplo para dónde queda guardado",
+      "schedule": "20 2 * * *",
+      "tasks": ["analizar"],
+      "save": "reports/analisis-ley21719-ia_{date}.md",
+      "budget": { "focus": true }
+    }
+  ]
+}

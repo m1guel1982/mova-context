@@ -32,6 +32,10 @@ type GatedContext struct {
 	// is a no-op), so a caller can build a report without a nil check.
 	Sanitize       sanitize.Stats
 	CircuitBreaker CircuitBreakerResult
+	// PII: PII Masking stage result — zero value unless the project
+	// explicitly opted in (core.PIIMaskingEnabled), see PIIMasking's
+	// doc comment on core.BudgetConfig for why this one defaults off.
+	PII sanitize.PIIStats
 }
 
 // BuildGatedContext assembles project/task's context and runs it
@@ -56,10 +60,19 @@ func BuildGatedContext(adapter core.Adapter, root, project, task string) GatedCo
 	// when enabled, so unchanged files skip re-sanitizing on repeat runs.
 	sanitizeCfg := sanitizeConfigFrom(cfg)
 	sanitizeStats := SanitizeCached(root, project, sections, sanitizeCfg, core.ContextCacheEnabled(cfg))
+
+	// [1b] PII Masking — OPTIONAL, off by default (see
+	// core.PIIMaskingEnabled), runs right after the Sanitizer and
+	// still BEFORE anything is counted or gated, so a project that
+	// enables it never sends the original candidate-PII tokens to a
+	// model, local or cloud. See mova.local/sanitize/pii.go's header
+	// for the technical/legal disclaimer this stage carries.
+	piiStats := applyPIIMasking(root, sections, cfg)
+
 	text := sections.Full()
 	tokens := countTokensRespectingToggle(text, modelHintOf(proj), cfg)
 
-	result := GatedContext{Sections: sections, Text: text, Tokens: tokens, Sanitize: sanitizeStats}
+	result := GatedContext{Sections: sections, Text: text, Tokens: tokens, Sanitize: sanitizeStats, PII: piiStats}
 
 	// [2] Circuit Breaker — spend governance, checked BEFORE the
 	// content-size gate below so a project that's already over its
@@ -111,6 +124,33 @@ func modelHintOf(proj *core.Project) string {
 // for a very large Focus set where an exact count isn't needed on
 // every single run. The approximation (chars/4) is the same rough rule
 // of thumb documented throughout this codebase's own comments.
+// applyPIIMasking runs sanitize.MaskPII over sections.Focus/Memory IN
+// PLACE, but only when the project explicitly opted in — a no-op
+// (PIIStats{}) otherwise, same "absent config = zero behavior change"
+// contract every other Token Firewall stage follows, except this one
+// requires an explicit `true` instead of defaulting to on (see
+// core.PIIMaskingEnabled's doc comment for why).
+func applyPIIMasking(root string, sections *core.ContextSections, cfg *core.BudgetConfig) sanitize.PIIStats {
+	if !core.PIIMaskingEnabled(cfg) || sections == nil {
+		return sanitize.PIIStats{}
+	}
+	policy := sanitize.LoadPIIPolicy(root)
+	var total sanitize.PIIStats
+	if sections.Focus != "" {
+		masked, stats := sanitize.MaskPII(sections.Focus, policy)
+		sections.Focus = masked
+		total.TokensScanned += stats.TokensScanned
+		total.TokensMasked += stats.TokensMasked
+	}
+	if sections.Memory != "" {
+		masked, stats := sanitize.MaskPII(sections.Memory, policy)
+		sections.Memory = masked
+		total.TokensScanned += stats.TokensScanned
+		total.TokensMasked += stats.TokensMasked
+	}
+	return total
+}
+
 func countTokensRespectingToggle(text, modelHint string, cfg *core.BudgetConfig) int {
 	if !core.TokenEstimationEnabled(cfg) {
 		return len(text) / 4

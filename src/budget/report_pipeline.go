@@ -38,6 +38,23 @@ func sanitizerSection(r *Report) string {
 	return b.String()
 }
 
+// piiMaskingSection reports the PII Masking stage's result — present
+// only when it actually masked something (i.e. the project explicitly
+// enabled it AND at least one token cleared the threshold). Always
+// carries the legal/technical disclaimer so the report itself never
+// implies a compliance guarantee this heuristic stage doesn't make.
+func piiMaskingSection(r *Report) string {
+	p := r.PIIStats
+	if p.TokensMasked == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## PII Masking\n\n")
+	b.WriteString(fmt.Sprintf("%d of %d scanned token(s) in Focus/Memory matched the structural PII-shape threshold (config/policy.json) and were replaced with a deterministic `[PII_xxxxxxxx]` pseudonym before counting or sending anything.\n\n", p.TokensMasked, p.TokensScanned))
+	b.WriteString("This is a heuristic, structural mitigation (word shape + Shannon entropy, no word lists) — **not** a legal anonymization or Ley 21.719/GDPR compliance guarantee. It does not detect 100% of PII (false negatives), and can also mask some non-PII tokens that share a similar structural shape, such as dates (false positives). It does not replace legal review, an internal privacy policy, or a compliance program. See docs/i18n/{es,en}/COMMANDS.md § PII Masking.\n\n")
+	return b.String()
+}
+
 // cacheLayoutSection reports the Cache Layout Guard's result — present
 // only when "cache_hint" is enabled (r.CacheLayout != nil).
 func cacheLayoutSection(r *Report) string {

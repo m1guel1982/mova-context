@@ -82,6 +82,30 @@ type BudgetConfig struct {
 	// local cache, saves wall-clock time, never tokens or money by
 	// itself. Default enabled; state lives in mova-context-cache.json.
 	ContextCache *bool `json:"context_cache"`
+
+	// PIIMasking: optional technical/structural pseudonymization stage
+	// (see mova.local/sanitize's pii.go + config/policy.json) that
+	// replaces candidate-PII tokens in Focus/Memory with deterministic
+	// [TAG_HASH] pseudonyms BEFORE counting/sending anything, using
+	// only Shannon entropy + word-shape structure — no word lists, no
+	// language-specific rules. UNLIKE every other Token Firewall stage
+	// above, this one defaults OFF (nil/absent = disabled): it changes
+	// the actual content sent to the model, not just cosmetic noise, so
+	// it must be an explicit, informed opt-in per project. See
+	// docs/i18n/{es,en}/COMMANDS.md § PII Masking for the full
+	// technical/legal disclaimer — this is NOT an anonymization or Ley
+	// 21.719/GDPR compliance guarantee, only a heuristic mitigation.
+	PIIMasking *PIIMaskingConfig `json:"pii_masking"`
+}
+
+// PIIMaskingConfig maps project.json's (or a task's)
+// "budget"."pii_masking" object — a single on/off switch. Every
+// threshold/tag/weight the algorithm itself uses lives in
+// config/policy.json (see mova.local/sanitize.LoadPIIPolicy), never
+// here and never hardcoded in Go — project.json only decides WHETHER
+// this project wants the stage to run, not HOW it scores tokens.
+type PIIMaskingConfig struct {
+	Enabled bool `json:"enabled"` // default false — must be explicitly turned on, see BudgetConfig.PIIMasking's doc comment
 }
 
 // SanitizeConfig mirrors sanitize.Config's JSON shape — kept in core
@@ -155,6 +179,14 @@ func ContextCacheEnabled(cfg *BudgetConfig) bool {
 		return true
 	}
 	return cfg.ContextCache == nil || *cfg.ContextCache
+}
+
+// PIIMaskingEnabled reports whether the technical/structural PII
+// pseudonymization stage should run — the ONE Token Firewall stage
+// that defaults OFF (nil/absent = false), unlike every helper above.
+// See PIIMasking's doc comment for why.
+func PIIMaskingEnabled(cfg *BudgetConfig) bool {
+	return cfg != nil && cfg.PIIMasking != nil && cfg.PIIMasking.Enabled
 }
 
 // SanitizerEnabled reports whether the noise-removal stage should run

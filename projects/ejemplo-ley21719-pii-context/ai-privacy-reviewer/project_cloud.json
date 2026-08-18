@@ -1,0 +1,57 @@
+{
+  "_nota": "Variante CLOUD del mismo ejemplo — misma auditoría de la Ley 21.719, mismo Focus, mismas políticas de privacidad y de presupuesto, pero configurada para usar un modelo Cloud (Google Gemini) en vez del modelo local por defecto. Para activarla: renombrar el project.json actual a project_local.json (respaldo), y renombrar este archivo a project.json. Para volver al modelo local, hacer el proceso inverso. No se necesita ningún cambio de código para alternar entre ambos — es solo una cuestión de qué archivo se llama 'project.json' en un momento dado.",
+  "_note_en": "CLOUD variant of the same example — same Ley 21.719 audit, same Focus, same privacy and budget policies, but configured to use a Cloud model (Google Gemini) instead of the local default. To activate: rename the current project.json to project_local.json (backup), and rename this file to project.json. To go back to the local model, reverse the process. No code change is needed to switch between the two — it is only a matter of which file is named 'project.json' at any given time.",
+
+  "project": "ejemplo-ley21719-pii-context/ai-privacy-reviewer",
+  "description": "Agente del grupo 'ejemplo-ley21719-pii-context' — evalúa qué información es realmente necesaria para responder la consulta y cuál debería evitarse enviar a un LLM externo. Variante CLOUD: mismo agente, mismas políticas de privacidad y presupuesto, apuntando a un modelo Cloud (Google Gemini) para demostrar control de costos y protección de datos hacia un proveedor externo real.",
+  "repo": "examples/ejemplo-ley21719-pii-context-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "analizar",
+
+  "agents": { "domain": "base", "use": ["ai-privacy-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": ["pii-context-reduction"], "custom": [] },
+
+  "tasks": {
+    "analizar": {
+      "prompt": "analizar-contexto-clientes-ia",
+      "variables": {
+        "query": "Busca la información relevante de los clientes y dime qué datos personales tenemos, para qué los usamos y qué sistemas o procesos están involucrados.",
+        "regulation": "Ley 21.719 (Chile)"
+      },
+      "focus": [
+        "data/customers.json",
+        "data/customer-profile.pdf",
+        "data/privacy-policy.docx",
+        "data/system-logs.txt"
+      ]
+    }
+  },
+
+  "llm_profile": {
+    "provider": "google",
+    "config": "gemini-3.5-flash"
+  },
+
+  "budget": {
+    "max_tokens": 20000,
+    "max_monthly_usd": 15.00,
+    "on_exceed": "warn",
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true,
+    "pii_masking": { "enabled": true }
+  },
+
+  "budget_path": "projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/mova-budget-report.md",
+  "token_history_path": "projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/mova-token-history.json",
+
+  "jobs": [
+    {
+      "comment": "Genera el informe narrativo diario de este agente (con PII Masking aplicado antes de que los datos salgan hacia el proveedor Cloud) — corre a las 2:20 AM, ver README del ejemplo para dónde queda guardado",
+      "schedule": "20 2 * * *",
+      "tasks": ["analizar"],
+      "save": "reports/analisis-ley21719-ia_{date}.md",
+      "budget": { "focus": true }
+    }
+  ]
+}

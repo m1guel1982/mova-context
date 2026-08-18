@@ -1,0 +1,27 @@
+{
+  "_comment_en": "Policy for the optional PII Masking stage (mova.local/sanitize's pii.go). Off by default per project — see project.json's budget.pii_masking.enabled. Every number here is what tunes the algorithm; nothing here is a word list or a language rule (the algorithm is structural: word shape + Shannon entropy). See docs/i18n/en/COMMANDS.md § PII Masking for the full explanation and its legal disclaimer.",
+  "_comment_es": "Politica para la etapa opcional de PII Masking (mova.local/sanitize, pii.go). Desactivada por defecto por proyecto -- ver budget.pii_masking.enabled en project.json. Cada numero de aqui ajusta el algoritmo; nada de esto es una lista de palabras ni una regla de idioma (el algoritmo es estructural: forma de la palabra + entropia de Shannon). Ver docs/i18n/es/COMMANDS.md, seccion PII Masking, para la explicacion completa y su deslinde legal.",
+
+  "pii_masking": {
+    "min_score": 0.62,
+    "shape_weight": 0.65,
+    "entropy_weight": 0.35,
+    "min_token_length": 4,
+    "hash_length": 8,
+    "tag_format": "[PII_%s]",
+
+    "shape_rules": {
+      "_comment": "Structural signals only -- no dictionaries, no per-language grammar. Each bonus is added to the shape score (0..1, clamped) when the token's structural pattern matches.",
+      "digit_ratio_threshold": 0.3,
+      "digit_ratio_bonus": 0.3,
+      "separator_min_count": 2,
+      "separator_digit_ratio_threshold": 0.2,
+      "separator_bonus": 0.25,
+      "at_symbol_bonus": 0.5,
+      "long_token_bonus_len": 10,
+      "long_mixed_token_bonus": 0.15,
+      "upper_run_ratio_threshold": 0.6,
+      "upper_run_bonus": 0.15
+    }
+  }
+}
