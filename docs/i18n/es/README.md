@@ -25,7 +25,7 @@ Fuentes  ──▶  Firewall de Privacidad (PII)  ──▶  Agentes  ──▶ 
 4. [Las cuatro puertas de entrada](#4-las-cuatro-puertas-de-entrada) — CLI, Chat, MCP, HTTP
 5. [Cómo funciona](#5-cómo-funciona) — el mapa completo en un diagrama
 6. [La convención](#6-la-convención) — las 6 piezas de las que depende todo
-7. [Token Firewall y 7.1 Tokenomics](#7-token-firewall-y-tokenomics) — la capa de protección y control de costo
+7. [Token Firewall y Tokenomics](#7-token-firewall-y-tokenomics) — la capa de protección y control de costo
 8. [Job Engine, Cron y Multiagente](#8-job-engine-cron-y-multiagente)
 9. [Interfaz visual — `mova ui`](#9-interfaz-visual--mova-ui)
 10. [¿Necesito el CLI?](#10-necesito-el-cli) — tabla de decisión
@@ -240,7 +240,9 @@ Nadie sabe qué datos salieron  →      El diagrama lo muestra, siempre
 
 ---
  
-# 7. Token Firewall
+# 7. Token Firewall y Tokenomics
+
+### Firewall
 
 Además de la auditoría y protección de datos, Mova Context también controla — de forma determinística y sin IA — cuánto contexto se envía y cuánto cuesta.
 
@@ -316,7 +318,7 @@ Si el contexto ensamblado supera ese límite, Mova detiene la ejecución **antes
 
 El control de costo se convierte así en una **regla de arquitectura**, no en un hábito que alguien puede olvidar.
 
-# 7.1. Tokenomics
+### Tokenomics
 
 ### El reporte: `mova budget`, cero llamadas a ningún proveedor
 
