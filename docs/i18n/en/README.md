@@ -25,7 +25,7 @@ Sources  ──▶  Privacy Firewall (PII)  ──▶  Agents  ──▶  Audita
 4. [The four doors](#4-the-four-doors) — CLI, Chat, MCP, HTTP
 5. [How it works](#5-how-it-works) — the complete map in one diagram
 6. [The convention](#6-the-convention) — the 6 pieces everything depends on
-7. [Token Firewall & 7.1 Tokenomics](#7-token-firewall--tokenomics) — the protection and cost-control layer
+7. [Token Firewall & Tokenomics](#7-token-firewall--tokenomics) — the protection and cost-control layer
 8. [Job Engine, Cron & Multiagent](#8-job-engine-cron--multiagent)
 9. [Visual interface — `mova ui`](#9-visual-interface--mova-ui)
 10. [Do I need the CLI?](#10-do-i-need-the-cli) — decision table
@@ -240,7 +240,9 @@ No one knows what data left      →      The diagram always shows it
 
 ---
 
-# 7. Token Firewall
+# 7. Token Firewall y Tokenomics
+
+### Firewall
 
 In addition to data auditing and protection, Mova Context also controls — deterministically and without AI — how much context is sent and how much it costs.
 
@@ -314,7 +316,7 @@ If the assembled context exceeds that limit, Mova stops the execution **before a
 
 Cost control thus becomes an **architectural rule**, not a habit someone can forget.
 
-# 7.1. Tokenomics
+### Tokenomics
 
 ### The report: `mova budget`, zero calls to any provider
 
