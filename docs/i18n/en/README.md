@@ -25,7 +25,7 @@ Sources  ──▶  Privacy Firewall (PII)  ──▶  Agents  ──▶  Audita
 4. [The four doors](#4-the-four-doors) — CLI, Chat, MCP, HTTP
 5. [How it works](#5-how-it-works) — the complete map in one diagram
 6. [The convention](#6-the-convention) — the 6 pieces everything depends on
-7. [Token Firewall & Tokenomics](#7-token-firewall--tokenomics) — the protection and cost-control layer
+7. [Token Firewall & 7.1 Tokenomics](#7-token-firewall--tokenomics) — the protection and cost-control layer
 8. [Job Engine, Cron & Multiagent](#8-job-engine-cron--multiagent)
 9. [Visual interface — `mova ui`](#9-visual-interface--mova-ui)
 10. [Do I need the CLI?](#10-do-i-need-the-cli) — decision table
@@ -240,40 +240,109 @@ No one knows what data left      →      The diagram always shows it
 
 ---
 
-## 7. Token Firewall & Tokenomics
+# 7. Token Firewall
 
-Beyond auditing and protecting data, Mova Context also controls — deterministically, with no AI involved — how much context gets sent and what it costs.
+In addition to data auditing and protection, Mova Context also controls — deterministically and without AI — how much context is sent and how much it costs.
 
-### The Token Firewall
+Three automatic stages run before every execution (`mova run`, `mova chat`, jobs, MCP, HTTP, and the TUI itself), with no additional command:
 
-Three automatic stages that run ahead of every execution (`mova run`, `mova chat`, jobs, MCP, HTTP, the TUI itself), with no extra command:
+```text
+┌──────────────────────┐
+│     INPUT CONTEXT    │
+└──────────┬───────────┘
+           │
+           ▼
+┌────────────────────────────────────────────────────┐
+│  1. SANITIZER                                      │
+│  Collapses repeated logs, blank lines, and         │
+│  duplicate headers before counting tokens.         │
+│                                                    │
+│  2,737 → 1,764 tokens                              │
+│  ↓ 35.6% fewer tokens · same information          │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────┐
+│  2. PII MASKING · OPTIONAL                         │
+│  Replaces tokens with the structural form of      │
+│  personal data with deterministic pseudonyms       │
+│  before counting or sending any data.              │
+│                                                    │
+│  See Section 1: the diagram shows the tokens       │
+│  protected. Requires explicit project activation.  │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────┐
+│  3. CACHE LAYOUT GUARD                             │
+│  Reorders the prompt so its first tokens form a    │
+│  stable prefix, byte by byte, enabling real       │
+│  prompt caching from Claude/GPT/Gemini.            │
+│                                                    │
+│  ~1,050 / 1,167 tokens of the static prefix       │
+│  estimated reusable on a cache hit.               │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────┐
+│  4. CIRCUIT BREAKER                                 │
+│  Verifies per-run and monthly USD limits           │
+│  before sending any data to the provider.          │
+│                                                    │
+│  If the run exceeds the limit →                   │
+│  IT NEVER REACHES THE MODEL.                       │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+              ┌─────────────────┐
+              │    MODEL / LLM  │
+              └─────────────────┘
+```
 
-| Stage | What it does | Real, measured result (example included) |
-|---|---|---|
-| **Sanitizer** | Collapses repeated log lines, runs of blank lines, and duplicated file headers — before counting anything | 2,737 → 1,764 tokens: **35.6% fewer tokens, same information** |
-| **PII Masking** (optional) | Replaces structurally personal-data-shaped tokens with deterministic pseudonyms, before counting or sending anything | See section 1 — the diagram itself shows how many tokens were protected |
-| **Cache Layout Guard** | Reorders the prompt so its first tokens form a stable, byte-for-byte prefix — what actually triggers Claude/GPT/Gemini's prompt caching | ~1,050 of 1,167 static-prefix tokens estimated reusable on a cache hit |
-| **Circuit Breaker** | Per-run and monthly USD limits, checked **before** anything is sent | A run that would exceed its limit never reaches the model |
+All stages are enabled by default, except **PII Masking**, which requires explicit project activation — see [PROJECT_JSON.md § Budget](PROJECT_JSON.md#budget-y-el-token-firewall).
 
-Every stage is on by default (except PII Masking, which requires explicit per-project opt-in — see [PROJECT_JSON.md § Budget](PROJECT_JSON.md#budget-and-the-token-firewall)), can be turned off independently, and every number in the table is real, measured by actually running the example included in this repository. See [COMMANDS.md § Token Firewall](COMMANDS.md#20-token-firewall) for the full mechanics.
+Each stage can be disabled independently. All numbers shown are real and were measured by running the example included in this repository.
+
+See [COMMANDS.md § Token Firewall](COMMANDS.md#20-token-firewall) for the complete mechanics.
 
 ### The gate: `budget.max_tokens`
 
 ```json
 { "budget": { "max_tokens": 8000 } }
 ```
+If the assembled context exceeds that limit, Mova stops the execution **before a single token is sent to the model** — from `mova chat`, the MCP `chat_completion` tool, or HTTP, always the same way.
 
-If the assembled context exceeds that limit, Mova stops execution before a single token goes out to the model — from `mova chat`, the `chat_completion` MCP tool, or HTTP, always the same. Cost control becomes an architectural rule, not a habit someone can forget.
+Cost control thus becomes an **architectural rule**, not a habit someone can forget.
+
+# 7.1. Tokenomics
 
 ### The report: `mova budget`, zero calls to any provider
 
-`mova budget my-project` calculates, 100% on your own machine, how many tokens the real context would use and what it would cost on OpenAI, Anthropic, and Google, based on `config/prices.json`. It's an estimate computed with [tiktoken-go](https://github.com/tiktoken-go/tokenizer), cross-checked against manually maintained prices — it doesn't replace the real invoice, it's a compass for deciding what to optimize.
+`mova budget my-project` calculates, 100% on the local machine, how many tokens the actual context would use and how much it would cost on OpenAI, Anthropic, and Google, according to `config/prices.json`. It is an estimate calculated with [tiktoken-go](https://github.com/tiktoken-go/tokenizer), cross-checked against manual prices — it does not replace the actual bill; it is a compass for deciding what to optimize.
 
-### The learning loop: every real call refines the estimate
+### The learning: every real call refines the estimate
 
-Every time a real call reaches a provider, Mova compares the local estimate against the real count the API returns, and stores that deviation in `mova-token-history.json` — never the content, just two numbers per provider. Over time, the estimate calibrates specifically to each project: its language mix, its code, its documents. See [COMMANDS.md § mova budget](COMMANDS.md#15-tokenomics--mova-budget) for the full mechanics with real examples.
+Every time a real call is made to a provider, Mova compares the local estimate against the actual token count returned by the API and stores that deviation in `mova-token-history.json` — never the content, only two numbers per provider. Over time, the estimate is calibrated specifically for each project: its language mix, its code, its documents. See [COMMANDS.md § mova budget](COMMANDS.md#15-tokenomics--mova-budget) for the complete mechanics with real examples.
 
 ---
+
+### Example: the airport scale analogy
+
+Before traveling, you weigh your suitcase at home with a bathroom scale. It gives you an approximate idea, but it is not the official scale. At the airport, the suitcase is weighed for real — and that is where the difference between what you calculated and what it actually weighs appears. If you knew in advance how much your home scale was off (for example, "it always reads 3% less than the real weight"), you could adjust the calculation next time and stop getting surprises at the check-in counter.
+
+**Mova Tokenomics does exactly that, but with tokens instead of kilos:**
+
+| **The analogy**                                            | **Mova Tokenomics**                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Before the airport** — Bathroom scale at home            | **Before sending** — Local estimate with `tiktoken-go`                          |
+| **At the airport** — Official scale                        | **During the real call** — Token count returned by Anthropic, OpenAI, or Google |
+| **Airline limit** — Maximum allowed baggage                | **Mova limit** — `budget.max_tokens` in `project.json`                          |
+| **Notebook** — "At home it was X, at the airport it was Y" | **History** — `mova-token-history.json` stores the deviation, never the content |
+
+And because that notebook is yours — not a generic average from thousands of other suitcases — the calibration Mova learns is specific to **your project**: its language mix, its code, its documents.
+
+**Why this matters for your wallet:** every token you send to a Cloud model costs money; if the model is local, a context that does not fit within the window is truncated or degraded silently, without warning. Mova attacks both problems with the same mechanism: **measure before spending, stop if it exceeds the limit, and learn from every real call.**
+
 
 ## 8. Job Engine, Cron & Multiagent
 

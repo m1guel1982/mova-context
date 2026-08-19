@@ -25,7 +25,7 @@ Fuentes  ──▶  Firewall de Privacidad (PII)  ──▶  Agentes  ──▶ 
 4. [Las cuatro puertas de entrada](#4-las-cuatro-puertas-de-entrada) — CLI, Chat, MCP, HTTP
 5. [Cómo funciona](#5-cómo-funciona) — el mapa completo en un diagrama
 6. [La convención](#6-la-convención) — las 6 piezas de las que depende todo
-7. [Token Firewall y Tokenomics](#7-token-firewall-y-tokenomics) — la capa de protección y control de costo
+7. [Token Firewall y 7.1 Tokenomics](#7-token-firewall-y-tokenomics) — la capa de protección y control de costo
 8. [Job Engine, Cron y Multiagente](#8-job-engine-cron-y-multiagente)
 9. [Interfaz visual — `mova ui`](#9-interfaz-visual--mova-ui)
 10. [¿Necesito el CLI?](#10-necesito-el-cli) — tabla de decisión
@@ -239,23 +239,72 @@ Nadie sabe qué datos salieron  →      El diagrama lo muestra, siempre
 ```
 
 ---
-
-## 7. Token Firewall y Tokenomics
+ 
+# 7. Token Firewall
 
 Además de la auditoría y protección de datos, Mova Context también controla — de forma determinística y sin IA — cuánto contexto se envía y cuánto cuesta.
 
-### El Token Firewall
-
 Tres etapas automáticas que corren delante de cada ejecución (`mova run`, `mova chat`, jobs, MCP, HTTP, el mismo TUI), sin ningún comando adicional:
 
-| Etapa | Qué hace | Resultado real, medido (ejemplo incluido) |
-|---|---|---|
-| **Sanitizer** | Colapsa líneas de log repetidas, corridas de líneas en blanco y encabezados de archivo duplicados — antes de contar nada | 2.737 → 1.764 tokens: **35,6% menos tokens, misma información** |
-| **PII Masking** (opcional) | Reemplaza tokens con forma estructural de dato personal por pseudónimos determinísticos, antes de contar o enviar nada | Ver la sección 1 — el propio diagrama muestra cuántos tokens se protegieron |
-| **Cache Layout Guard** | Reordena el prompt para que sus primeros tokens sean un prefijo estable, byte a byte — lo que activa el prompt caching real de Claude/GPT/Gemini | ~1.050 de 1.167 tokens del prefijo estático estimados reutilizables en un acierto de caché |
-| **Circuit Breaker** | Límites por corrida y mensuales en USD, verificados **antes** de enviar nada | Una corrida que superaría su límite nunca llega al modelo |
+```text
+┌──────────────────────┐
+│  CONTEXTO DE ENTRADA │
+└──────────┬───────────┘
+           │
+           ▼
+┌────────────────────────────────────────────────────┐
+│  1. SANITIZER                                      │
+│  Colapsa logs repetidos, líneas en blanco y        │
+│  encabezados duplicados antes de contar tokens.    │
+│                                                    │
+│  2.737 → 1.764 tokens                              │
+│  ↓ 35,6% menos tokens · misma información         │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────┐
+│  2. PII MASKING · OPCIONAL                         │
+│  Reemplaza tokens con forma estructural de dato    │
+│  personal por pseudónimos determinísticos antes    │
+│  de contar o enviar cualquier dato.                │
+│                                                    │
+│  Ver sección 1: el diagrama muestra los tokens     │
+│  protegidos. Requiere activación explícita por      │
+│  proyecto.                                         │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────┐
+│  3. CACHE LAYOUT GUARD                             │
+│  Reordena el prompt para que sus primeros tokens   │
+│  formen un prefijo estable, byte a byte, activando │
+│  prompt caching real de Claude/GPT/Gemini.         │
+│                                                    │
+│  ~1.050 / 1.167 tokens del prefijo estático        │
+│  estimados reutilizables en un acierto de caché.   │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+┌────────────────────────────────────────────────────┐
+│  4. CIRCUIT BREAKER                                 │
+│  Verifica límites por corrida y mensuales en USD   │
+│  antes de enviar cualquier dato al proveedor.      │
+│                                                    │
+│  Si la corrida supera el límite →                 │
+│  NO llega al modelo.                               │
+└──────────────────────┬─────────────────────────────┘
+                       │
+                       ▼
+              ┌─────────────────┐
+              │   MODELO / LLM  │
+              └─────────────────┘
+```
 
-Cada etapa está activada por defecto (excepto PII Masking, que requiere activación explícita por proyecto — ver [PROJECT_JSON.md § Budget](PROJECT_JSON.md#budget-y-el-token-firewall)), se puede desactivar de forma independiente, y cada número de la tabla es real, medido corriendo el ejemplo incluido en este repositorio. Ver [COMMANDS.md § Token Firewall](COMMANDS.md#20-token-firewall) para la mecánica completa.
+Todas las etapas están activadas por defecto, excepto **PII Masking**, que requiere activación explícita por proyecto — ver [PROJECT_JSON.md § Budget](PROJECT_JSON.md#budget-y-el-token-firewall).
+
+Cada etapa se puede desactivar de forma independiente. Todos los números mostrados son reales y fueron medidos ejecutando el ejemplo incluido en este repositorio.
+
+Ver [COMMANDS.md § Token Firewall](COMMANDS.md#20-token-firewall) para la mecánica completa.
 
 ### El gate: `budget.max_tokens`
 
@@ -263,7 +312,11 @@ Cada etapa está activada por defecto (excepto PII Masking, que requiere activac
 { "budget": { "max_tokens": 8000 } }
 ```
 
-Si el contexto ensamblado supera ese límite, Mova detiene la ejecución antes de que salga un solo token hacia el modelo — desde `mova chat`, la tool MCP `chat_completion`, o HTTP, siempre igual. El control de costo se vuelve una regla de arquitectura, no un hábito que alguien puede olvidar.
+Si el contexto ensamblado supera ese límite, Mova detiene la ejecución **antes de que salga un solo token hacia el modelo** — desde `mova chat`, la tool MCP `chat_completion` o HTTP, siempre igual.
+
+El control de costo se convierte así en una **regla de arquitectura**, no en un hábito que alguien puede olvidar.
+
+# 7.1. Tokenomics
 
 ### El reporte: `mova budget`, cero llamadas a ningún proveedor
 
@@ -272,6 +325,24 @@ Si el contexto ensamblado supera ese límite, Mova detiene la ejecución antes d
 ### El aprendizaje: cada llamada real afina la estimación
 
 Cada vez que se hace una llamada real a un proveedor, Mova compara la estimación local contra el conteo real que devuelve la API, y guarda esa desviación en `mova-token-history.json` — nunca el contenido, solo dos números por proveedor. Con el tiempo, la estimación se calibra específicamente para cada proyecto: su mezcla de idioma, su código, sus documentos. Ver [COMMANDS.md § mova budget](COMMANDS.md#15-tokenomics--mova-budget) para la mecánica completa con ejemplos reales.
+
+---
+### Ejemplo: la analogía de la balanza del aeropuerto
+
+Antes de viajar, pesas la maleta en tu casa con una balanza de baño. Te da una idea aproximada, pero no es la balanza oficial. En el aeropuerto, la maleta se pesa de verdad — y ahí aparece la diferencia entre lo que calculaste y lo que realmente pesa. Si supieras de antemano cuánto se equivoca tu balanza casera (por ejemplo, "siempre marca 3% menos de lo real"), podrías ajustar el cálculo la próxima vez y dejar de llevarte sorpresas en el mostrador.
+
+**Mova Tokenomics hace exactamente eso, pero con tokens en vez de kilos:**
+
+| **La analogía**                                               | **Mova Tokenomics**                                                               |
+| -------------------------------------------------------------  | ----------------------------------------------------------------------------------- |
+|  **Antes del aeropuerto** Balanza de baño en casa              | **Antes de enviar** Estimación local con `tiktoken-go`                              |
+|  **En el aeropuerto** Balanza oficial                          | **En la llamada real** Conteo de tokens devuelto por Anthropic, OpenAI o Google     |
+|  **Límite de la aerolínea** Máximo de equipaje permitido       | **Límite de Mova** `budget.max_tokens` en `project.json`                            |
+|  **Libreta** "En casa dio X, en el aeropuerto dio Y"           | **Historial**`mova-token-history.json` guarda la desviación, nunca el contenido     |
+
+Y como esa libreta es tuya —no un promedio genérico de miles de maletas ajenas— la calibración que aprende Mova es específica de **tu proyecto**: su mezcla de idioma, su código, sus documentos.
+
+**Por qué esto importa para el bolsillo:** cada token que le mandás a un modelo Cloud cuesta dinero; si el modelo es local, un contexto que no entra en la ventana se trunca o degrada en silencio, sin avisar. Mova ataca los dos problemas con el mismo mecanismo: **medir antes de gastar, cortar si se pasa, y aprender de cada llamada real.**
 
 ---
 
