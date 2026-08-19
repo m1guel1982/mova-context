@@ -61,10 +61,12 @@ func (p *geminiNativeProvider) Chat(ctx context.Context, model string, mc *Model
 		return "", Usage{}, err
 	}
 
-	// Build the exact REST URL:
-	// https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=...
+	// Normalización de BaseURL (respetando la configuración del JSON o usando el valor por defecto)
+	baseURL := strings.TrimSuffix(orDefault(p.cfg.BaseURL, "https://generativelanguage.googleapis.com"), "/")
+	baseURL = strings.TrimSuffix(baseURL, "/v1beta")
+
 	cleanModel := strings.TrimPrefix(model, "models/")
-	endpoint := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", cleanModel, p.cfg.APIKey)
+	endpoint := fmt.Sprintf("%s/v1beta/models/%s:generateContent?key=%s", baseURL, cleanModel, p.cfg.APIKey)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {

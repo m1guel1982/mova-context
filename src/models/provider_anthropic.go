@@ -93,7 +93,10 @@ func postAnthropicJSON(ctx context.Context, cfg *ModelConfig, body any, out any)
 	if err != nil {
 		return err
 	}
+
+	// Normalizamos la URL eliminando barras finales y sufijos "/v1/messages" duplication-prone
 	baseURL := strings.TrimSuffix(orDefault(cfg.BaseURL, "https://api.anthropic.com"), "/")
+	baseURL = strings.TrimSuffix(baseURL, "/v1/messages")
 	reqURL := baseURL + "/v1/messages"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
