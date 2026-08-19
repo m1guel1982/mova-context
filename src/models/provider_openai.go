@@ -34,9 +34,11 @@ func (p *openAIProvider) Chat(ctx context.Context, model string, mc *ModelConfig
 		} `json:"error"`
 	}
 
+	// Normalización defensiva de baseURL y path
 	baseURL := strings.TrimSuffix(p.cfg.ResolvedBaseURL(), "/")
+	baseURL = strings.TrimSuffix(baseURL, "/chat/completions")
+	
 	path := "v1/chat/completions"
-
 	if strings.HasSuffix(baseURL, "/v1") {
 		path = "chat/completions"
 	}

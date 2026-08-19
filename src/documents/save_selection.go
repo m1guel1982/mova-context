@@ -131,27 +131,45 @@ func TranscriptText(exchanges []Exchange) string {
 // ExtractCodeBlocks returns strictly the contents of every fenced ```
 // code block in text, in order — independent of language ("go", "python",
 // "yaml", or no tag at all), used by `/save -c` ("únicamente código").
-// If no ``` blocks exist, it falls back to heuristic checks (isLikelyCode)
-// to support raw code responses directly.
+// Ignores internal CLI metadata tags (memory, budget, system).
+// If no valid ``` blocks exist, it falls back to heuristic checks (isLikelyCode).
 func ExtractCodeBlocks(text string) []string {
 	var blocks []string
 	lines := strings.Split(text, "\n")
 	inBlock := false
+	skipBlock := false
 	var cur strings.Builder
+
+	// Etiquetas de control/metadata que NO deben tratarse como código fuente
+	ignoredLangs := map[string]bool{
+		"memory": true,
+		"budget": true,
+		"system": true,
+	}
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") {
 			if inBlock {
-				blocks = append(blocks, strings.TrimRight(cur.String(), "\n"))
+				if !skipBlock {
+					content := strings.TrimRight(cur.String(), "\n")
+					if strings.TrimSpace(content) != "" {
+						blocks = append(blocks, content)
+					}
+				}
 				cur.Reset()
 				inBlock = false
+				skipBlock = false
 			} else {
 				inBlock = true
+				lang := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(trimmed, "```")))
+				if ignoredLangs[lang] {
+					skipBlock = true
+				}
 			}
 			continue
 		}
-		if inBlock {
+		if inBlock && !skipBlock {
 			cur.WriteString(line + "\n")
 		}
 	}

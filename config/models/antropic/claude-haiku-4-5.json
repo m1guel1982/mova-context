@@ -1,0 +1,10 @@
+{
+  "type": "anthropic",
+  "base_url": "https://api.anthropic.com/v1/messages",
+  "api_key": "xxxxxx",
+  "timeout_seconds": 120,
+  "model": "claude-haiku-4-5",
+  "temperature": 0.2,
+  "max_tokens": 4096,
+  "context_window": 200000
+}
