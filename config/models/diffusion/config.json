@@ -1,5 +1,0 @@
-{
-  "provider": "automatic1111",
-  "base_url": "http://localhost:7860",
-  "model": "stable-diffusion-v1-5"
-}

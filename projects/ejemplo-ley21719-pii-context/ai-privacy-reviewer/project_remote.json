@@ -1,0 +1,56 @@
+{
+  "_nota": "Variante REMOTA del mismo ejemplo — misma auditoría de la Ley 21.719, mismo Focus, mismas políticas de privacidad y de presupuesto, pero apuntando a un Ollama que corre en OTRA máquina (por ejemplo una instancia Oracle Cloud/AWS conectada por Tailscale o WireGuard) en vez de localhost. Para activarla: renombrar el project.json actual a project_local.json (respaldo), y renombrar este archivo a project.json — ningún cambio de código, exactamente la misma convención que project_cloud.json. Antes de activarla, edita config/models/ollama/llama3.2.3b-remote.json y reemplaza '100.x.y.z' por la IP privada real de tu servidor.",
+  "_note_en": "REMOTE variant of the same example — same Ley 21.719 audit, same Focus, same privacy and budget policies, but pointing at an Ollama instance running on ANOTHER machine (e.g. an Oracle Cloud/AWS instance reached over Tailscale or WireGuard) instead of localhost. To activate: rename the current project.json to project_local.json (backup), and rename this file to project.json — no code change, same convention as project_cloud.json. Before activating, edit config/models/ollama/llama3.2.3b-remote.json and replace '100.x.y.z' with your server's real private IP.",
+  "_arquitectura": "Separación estricta: ESTA máquina (cliente) lee los archivos del repo, sanitiza, aplica PII Masking, y arma el contexto final — todo eso ocurre aquí, nunca en el servidor remoto. El servidor remoto (Oracle Cloud u otro) solo recibe el payload ya sanitizado a través de 'base_url' y actúa como coprocesador de inferencia stateless: no lee el repo, no ve project.json, no guarda nada del contenido del proyecto. Ver docs/i18n/es/PROJECT_JSON.md § Arquitectura distribuida.",
+
+  "project": "ejemplo-ley21719-pii-context/ai-privacy-reviewer",
+  "description": "Agente del grupo 'ejemplo-ley21719-pii-context' — evalúa qué información es realmente necesaria para responder la consulta y cuál debería evitarse enviar a un LLM externo. Variante REMOTA: mismo agente, mismas políticas de privacidad y presupuesto, apuntando a un Ollama en una red privada (Tailscale/WireGuard) para demostrar el despliegue centralizado multiusuario.",
+  "repo": "examples/ejemplo-ley21719-pii-context-repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "analizar",
+
+  "agents": { "domain": "base", "use": ["ai-privacy-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": ["pii-context-reduction"], "custom": [] },
+
+  "tasks": {
+    "analizar": {
+      "prompt": "analizar-contexto-clientes-ia",
+      "variables": {
+        "query": "Busca la información relevante de los clientes y dime qué datos personales tenemos, para qué los usamos y qué sistemas o procesos están involucrados.",
+        "regulation": "Ley 21.719 (Chile)"
+      },
+      "focus": [
+        "data/customers.json",
+        "data/customer-profile.pdf",
+        "data/privacy-policy.docx",
+        "data/system-logs.txt"
+      ]
+    }
+  },
+
+  "llm_profile": {
+    "provider": "ollama",
+    "config": "llama3.2.3b-remote"
+  },
+
+  "budget": {
+    "max_tokens": 20000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true,
+    "pii_masking": { "enabled": true }
+  },
+
+  "budget_path": "projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/mova-budget-report.md",
+  "token_history_path": "projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/mova-token-history.json",
+
+  "jobs": [
+    {
+      "comment": "Genera el informe narrativo diario de este agente (con PII Masking aplicado antes de que los datos salgan hacia el servidor remoto) — corre a las 2:20 AM, ver README del ejemplo para dónde queda guardado",
+      "schedule": "20 2 * * *",
+      "tasks": ["analizar"],
+      "save": "reports/analisis-ley21719-ia_{date}.md",
+      "budget": { "focus": true }
+    }
+  ]
+}

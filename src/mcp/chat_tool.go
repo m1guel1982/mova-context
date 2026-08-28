@@ -84,7 +84,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		// "build then gate".
 		gated := budget.BuildGatedContext(adapter, root, project, taskName)
 		if gated.Sections != nil {
-			writeContextSummary(&statusLog, gated.Sections)
+			writeContextSummary(&statusLog, gated.Sections, proj)
 		}
 		if gated.Sanitize.LinesRemoved > 0 || gated.Sanitize.BlankRemoved > 0 {
 			statusLog.WriteString(fmt.Sprintf("[Sanitizer] Cleaned %d repeated line(s), %d blank-line run(s).\n", gated.Sanitize.LinesRemoved, gated.Sanitize.BlankRemoved))
@@ -208,19 +208,24 @@ func sendWithToolsMCP(statusLog *strings.Builder, sess *models.Session, adapter 
 			return "", err
 		}
 	}
-	return reply, nil
+	// Same cleanup cli/chat_helpers.go's sendWithTools applies — see
+	// StripResidualToolArtifacts' doc comment for why this is needed and
+	// why it's safe. HTTP gets this for free (http/server.go is a thin
+	// wrapper over this same function via mcp.Process).
+	return StripResidualToolArtifacts(reply), nil
 }
 
 // writeContextSummary mirrors cli/chat_cmd.go's printContextSummary,
-// writing into the tool's returned text instead of the console.
-func writeContextSummary(b *strings.Builder, sections *core.ContextSections) {
+// writing into the tool's returned text instead of the console. proj is
+// used only to resolve "focus_display_limit" (core.FocusDisplayLimit) —
+// pass nil for the built-in default of 2.
+func writeContextSummary(b *strings.Builder, sections *core.ContextSections, proj *core.Project) {
 	if sections.DuplicatesRemoved > 0 {
 		approxTokens := sections.DuplicatesRemovedChars / 4
 		b.WriteString(fmt.Sprintf("[Dedup] Removed %d duplicated paragraph(s) (~%d tokens saved).\n", sections.DuplicatesRemoved, approxTokens))
 	}
-	if sections.Focus != "" {
-		fileCount := strings.Count(sections.Focus, "FOCUS:")
-		b.WriteString(fmt.Sprintf("[Focus] Selected %d file(s).\n", fileCount))
+	if line := core.FormatFocusSelection(sections.FocusItems, core.FocusDisplayLimit(proj)); line != "" {
+		b.WriteString(line)
 	}
 }
 

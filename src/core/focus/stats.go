@@ -33,8 +33,38 @@ type ScanStats struct {
 	// reformulación ni un "parecido". Ver render.go (dedupParagraphs).
 	// Aplica solo a contenido de prosa (Markdown/legal/texto), nunca a
 	// bloques de código, SQL o JSON — esos nunca se tocan.
-	DuplicatesRemoved int
+	DuplicatesRemoved      int
 	DuplicatesRemovedChars int
+
+	// Items: uno por target de nivel superior de `focus`/`memory`
+	// (project.json), en el orden en que aparecen — NUNCA uno por
+	// archivo individual dentro de un directorio/glob. Alimenta el
+	// resumen "[Focus] Selected ..." de `mova chat` y del tool MCP
+	// chat_completion (ver core.FormatFocusSelection) sin que la capa
+	// de presentación tenga que volver a resolver nada.
+	Items []FocusItem
+}
+
+// FocusItem es un target de `focus`/`memory` ya resuelto, anotado para
+// mostrarse: Name es el string EXACTO tal como aparece en project.json
+// (p. ej. "src", "server.js", "."), Kind distingue "file" (un único
+// archivo) de "dir" (un directorio o patrón glob que expandió a 1+
+// archivos), y Files es cuántos archivos reales aportó ese target.
+type FocusItem struct {
+	Name  string
+	Kind  string // "file" | "dir"
+	Files int
+}
+
+// RecordFocusItem agrega un target ya resuelto — la llama render.go una
+// sola vez por target de la lista de `focus`/`memory`, nunca por cada
+// archivo dentro de un directorio. No-op seguro cuando Stats es nil,
+// mismo contrato que RecordScanned/RecordExcluded.
+func (s *ScanStats) RecordFocusItem(name, kind string, files int) {
+	if s == nil {
+		return
+	}
+	s.Items = append(s.Items, FocusItem{Name: name, Kind: kind, Files: files})
 }
 
 // FilesScanned es la cuenta final, deduplicada por ruta real.

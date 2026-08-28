@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	corefocus "mova.local/core/focus"
 	focusrender "mova.local/core/focus/render"
 	"mova.local/dedup"
 )
@@ -44,6 +45,14 @@ type ContextSections struct {
 	Instruction            string
 	DuplicatesRemoved      int
 	DuplicatesRemovedChars int
+
+	// FocusItems: un ítem por target de `focus`/`memory` YA resuelto
+	// (ver mova.local/core/focus.FocusItem) — nunca uno por archivo
+	// individual dentro de un directorio. Vacío cuando el proyecto/task
+	// no tiene `focus` configurado. Alimenta el resumen "[Focus]
+	// Selected ..." de `mova chat`/chat_completion (ver
+	// FormatFocusSelection) sin volver a resolver nada.
+	FocusItems []corefocus.FocusItem
 }
 
 // Full concatenates every section in the exact order and format
@@ -219,15 +228,16 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 	}
 
 	// ── FOCUS ───────────────────────────────────────────────────────────────
- 
-if items := resolveTaskFocus(proj, &task); len(items) > 0 {
-    text, stats := focusrender.RenderFocusContextWithSeen(root, proj.Repo, items, nil, dedupSeen)
-    sections.DuplicatesRemoved += stats.DuplicatesRemoved
-    sections.DuplicatesRemovedChars += stats.DuplicatesRemovedChars // ✅ Ahora sí recibirá el valor real
-    if strings.TrimSpace(text) != "" {
-        sections.Focus = "\n\n---\n## FOCUS\n" + text
-    }
-}
+
+	if items := resolveTaskFocus(proj, &task); len(items) > 0 {
+		text, stats := focusrender.RenderFocusContextWithSeen(root, proj.Repo, items, nil, resolveTaskExclude(proj, &task), dedupSeen)
+		sections.DuplicatesRemoved += stats.DuplicatesRemoved
+		sections.DuplicatesRemovedChars += stats.DuplicatesRemovedChars // ✅ Ahora sí recibirá el valor real
+		sections.FocusItems = stats.Items
+		if strings.TrimSpace(text) != "" {
+			sections.Focus = "\n\n---\n## FOCUS\n" + text
+		}
+	}
 
 	// ── MEMORY ──────────────────────────────────────────────────────────────
 	if mem, _ := adapter.GetMemory(projectName); mem != "" {
@@ -238,7 +248,7 @@ if items := resolveTaskFocus(proj, &task); len(items) > 0 {
 	}
 
 	// ── INSTRUCTION ─────────────────────────────────────────────────────────
-// ── INSTRUCTION ─────────────────────────────────────────────────────────
+	// ── INSTRUCTION ─────────────────────────────────────────────────────────
 	var instruction strings.Builder
 	instruction.WriteString("\n\n---\n## INSTRUCTION\n")
 	instruction.WriteString(fmt.Sprintf("Project: **%s** | Repo: `%s`\n", proj.Project, proj.Repo))
@@ -253,6 +263,82 @@ if items := resolveTaskFocus(proj, &task); len(items) > 0 {
 	sections.Instruction = instruction.String()
 
 	return sections, nil
+}
+
+// FormatFocusSelection arma la línea de estado "[Focus] Selected ..."
+// a partir de los targets ya resueltos — usada por AMBOS `mova chat`
+// (cli/chat_helpers.go) y el tool MCP/HTTP chat_completion
+// (mcp/chat_tool.go), así CLI, HTTP y MCP muestran exactamente la misma
+// línea para el mismo project.json. limit es cuántos nombres listar
+// antes de colapsar el resto en un badge "+N" (ver FocusDisplayLimit).
+// Devuelve "" cuando items está vacío (sin `focus`/`memory` configurado
+// — no imprime nada, igual que antes).
+func FormatFocusSelection(items []corefocus.FocusItem, limit int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	if limit <= 0 {
+		limit = DefaultFocusDisplayLimit
+	}
+
+	files, dirs, totalFiles := 0, 0, 0
+	names := make([]string, 0, len(items))
+	for _, it := range items {
+		if it.Kind == "dir" {
+			dirs++
+		} else {
+			files++
+		}
+		totalFiles += it.Files
+		names = append(names, it.Name)
+	}
+
+	shownCount := limit
+	if shownCount > len(names) {
+		shownCount = len(names)
+	}
+	list := strings.Join(names[:shownCount], ", ")
+	if extra := len(names) - limit; extra > 0 {
+		list += fmt.Sprintf(" 📎+%d", extra)
+	}
+
+	return fmt.Sprintf("[Focus] Selected %d %s (%d file(s) total): %s.\n",
+		len(items), focusKindLabel(files, dirs), totalFiles, list)
+}
+
+// focusKindLabel describe la MEZCLA de targets resueltos ("2 files",
+// "1 directory", "3 items" cuando hay de ambos tipos) — nunca inventa
+// una categoría que no corresponda a lo realmente resuelto.
+func focusKindLabel(files, dirs int) string {
+	switch {
+	case dirs == 0 && files == 1:
+		return "file"
+	case dirs == 0:
+		return "files"
+	case files == 0 && dirs == 1:
+		return "directory"
+	case files == 0:
+		return "directories"
+	default:
+		return "item(s)"
+	}
+}
+
+// DefaultFocusDisplayLimit: cuántos nombres de target muestra "[Focus]
+// Selected ..." antes de colapsar el resto en "+N" cuando project.json
+// no configura "focus_display_limit" — ver FocusDisplayLimit.
+const DefaultFocusDisplayLimit = 2
+
+// FocusDisplayLimit resuelve cuántos nombres mostrar: el
+// "focus_display_limit" de project.json siempre gana; 0/ausente usa
+// DefaultFocusDisplayLimit. Cualquier valor configurado (2, 4, 10, ...)
+// se respeta tal cual — al superarlo SIEMPRE se colapsa el resto en el
+// badge "+N", sin importar cuál sea el número.
+func FocusDisplayLimit(proj *Project) int {
+	if proj != nil && proj.FocusDisplayLimit > 0 {
+		return proj.FocusDisplayLimit
+	}
+	return DefaultFocusDisplayLimit
 }
 
 // dedupSection applies dedup.Paragraphs to one prose chunk and accumulates

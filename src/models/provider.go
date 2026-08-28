@@ -20,6 +20,7 @@ type Usage struct {
 
 type Provider interface {
 	Chat(ctx context.Context, model string, mc *ModelConfig, messages []ChatMessage) (string, Usage, error)
+	ChatStream(ctx context.Context, model string, mc *ModelConfig, messages []ChatMessage, onToken func(string)) (string, Usage, error)
 }
 
 type StreamProvider interface {

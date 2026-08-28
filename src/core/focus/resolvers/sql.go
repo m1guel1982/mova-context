@@ -25,6 +25,11 @@ func createTablePattern(table string) *regexp.Regexp {
 }
 
 func (r *SQLResolver) Match(ctx focus.Context, target string) bool {
+	// Mismo motivo que CodeSymbolResolver.Match: "." / patrones glob son
+	// territorio de GlobResolver, nunca de un catch-all heurístico.
+	if isGlobPattern(target) {
+		return false
+	}
 	return true // catch-all: solo aplica a archivos .sql, decidido en Resolve
 }
 

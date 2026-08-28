@@ -1,0 +1,11 @@
+{
+  "type": "openai",
+  "base_url": "http://localhost:1234/v1",
+  "api_key": "lm-studio",
+  "timeout_seconds": 120,
+  "model": "llama-3.2-3b-instruct",
+  "temperature": 0.2,
+  "max_tokens": 5000,
+  "stream": true,
+  "context_window": 32768
+}

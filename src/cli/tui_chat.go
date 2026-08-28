@@ -2,8 +2,7 @@
 // Budget gate) mirrors `mova chat`'s runChat (chat_cmd.go) exactly —
 // same models.NewSession, core.BuildContextSections, budget.EnforceLimit
 // — and every ordinary message is sent through the same sendWithTools
-// (chat_helpers.go) the CLI REPL uses. Replies are shown once complete
-// (no token-by-token streaming in the TUI, by design — see chatSendCmd).
+// (chat_helpers.go) the CLI REPL uses.
 //
 // Commands (set -model, /memory, /budget, /tools, /clear, /save,
 // /delete, exit|quit) are intercepted the SAME way `mova chat`'s REPL
@@ -44,6 +43,11 @@ type chatScreen struct {
 	adapter   core.Adapter
 	proj      *core.Project
 	fileState *chatFileState
+	// signature: firma de project.json (projectSignature) tal como
+	// estaba la última vez que este chat cargó/recargó su contexto —
+	// ver refreshProjectContext (chat_helpers.go) y su comentario
+	// "Hot reload de project.json durante un chat ya abierto".
+	signature string
 
 	// pendingDelete holds an unconfirmed /delete request while it waits
 	// for the person's next line to be "y"/"n" — see handleCommand and
@@ -56,6 +60,10 @@ type chatScreen struct {
 	spin       spinner.Model
 	waiting    bool
 	setupNote  string
+
+	// Stream channels for token updates
+	tokenChan chan string
+	doneChan  chan chatReplyMsg
 }
 
 func newChatScreen(app *tuiApp, project string) *chatScreen {
@@ -86,10 +94,17 @@ func newChatScreen(app *tuiApp, project string) *chatScreen {
 			sess.SetSystem(systemText + mcp.ToolsSystemPrompt(proj.Tools))
 			sess.CacheBoundary = boundary
 			c.setupNote = "Loaded project: " + project
+			if line := core.FormatFocusSelection(gated.Sections.FocusItems, core.FocusDisplayLimit(proj)); line != "" {
+				c.setupNote += "\n" + strings.TrimSuffix(line, "\n")
+			}
 			if gated.CircuitBreaker.Message != "" {
 				c.setupNote += " — " + gated.CircuitBreaker.Message
 			}
 		}
+		// Firma inicial de project.json — cualquier edición posterior
+		// mientras este chat sigue abierto se detecta comparando contra
+		// esta, ver refreshProjectContext.
+		c.signature = projectSignature(proj)
 	}
 
 	vp := viewport.New(90, 20)
@@ -110,12 +125,42 @@ type chatReplyMsg struct {
 	err   error
 }
 
+type chatTokenMsg string
+
+func listenForStreamTokens(ch chan string) tea.Cmd {
+	return func() tea.Msg {
+		token, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return chatTokenMsg(token)
+	}
+}
+
+func waitForStreamDone(doneChan chan chatReplyMsg) tea.Cmd {
+	return func() tea.Msg {
+		return <-doneChan
+	}
+}
+
 func chatSendCmd(c *chatScreen, text string) tea.Cmd {
 	sess, adapter, proj, root := c.sess, c.adapter, c.proj, c.app.root
-	return func() tea.Msg {
-		reply, _, err := sendWithTools(sess, adapter, proj, root, text, func(string) {})
-		return chatReplyMsg{reply: reply, err: err}
-	}
+	c.tokenChan = make(chan string, 100)
+	c.doneChan = make(chan chatReplyMsg, 1)
+
+	// Inicia el procesamiento en segundo plano enviando cada token al canal
+	go func() {
+		defer close(c.tokenChan)
+		reply, _, err := sendWithTools(sess, adapter, proj, root, text, func(token string) {
+			c.tokenChan <- token
+		})
+		c.doneChan <- chatReplyMsg{reply: reply, err: err}
+	}()
+
+	return tea.Batch(
+		listenForStreamTokens(c.tokenChan),
+		waitForStreamDone(c.doneChan),
+	)
 }
 
 // emit appends one line of command output to the transcript — the sink
@@ -267,18 +312,34 @@ func (c *chatScreen) Update(msg tea.Msg) (tuiScreen, tea.Cmd) {
 				return c, cmd
 			}
 
+			// Hot reload: si project.json cambió mientras este chat
+			// seguía abierto, reconstruye el contexto/system prompt
+			// ANTES de enviar este turno — ver refreshProjectContext.
+			if c.project != "" {
+				c.proj, c.adapter, c.signature = refreshProjectContext(
+					c.app.root, c.project, "", c.sess, c.proj, c.adapter, c.signature, c.emit)
+			}
+
+			c.transcript.WriteString("\n")
 			c.vp.SetContent(c.transcript.String())
 			c.vp.GotoBottom()
 			c.waiting = true
 			return c, tea.Batch(chatSendCmd(c, text), c.spin.Tick)
 		}
 
+	case chatTokenMsg:
+		// Se van escribiendo los tokens acumulados directamente a la transcripción
+		c.transcript.WriteString(string(msg))
+		c.vp.SetContent(c.transcript.String())
+		c.vp.GotoBottom()
+		return c, listenForStreamTokens(c.tokenChan)
+
 	case chatReplyMsg:
 		c.waiting = false
 		if msg.err != nil {
-			c.transcript.WriteString("\n" + msg.err.Error() + "\n")
+			c.transcript.WriteString("\nError: " + msg.err.Error() + "\n")
 		} else {
-			c.transcript.WriteString(fmt.Sprintf("\n[%s]\n%s\n", c.sess.Model, msg.reply))
+			c.transcript.WriteString("\n")
 		}
 		c.vp.SetContent(c.transcript.String())
 		c.vp.GotoBottom()
@@ -310,7 +371,7 @@ func (c *chatScreen) View() string {
 	}
 	body += c.vp.View() + "\n\n"
 	if c.waiting {
-		body += c.spin.View() + " waiting for response…\n"
+		body += c.spin.View() + " streaming response…\n"
 	} else if c.pendingDelete != nil {
 		body += c.input.View() + "\n"
 		body += tuiFooter("y/n: confirm delete · esc: back")

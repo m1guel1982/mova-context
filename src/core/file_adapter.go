@@ -6,6 +6,8 @@
 package core
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -31,6 +33,7 @@ func NewFileAdapter(root string) *fileAdapter { return &fileAdapter{root} }
 //  7. recursive walk: domain/i18n/lang/ (handles subdirs like engineering/)
 //  8. recursive walk: domain/i18n/en/   (en fallback, recursive)
 //  9. recursive walk: domain/           (any subdir under domain)
+//
 // 10. recursive walk: root/             (finds custom/, etc.)
 func (a *fileAdapter) GetKnowledge(kind, domain, lang, name string) (string, error) {
 	if domain == "" {
@@ -113,6 +116,40 @@ func (a *fileAdapter) GetProject(name string) (*Project, error) {
 		return nil, fmt.Errorf("project.json invalid: %w", err)
 	}
 	return &p, nil
+}
+
+// ProjectJSONPath es dónde vive project.json para un proyecto basado en
+// archivos — expuesto para que procesos de vida larga (el REPL de `mova
+// chat`, la invalidación en caliente de mova.local/budget/contextcache.go)
+// puedan vigilarlo sin reimplementar esta misma ruta. Los proyectos
+// respaldados por base de datos (dbAdapter) o los grupos multiagente
+// (projects/<group>/config.json) no tienen project.json — ver
+// ProjectJSONFingerprint, que devuelve ok=false en ese caso en vez de
+// error.
+func ProjectJSONPath(root, project string) string {
+	return filepath.Join(root, "projects", project, "project.json")
+}
+
+// ProjectJSONFingerprint identifica el ESTADO ACTUAL de project.json en
+// disco: su mtime y un hash sha256 de su contenido byte a byte. ok es
+// false cuando el archivo no existe — nunca un error, porque "este
+// proyecto no tiene project.json para vigilar" (DB adapter, grupo
+// multiagente) es un caso normal, no una falla. Usado por
+// mova.local/budget.SanitizeCached (invalidación del cache al primer
+// cambio detectado) y por cli/chat_helpers.go's refreshProjectContext
+// (recarga en caliente durante una sesión de `mova chat` ya abierta).
+func ProjectJSONFingerprint(root, project string) (modTime time.Time, hash string, ok bool) {
+	path := ProjectJSONPath(root, project)
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, "", false
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return info.ModTime(), "", true
+	}
+	sum := sha256.Sum256(data)
+	return info.ModTime(), hex.EncodeToString(sum[:]), true
 }
 
 // ListProjects discovers all projects by recursively walking projects/ for project.json files.

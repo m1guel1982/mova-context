@@ -1,0 +1,10 @@
+{
+  "type": "openai",
+  "base_url": "https://api.openai.com/v1",
+  "api_key": "xxxxx",
+  "timeout_seconds": 120,
+  "model": "gpt-4o-mini",
+  "temperature": 0.2,
+  "max_tokens": 4096,
+  "context_window": 128000
+}

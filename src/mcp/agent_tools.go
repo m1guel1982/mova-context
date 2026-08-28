@@ -164,6 +164,7 @@ func ParseAgentToolCall(reply string) (name string, arguments map[string]any, ok
 		return "", nil, false
 	}
 	raw := strings.TrimSpace(rest[:end])
+	raw = stripFence(raw)
 
 	var call struct {
 		Name      string         `json:"name"`
@@ -173,6 +174,96 @@ func ParseAgentToolCall(reply string) (name string, arguments map[string]any, ok
 		return "", nil, false
 	}
 	return call.Name, call.Arguments, true
+}
+
+// stripFence removes a single wrapping ```/```json Markdown fence around
+// s, if present — some local models (e.g. small Ollama models like
+// lfm2.5-1.2b) wrap the taught <<<MOVA_TOOL_CALL>>> JSON payload in a
+// code fence even though ToolsSystemPrompt's example doesn't show one,
+// which otherwise breaks json.Unmarshal on the fence markers themselves.
+func stripFence(s string) string {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "```") {
+		return s
+	}
+	lines := strings.SplitN(s, "\n", 2)
+	if len(lines) < 2 {
+		return s
+	}
+	body := lines[1]
+	body = strings.TrimSuffix(strings.TrimSpace(body), "```")
+	return strings.TrimSpace(body)
+}
+
+// StripResidualToolArtifacts removes a leftover, never-executed
+// tool-call payload from the START of a model's reply before it is
+// shown to a person — the bug this fixes: a small local model taught
+// ToolsSystemPrompt's protocol sometimes echoes the JSON shape itself
+// (occasionally fenced as ```json) as if it were its answer, instead of
+// (or in addition to) actually emitting <<<MOVA_TOOL_CALL>>> correctly.
+// ParseAgentToolCall only recognizes a call between the real markers, so
+// that echoed shape is never executed and, left alone, leaks into the
+// visible reply as a stray "```json {\"name\":...}" header — exactly the
+// residual prefix this strips. Only a LEADING block matching the taught
+// {"name":..., "arguments":...} shape is removed; any code the person
+// actually asked for later in the reply is untouched. If stripping would
+// leave nothing, the original reply is returned unchanged so a real
+// answer is never silently dropped.
+func StripResidualToolArtifacts(reply string) string {
+	trimmed := strings.TrimLeft(reply, " \t\r\n")
+	body := trimmed
+	fenced := strings.HasPrefix(trimmed, "```")
+	if fenced {
+		nl := strings.Index(trimmed, "\n")
+		if nl == -1 {
+			return reply
+		}
+		rest := trimmed[nl+1:]
+		end := strings.Index(rest, "```")
+		if end == -1 {
+			return reply
+		}
+		body = strings.TrimSpace(rest[:end])
+		trimmed = strings.TrimLeft(rest[end+3:], " \t\r\n")
+	} else {
+		// unfenced: only consider it residue if the ENTIRE leading
+		// JSON value (not just a substring) matches the tool shape —
+		// find the first top-level balanced {...}.
+		if !strings.HasPrefix(body, "{") {
+			return reply
+		}
+		depth, i := 0, 0
+		for ; i < len(body); i++ {
+			switch body[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					i++
+					goto found
+				}
+			}
+		}
+		return reply
+	found:
+		trimmed = strings.TrimLeft(body[i:], " \t\r\n")
+		body = body[:i]
+	}
+
+	var probe struct {
+		Name      string         `json:"name"`
+		Arguments map[string]any `json:"arguments"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(body)), &probe); err != nil || probe.Name == "" {
+		return reply // not the taught shape — leave the reply exactly as-is
+	}
+	trimmed = strings.TrimPrefix(trimmed, toolCallEnd)
+	trimmed = strings.TrimLeft(trimmed, " \t\r\n")
+	if trimmed == "" {
+		return reply // stripping would leave nothing to show — keep the original rather than return blank
+	}
+	return trimmed
 }
 
 // RunAgentTool executes a single whitelisted tool call from inside a chat

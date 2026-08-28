@@ -87,7 +87,11 @@ type MarkdownResolver struct{}
 
 func NewMarkdownResolver() *MarkdownResolver { return &MarkdownResolver{} }
 
-func (r *MarkdownResolver) Match(ctx focus.Context, target string) bool { return true }
+// Match excluye "." y patrones glob — ver CodeSymbolResolver.Match para
+// el motivo exacto (misma clase de falso-positivo LIKE con ".").
+func (r *MarkdownResolver) Match(ctx focus.Context, target string) bool {
+	return !isGlobPattern(target)
+}
 
 func (r *MarkdownResolver) Resolve(ctx focus.Context, target string) ([]focus.ContextBlock, error) {
 	exact := focus.IsExact(target)

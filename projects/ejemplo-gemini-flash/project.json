@@ -6,17 +6,21 @@
   "adapter": "file",
   "default_task": "revisar-backend",
 
- 
+  "agents": { "domain": "base", "use": ["backend-dev", "security-architect"], "custom": [] },
+  "skills": { "domain": "base", "use": ["api-security"], "custom": [] },
+
   "tasks": {
     "revisar-backend": {
       "prompt": "review-project",
       "variables": { "PROJECT": "backend-api", "REVIEW_TYPE": "completa" } ,
-      "focus": ["server.js"]
+      "focus": ["."],
+      "exclude":["deduplicacion.md"]
+     
     }
   },
 
   "llm_profile": {
-    "config": "llama3.2.3b"
+    "config": "lfm2.5-1.2b"
   },
 
   "budget": {

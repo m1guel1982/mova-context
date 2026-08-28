@@ -157,6 +157,14 @@ mova install llama3.1,mistral,phi3
 mova show config
 ```
 
+**Endpoint remoto (Oracle Cloud, AWS, cualquier red privada):** `base_url`, dentro del `.json` del modelo, no tiene que ser `localhost` — puede apuntar a un servidor centralizado (ver [DEPLOY.md](../es/DEPLOY.md)) sobre una red privada (Tailscale/WireGuard):
+
+```json
+{ "base_url": "http://100.x.y.z:11434", "model": "llama3.2:3b" }
+```
+
+Nada más cambia: `project.json` sigue apuntando al mismo `llm_profile.config`, y el pipeline de sanitización/PII Masking sigue corriendo siempre en la máquina local, nunca en el servidor remoto — ver [PROJECT_JSON.md § Arquitectura distribuida](PROJECT_JSON.md#arquitectura-distribuida-endpoints-remotos). Ejemplo listo para probar: `config/models/ollama/llama3.2.3b-remote.json`.
+
 ## 7. Chat — `mova chat`
 
 ```
@@ -257,6 +265,8 @@ Si el contexto supera el Budget, el archivo no se carga.
 { "tools": { "enabled": true, "allow": ["save", "read_file"] } }
 ```
 Con `tools.enabled`, el propio modelo puede pedirle a `mova` que ejecute una acción real (guardar, leer, editar) durante la conversación, en cualquier proveedor. `allow` restringe a un subconjunto (`save`, `read_file`, `patch_file`, `read_document_layer`); sin `allow`, las cuatro quedan habilitadas. Es adicional a `/save`, que siempre funciona sin depender de esto.
+
+El protocolo es texto plano, no la API nativa de function-calling de cada proveedor — un mismo formato (`<<<MOVA_TOOL_CALL>>>{"name":...,"arguments":...}<<<END_MOVA_TOOL_CALL>>>`) para Ollama, Claude, GPT o Gemini por igual. Modelos locales chicos (por ejemplo `lfm2.5-1.2b`) a veces "ecoan" ese mismo formato como si fuera su respuesta en vez de un llamado real; `mova` detecta y descarta ese residuo automáticamente antes de mostrar la respuesta — en CLI, Chat, MCP y HTTP por igual — así que nunca aparece un encabezado JSON crudo donde debería ir la respuesta del modelo.
 
 ## 12. Documentos, medios, texto y código
 

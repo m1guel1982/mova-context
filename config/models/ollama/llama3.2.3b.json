@@ -11,5 +11,6 @@
   "num_predict": 512,
   "temperature": 0,
   "context_window": 131072,
-  "repeat_penalty": 1.1
+  "repeat_penalty": 1.1,
+  "stream": true
 }

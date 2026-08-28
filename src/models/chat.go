@@ -157,14 +157,10 @@ func (s *Session) Send(userText string) (string, error) {
 	return reply, nil
 }
 
-// SendStream es igual que Send, pero si el proveedor activo implementa
-// StreamProvider (hoy: solo Ollama), invoca onToken con cada fragmento
-// de texto a medida que el modelo lo genera — útil para que `mova chat`
-// muestre la respuesta apareciendo palabra por palabra en vez de una
-// pantalla congelada hasta que termine (la latencia total no cambia,
-// pero la percibida sí, sobre todo corriendo en CPU). Si el proveedor
-// activo no soporta streaming, cae a Send() sin romper nada: onToken se
-// llama una sola vez con la respuesta completa al final.
+// SendStream es igual que Send, pero invoca el método de streaming del proveedor.
+// Evalúa dinámicamente si el proveedor implementa ChatStream (o la interfaz legacy StreamProvider).
+// Si el proveedor activo no soporta streaming, cae a Send() de forma transparente sin romper nada:
+// onToken se llama una sola vez con la respuesta completa al final.
 func (s *Session) SendStream(userText string, onToken func(string)) (string, error) {
 	if s.Model == "" {
 		return "", fmt.Errorf("no hay modelo activo — usá `set -model <nombre>` primero")
@@ -175,8 +171,20 @@ func (s *Session) SendStream(userText string, onToken func(string)) (string, err
 	}
 	pv := NewProvider(mc)
 
-	sp, ok := pv.(StreamProvider)
-	if !ok {
+	// Verificación de compatibilidad con la interfaz unificada Provider o la de interfaz explícita StreamProvider
+	type streamable interface {
+		ChatStream(ctx context.Context, model string, mc *ModelConfig, messages []ChatMessage, onToken func(string)) (string, Usage, error)
+	}
+
+	sp, supportsStream := pv.(streamable)
+	if !supportsStream {
+		if legacySp, ok := pv.(StreamProvider); ok {
+			sp = legacySp
+			supportsStream = true
+		}
+	}
+
+	if !supportsStream {
 		reply, err := s.Send(userText)
 		if err == nil && onToken != nil {
 			onToken(reply)

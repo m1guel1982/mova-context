@@ -56,7 +56,12 @@ type MemoryResolver struct{}
 
 func NewMemoryResolver() *MemoryResolver { return &MemoryResolver{} }
 
-func (r *MemoryResolver) Match(ctx focus.Context, target string) bool { return true }
+// Match excluye "." y patrones glob — ver
+// resolvers.CodeSymbolResolver.Match (code_symbol.go) para el motivo
+// exacto (falso-positivo LIKE con "." como símbolo de búsqueda).
+func (r *MemoryResolver) Match(ctx focus.Context, target string) bool {
+	return !isGlobPattern(target)
+}
 
 func (r *MemoryResolver) Resolve(ctx focus.Context, target string) ([]focus.ContextBlock, error) {
 	exact := focus.IsExact(target)
