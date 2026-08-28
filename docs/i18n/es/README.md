@@ -29,7 +29,8 @@ Fuentes  ──▶  Firewall de Privacidad (PII)  ──▶  Agentes  ──▶ 
 8. [Job Engine, Cron y Multiagente](#8-job-engine-cron-y-multiagente)
 9. [Interfaz visual — `mova ui`](#9-interfaz-visual--mova-ui)
 10. [¿Necesito el CLI?](#10-necesito-el-cli) — tabla de decisión
-11. [Seguir profundizando](#11-seguir-profundizando)
+11. [Despliegue multiusuario — Docker / Oracle Cloud](#11-despliegue-multiusuario--docker--oracle-cloud)
+12. [Seguir profundizando](#12-seguir-profundizando)
 
 ---
  
@@ -79,6 +80,12 @@ Un diagrama de arquitectura hecho a mano queda desactualizado la semana siguient
 Mova Context resuelve ambos problemas con el mismo mecanismo: un pipeline de contexto que pasa, siempre, por una capa de sanitización y protección de datos antes de llegar al modelo, y que puede convertirse en una imagen auditable con un solo comando, sin importar qué tan grande sea el proyecto.
 
 Esto no reemplaza una política de privacidad ni una revisión legal — es una herramienta técnica que hace visible y auditable lo que hoy, en la mayoría de los sistemas de IA, queda oculto dentro de una llamada a una API.
+
+### ¿Qué es Mova Context, exactamente?
+
+Mova Context nació como un **workflow en Markdown**: un `workflow.md` que cualquier agente de código (Claude Code, Cursor, etc.) podía leer y seguir, sin ninguna herramienta adicional. Esa convención — `workflow.md` + `agents/` + `skills/` + `prompts/` + `project.json` + `memory.md` — sigue siendo la fuente de verdad y **sigue funcionando exactamente igual sola**, sin instalar nada: se puede usar como workflow, como definición de agente, como skill, o simplemente como prompt estructurado, en cualquier herramienta que ya lea Markdown.
+
+El CLI (y el motor en Go detrás de él) es una capa **opcional** que se agregó después, sobre esa misma convención, para resolver lo que un archivo Markdown por sí solo no puede: gobernanza de contexto (qué datos salen y hacia dónde), presupuesto de tokens (cuánto cuesta antes de enviarlo), y control de inferencia (local, Cloud, o un servidor remoto propio) — sin cambiar una sola línea de `workflow.md`. En otras palabras: **Mova Context es, primero, una convención liviana de archivos; y, opcionalmente, un motor que audita, protege y optimiza esa misma convención.** Ver la sección [FAQ](FAQ.md) para la clasificación completa (qué tipo de herramienta es, qué arquitectura de software usa y por qué).
 
 ---
 
@@ -335,7 +342,7 @@ Antes de viajar, pesas la maleta en tu casa con una balanza de baño. Te da una 
 
 **Mova Tokenomics hace exactamente eso, pero con tokens en vez de kilos:**
 
-| **La analogía**                                               | **Mova Tokenomics**                                                               |
+| **La analogía**                                                | **Mova Tokenomics**                                                               |
 | -------------------------------------------------------------  | ----------------------------------------------------------------------------------- |
 |  **Antes del aeropuerto** Balanza de baño en casa              | **Antes de enviar** Estimación local con `tiktoken-go`                              |
 |  **En el aeropuerto** Balanza oficial                          | **En la llamada real** Conteo de tokens devuelto por Anthropic, OpenAI o Google     |
@@ -422,13 +429,30 @@ Con o sin CLI, la fuente de verdad nunca cambia: `workflow.md`, `agents/`, `skil
 
 ---
 
-## 11. Seguir profundizando
+## 11. Despliegue multiusuario — Docker / Oracle Cloud
+
+El mismo motor que corre en una laptop se empaqueta como imagen Docker y se instala una sola vez en una instancia centralizada (Oracle Cloud, AWS, o cualquier equipo con Docker), para que todo un equipo comparta un mismo servidor de inferencia sin que cada persona tenga que correr un modelo local:
+
+```bash
+docker build -t mova-context:latest .
+docker compose up -d        # levanta mova-context + ollama en una red privada
+```
+
+- La construcción del contexto, la sanitización y el PII Masking **siempre** ocurren en la máquina de cada usuario — el servidor centralizado solo recibe el payload final, ya listo, y actúa como coprocesador de inferencia *stateless* (nunca ve el repositorio ni `project.json`).
+- Apuntar a ese servidor desde cualquier `project.json` es solo cuestión de cambiar `base_url` en el `.json` del modelo — ver [PROJECT_JSON.md § Arquitectura distribuida](PROJECT_JSON.md#arquitectura-distribuida-endpoints-remotos).
+- Guía paso a paso completa (build, Docker Hub, Oracle Cloud, AWS, seguridad de red con Tailscale/WireGuard): **[DEPLOY.md](DEPLOY.md)**.
+
+---
+
+## 12. Seguir profundizando
 
 | Se busca... | Documento |
 |---|---|
 | Ver todos los comandos (memoria, Focus, MCP, HTTP, diagramas, tokenomics) | [COMMANDS.md](COMMANDS.md) |
 | Leer la especificación completa que siguen los modelos | [workflow.md](../../../workflow.md) |
 | Entender el código fuente (Resolvers, Adapters, cómo extenderlo) | [SOURCE.md](../SOURCE.md) *(en inglés)* |
+| Desplegar en Docker / Oracle Cloud / AWS para todo un equipo | [DEPLOY.md](DEPLOY.md) |
+| Preguntas frecuentes — clasificación, arquitectura, gobernanza de contexto, costos | [FAQ.md](FAQ.md) |
 
 ---
 

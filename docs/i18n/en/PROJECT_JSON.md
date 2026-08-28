@@ -35,9 +35,11 @@ Every project lives in `projects/<name>/project.json`. This is the single source
 | `default_task` | string | task used when none is given on the command line |
 | `variables` | object | `{name: value}` injected into prompts/agents/skills |
 | `agents` / `skills` | object | `{ "domain", "use": [...], "custom": [...] }` |
-| `tasks` | object | named tasks — each may override `prompt`/`agents`/`skills`/`variables`/`focus`/`budget` |
+| `tasks` | object | named tasks — each may override `prompt`/`agents`/`skills`/`variables`/`focus`/`exclude`/`budget` |
 | `archive` | object | memory management config (see [COMMANDS.md §4](COMMANDS.md#4-memory)) |
-| `focus` | array | files/dirs/symbols to work on instead of the whole repo — see **Working on part of `repo`** below |
+| `focus` | array | files/dirs/symbols to work on instead of the whole repo — see **Working on part of `repo`** below. Also supports cross-platform absolute host paths (`"C:\\example\\file.py"`, `"/mnt/data"`) alongside repo-relative paths and globs — see **Absolute paths in `focus`** below |
+| `exclude` | array | files/dirs/patterns `focus` must NEVER read, even if requested by exact name — same syntax as `focus` (name, relative path, cross-platform absolute path, glob). See **Excluding from `focus` (`exclude`)** below |
+| `focus_display_limit` | number | how many `focus` file/directory names the `[Focus] Selected ...` line (`mova chat`, chat_completion, Mova UI) shows before collapsing the rest into a `+N` badge. Defaults to `2` — see **The `[Focus] Selected ...` line** below |
 | `budget` | object | `{ "max_tokens": N }` — the context ceiling (see [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget)) |
 | `workflow_path` | string | where `workflow.md` lives for this project — see **Workflow** below |
 | `budget_path` | string | where `mova-budget-report.md` is written — see **Budget report** below |
@@ -67,6 +69,68 @@ If part of your work only touches one folder inside `repo` — one service in a 
 Each task scopes itself to its own directory with `focus` — see [COMMANDS.md's Focus section](COMMANDS.md#3-focus--scoping-context-to-part-of-the-repo) for the full glob/directory syntax (`"**/*"`, `"."`, `"src/"`, ...). This keeps `project.json` simple (one `repo`, one path) while still letting each task work on just its own slice of the repository.
 
 If your work genuinely spans two UNRELATED repositories — different owners, different release cycles, never touched by the same task — the simpler and more honest setup is two separate projects (`projects/service-a/project.json`, `projects/service-b/project.json`), each with its own `repo`, `workflow_path`, `budget_path`, and `token_history_path`. See **More than one project** below.
+
+## Absolute paths in `focus` (Windows / Linux / macOS)
+
+Besides repo-relative paths, a `focus` (or `memory`) target can be an absolute filesystem path, to work with a file or folder that lives **entirely outside `repo`**:
+
+```json
+{
+  "focus": [
+    "C:\\ejemploPython\\testSentence.py",
+    "d:\\test\\test.py",
+    "/mnt/archivo.java",
+    "/mnt"
+  ]
+}
+```
+
+Works identically no matter which OS `mova` runs on — a Windows drive letter (`C:\...`) or a UNC path (`\\server\share`) resolves directly; a Unix-style `/something` is tried first as a real absolute path (used as such if it exists on disk), and falls back to the historical behavior (relative to `repo`'s root — the long-standing `"/src"` convention keeps working exactly as before) if it doesn't. An absolute glob also works (`"/mnt/**/*.java"`).
+
+## Excluding from `focus` (`exclude`)
+
+`exclude` is `focus`'s counterpart: a list of targets, with the **same cross-platform syntax** (bare name, relative path, absolute host path, glob), but for EXCLUSION. Any file or directory matching an `exclude` pattern is never read — even if `focus` requests it by its exact name — and therefore never makes it into `mova-context-cache.json`.
+
+```json
+{
+  "focus": ["."],
+  "exclude": [
+    "node_modules",
+    ".git",
+    "C:\\secrets",
+    "D:\\private",
+    "/mnt/sensitive-data",
+    "*.env"
+  ]
+}
+```
+
+Supported forms, same as `focus`:
+
+| Pattern | What it excludes |
+|---|---|
+| `"node_modules"`, `".git"` | that folder/file by NAME, at any level of the tree — no need to know the full path |
+| `"src/secrets"` | that specific path, relative to `repo` |
+| `"C:\\secrets"`, `"/mnt/data"` | that absolute host path (and everything under it, if it's a directory) |
+| `"*.env"`, `"**/*.pem"` | any file matching the glob, regardless of directory |
+
+A task-level `tasks.<name>.exclude` overrides (does not merge with) the project-level `exclude` — same rule as `focus`. If `exclude` isn't declared, `focus` behaves exactly as it did before this key existed (on top of the always-on default exclusion of `.git`/`node_modules`/`vendor`/`dist`/`build`/`__pycache__`/`.venv`/`venv`/`.idea`/`.vscode`).
+
+## The `[Focus] Selected ...` line
+
+When `focus` is configured, `mova chat`, the `chat_completion` tool (MCP/HTTP), and Mova UI show a status line summarizing what's about to be analyzed — for example:
+
+```
+[Focus] Selected 3 items (45 file(s) total): server.js, backend-test.py 📎+1.
+```
+
+It distinguishes file from directory, counts real resolved files (not configured targets), and lists up to `focus_display_limit` names before collapsing the rest into the `📎+N` badge:
+
+```json
+{ "focus_display_limit": 4 }
+```
+
+Defaults to `2` when not declared. Any configured value is respected as-is — exceeding it always shows the `+N`, whatever the limit is.
 
 ## Workflow example
 
@@ -349,3 +413,29 @@ for the full command. Absent = defaults apply (`verbose`, export to
 |---|---|---|---|
 | `detail_level` | `"simple"` \| `"verbose"` | `"verbose"` | Diagram detail level — the CLI's `--diagram` can override this per run |
 | `export_formats` | array of strings | `["svg"]` | Default formats when `mova run --diagram` is called without `--export` |
+
+## Distributed architecture (remote endpoints)
+
+`llm_profile` makes no distinction between a model running on `localhost` and one running on another machine — the only field that changes is `base_url`, inside the file `llm_profile.config` points to (`config/models/<provider>/<file>.json`), never `project.json` itself. This is what enables a centralized deployment (see [DEPLOY.md](DEPLOY.md)): a single instance — for example a Docker container on Oracle Cloud or AWS running `mova mcp start` + Ollama — serves as an inference coprocessor for several local clients, without any of them needing to run the model on their own.
+
+```json
+{
+  "base_url": "http://100.x.y.z:11434",
+  "model": "llama3.2:3b",
+  "timeout_seconds": 300
+}
+```
+
+`100.x.y.z` is deliberately a **private-network** address (Tailscale, WireGuard, or a cloud provider's own virtual network) — never an unprotected public IP: see DEPLOY.md § Network security for why. The repository ships a complete, ready-to-try example under `config/models/ollama/llama3.2.3b-remote.json` and `projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/project_remote.json` — the same `project_local.json` / `project_cloud.json` / `project_remote.json` convention the Ley 21.719 example already uses to switch between a local model, a Cloud model, and a remote model without changing a single line of code.
+
+**Strict separation of responsibilities — why the remote server never sees the repository:**
+
+| Always happens on the CLIENT (this machine) | Always happens on the remote SERVER |
+|---|---|
+| Reading `project.json`, `agents/`, `skills/`, `prompts/`, `memory.md` | None of the above — the remote server neither has nor needs the repository |
+| Sanitization (`budget.sanitize`) and deduplication | — |
+| PII Masking (`budget.pii_masking`) | — |
+| Building the final context (the complete Token Firewall pipeline) | — |
+| Sending the final, ready payload to `base_url` | Receiving the payload and running inference — a stateless coprocessor that never persists any project content |
+
+This separation isn't a configurable option: it's how the pipeline is built (`budget.BuildGatedContext` always runs locally, before `models.Session.Send` makes the outbound HTTP call) — the same engine serves a model on `localhost` and one on Oracle Cloud identically, with no separate code path between the two.

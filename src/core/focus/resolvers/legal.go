@@ -29,7 +29,12 @@ type LegalResolver struct{}
 
 func NewLegalResolver() *LegalResolver { return &LegalResolver{} }
 
-func (r *LegalResolver) Match(ctx focus.Context, target string) bool { return true }
+// Match excluye "." y patrones glob — ver
+// resolvers.CodeSymbolResolver.Match (code_symbol.go) para el motivo
+// exacto (falso-positivo LIKE con "." como símbolo de búsqueda).
+func (r *LegalResolver) Match(ctx focus.Context, target string) bool {
+	return !isGlobPattern(target)
+}
 
 func (r *LegalResolver) Resolve(ctx focus.Context, target string) ([]focus.ContextBlock, error) {
 	exact := focus.IsExact(target)

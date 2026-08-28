@@ -37,7 +37,7 @@ func TestRenderFocusContextWithSeen_DedupsAgainstExternalSeen(t *testing.T) {
 		"Shared warning paragraph that repeats elsewhere.": true,
 	}
 
-	text, stats := RenderFocusContextWithSeen(root, "repo", []string{"notes.md"}, nil, externalSeen)
+	text, stats := RenderFocusContextWithSeen(root, "repo", []string{"notes.md"}, nil, nil, externalSeen)
 
 	if strings.Contains(text, "Shared warning paragraph") {
 		t.Fatalf("expected the paragraph already in externalSeen to be removed from focus output, got:\n%s", text)
@@ -56,7 +56,7 @@ func TestRenderFocusContext_StillWorksWithoutExternalSeen(t *testing.T) {
 	// RenderFocusContext (sin "WithSeen") no debe cambiar de
 	// comportamiento — sigue creando su propio seen interno, como
 	// siempre.
-	text, _ := RenderFocusContext(root, "repo", []string{"notes.md"}, nil)
+	text, _ := RenderFocusContext(root, "repo", []string{"notes.md"}, nil, nil)
 	if !strings.Contains(text, "Shared warning paragraph") {
 		t.Fatalf("expected RenderFocusContext (no external seen) to include all content normally, got:\n%s", text)
 	}

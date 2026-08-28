@@ -72,23 +72,31 @@ func LoadSpend(path string) (SpendState, error) {
 // saves — called once per REAL API call that actually happened (see
 // cli/chat_helpers.go's recordRealUsage and mcp/chat_tool.go), never
 // for a dry-run estimate.
+//
+// Serializada con withFileLock por la misma razón que RecordUsage: bajo
+// concurrencia masiva (varios chat_completion de MCP/HTTP en paralelo
+// para el mismo proyecto) esto es un contador de dinero — una carrera
+// aquí literalmente pierde gasto real, así que el lock es obligatorio,
+// no una optimización opcional.
 func RecordSpend(path string, tokens int, usd float64) error {
-	state, err := LoadSpend(path)
-	if err != nil {
-		return err
-	}
-	state.TokensSpent += tokens
-	state.USDSpent += usd
-	state.Month = currentMonth()
+	return withFileLock(path, func() error {
+		state, err := LoadSpend(path)
+		if err != nil {
+			return err
+		}
+		state.TokensSpent += tokens
+		state.USDSpent += usd
+		state.Month = currentMonth()
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(state, "", "  ")
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(path, data, 0o644)
+	})
 }
 
 // CircuitBreakerResult is what CheckCircuitBreaker returns — always

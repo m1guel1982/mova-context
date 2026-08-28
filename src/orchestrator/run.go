@@ -8,6 +8,10 @@ package orchestrator
 
 import (
 	"fmt"
+	"os"
+	"runtime"
+	"strconv"
+	"sync"
 
 	"mova.local/budget"
 	"mova.local/core"
@@ -40,18 +44,20 @@ func RunAgent(adapter core.Adapter, root, group, agent, task string) AgentResult
 }
 
 // RunGroup runs every agent in only (or, when only is empty, every agent
-// declared/discovered in the group's config.json — see LoadGroupConfig),
-// SEQUENTIALLY, one after another, in the order given.
+// declared/discovered in the group's config.json — see LoadGroupConfig)
+// through a bounded worker pool, and returns results in the SAME order
+// agents were requested regardless of which goroutine finishes first.
 //
-// Extensibility (parallel execution, spec section 7's "diseño preparado
-// para ejecución paralela futura"): this loop is the single place that
-// would change — replacing the for-loop body with a goroutine per agent
-// and a sync.WaitGroup — without touching RunAgent, GroupConfig, or any
-// caller's contract (AgentResult stays the same either way). Not done
-// today because unattended parallel runs share nothing that needs
-// coordinating yet (no shared mutable state across agents), so the
-// simplest correct implementation is sequential until a concrete need
-// for parallel throughput appears.
+// Why a worker pool instead of one goroutine per agent: a group can
+// list many agents, and this same process may be serving other
+// concurrent callers at once (CLI, Chat, MCP, HTTP API — see
+// http/server.go's own concurrency limiter). Bounding how many agents
+// of ONE group run at the same time keeps total goroutine/file-handle
+// usage predictable on a shared server instead of growing unbounded
+// with group size. RunAgent itself is untouched — it is already safe to
+// call concurrently, since every piece of state it can touch
+// (mova-token-history.json, mova-spend.json, mova-context-cache.json)
+// is now guarded by budget.withFileLock (see budget/filelock.go).
 func RunGroup(adapter core.Adapter, root, group string, only []string, task string) ([]AgentResult, error) {
 	cfg, err := LoadGroupConfig(root, group)
 	if err != nil {
@@ -65,9 +71,40 @@ func RunGroup(adapter core.Adapter, root, group string, only []string, task stri
 		return nil, fmt.Errorf("no agents found for group %q (checked config.json \"agents\" and subdirectories under projects/%s/)", group, group)
 	}
 
-	results := make([]AgentResult, 0, len(agents))
-	for _, agent := range agents {
-		results = append(results, RunAgent(adapter, root, group, agent, task))
+	results := make([]AgentResult, len(agents))
+	sem := make(chan struct{}, groupWorkerLimit())
+	var wg sync.WaitGroup
+	for i, agent := range agents {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, agent string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			results[i] = RunAgent(adapter, root, group, agent, task)
+		}(i, agent)
 	}
+	wg.Wait()
 	return results, nil
+}
+
+// groupWorkerLimit caps how many agents of one RunGroup call execute at
+// once. Overridable with MOVA_MAX_CONCURRENCY for tuning on a given
+// host (e.g. a small shared Oracle Cloud instance vs. a beefy
+// workstation); defaults to runtime.NumCPU(), capped at 8 so a group
+// with dozens of agents never opens dozens of simultaneous model
+// requests by accident.
+func groupWorkerLimit() int {
+	if v := os.Getenv("MOVA_MAX_CONCURRENCY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	n := runtime.NumCPU()
+	if n < 1 {
+		n = 1
+	}
+	if n > 8 {
+		n = 8
+	}
+	return n
 }

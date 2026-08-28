@@ -10,6 +10,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"runtime"
+	"strconv"
+	"time"
 
 	"mova.local/core"
 	"mova.local/logging"
@@ -217,7 +221,60 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("Mova MCP (HTTP) running → http://localhost%s/mcp", addr)
-	return http.ListenAndServe(addr, mux)
+
+	// net/http already gives every request its own goroutine; what it
+	// does NOT give is a ceiling, so a burst of concurrent callers (CLI
+	// scripts, a Chat UI, MCP clients, and other HTTP callers all
+	// hitting the same shared instance — e.g. on a small Oracle Cloud
+	// box) can otherwise spin up unbounded goroutines and file handles
+	// at once. httpConcurrencyLimit() bounds that; ReadTimeout/
+	// WriteTimeout/IdleTimeout keep a slow or dead client from holding a
+	// worker slot forever.
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      limitConcurrency(mux, httpConcurrencyLimit()),
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+	return srv.ListenAndServe()
+}
+
+// httpConcurrencyLimit reads MOVA_HTTP_MAX_CONCURRENCY, or defaults to
+// 4× runtime.NumCPU() (capped at 64) — generous enough for normal
+// bursts while still bounded, so this same knob can be tuned down on a
+// small shared server and up on a dedicated one.
+func httpConcurrencyLimit() int {
+	if v := os.Getenv("MOVA_HTTP_MAX_CONCURRENCY"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	n := runtime.NumCPU() * 4
+	if n < 8 {
+		n = 8
+	}
+	if n > 64 {
+		n = 64
+	}
+	return n
+}
+
+// limitConcurrency wraps handler with a semaphore so at most limit
+// requests execute at once; once the limit is reached it replies 503
+// immediately instead of letting goroutines pile up unboundedly while
+// callers wait.
+func limitConcurrency(handler http.Handler, limit int) http.Handler {
+	sem := make(chan struct{}, limit)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
+			handler.ServeHTTP(w, r)
+		default:
+			http.Error(w, `{"error":"server busy, try again"}`, http.StatusServiceUnavailable)
+		}
+	})
 }
 
 // mcpErrorHTTP helper exclusivo para respuestas rápidas de fallos de

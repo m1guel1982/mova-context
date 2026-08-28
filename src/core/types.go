@@ -23,7 +23,17 @@ type Project struct {
 	Tasks       map[string]Task   `json:"tasks"`
 	Archive     *ArchiveConfig    `json:"archive"` // optional memory management config
 	Focus       []string          `json:"focus"`   // files/dirs/symbols to work on — the way to scope to part of "repo", instead of a second repo (see "5. `save` and 9. `save` — Focus" in COMMANDS.md)
-	Budget      *BudgetConfig     `json:"budget"`  // optional: token ceiling for `mova budget` (see BudgetConfig)
+	// Exclude: MISMO formato/soporte multiplataforma que "focus"
+	// (nombre bare como "node_modules"/".git", ruta relativa como
+	// "src/secrets", ruta absoluta del host — "C:\\secrets",
+	// "D:\\private", "/mnt/private" — o glob como "*.env"/"**/*.pem")
+	// pero para EXCLUSIÓN: cualquier archivo/directorio que matchee un
+	// patrón de "exclude" NUNCA se resuelve — ni por un target
+	// explícito de "focus", ni al recorrer un directorio/glob — y por
+	// lo tanto nunca se agrega a mova-context-cache.json. Ver
+	// core.ResolveExclude / core/focus/resolvers/exclude.go.
+	Exclude []string      `json:"exclude"`
+	Budget  *BudgetConfig `json:"budget"` // optional: token ceiling for `mova budget` (see BudgetConfig)
 	// WorkflowPath: where workflow.md lives for this project (see "5./6.
 	// workflow.md" in the spec). A single path — once configured, that
 	// file is always used: Mova never searches for another workflow.md.
@@ -50,6 +60,14 @@ type Project struct {
 	// same "declare nothing, get the safe default" rule every other
 	// optional block in this struct follows.
 	Diagram *DiagramConfig `json:"diagram,omitempty"`
+	// FocusDisplayLimit: cuántos nombres de archivo/directorio de
+	// `focus` muestra la línea de estado "[Focus] Selected ..." (`mova
+	// chat`, tool MCP/HTTP chat_completion, Mova UI) antes de colapsar
+	// el resto en un badge "+N" — ver core.FocusDisplayLimit.
+	// 0/ausente = 2 (el default de fábrica). Cualquier número
+	// configurado se respeta tal cual: al superarlo SIEMPRE aparece el
+	// "+N", sea cual sea el límite.
+	FocusDisplayLimit int `json:"focus_display_limit,omitempty"`
 }
 
 // DiagramConfig maps project.json's optional "diagram" object — see
@@ -146,7 +164,15 @@ type Task struct {
 	Skills    []string          `json:"skills"`    // extra skills for this task
 	Variables map[string]string `json:"variables"` // task-level variable overrides
 	Focus     []string          `json:"focus"`     // task-level focus (overrides global focus if set)
-	Budget    *BudgetConfig     `json:"budget"`    // task-level budget ceiling (overrides project-level if set)
+	// Exclude: mismo formato que Focus (nombre bare, ruta relativa,
+	// ruta absoluta multiplataforma, glob) pero para EXCLUIR — un
+	// archivo/directorio que matchea Exclude NUNCA se resuelve, sin
+	// importar si Focus lo pide explícitamente. Ver
+	// core.ResolveExclude / core/focus/resolvers/exclude.go.
+	// Sobreescribe (no combina con) Project.Exclude si viene con al
+	// menos un elemento, igual que Focus.
+	Exclude []string      `json:"exclude"`
+	Budget  *BudgetConfig `json:"budget"` // task-level budget ceiling (overrides project-level if set)
 }
 
 // ProjectSummary is used by mova list.

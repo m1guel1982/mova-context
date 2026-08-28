@@ -62,7 +62,7 @@ func runProject(root string, adapter core.Adapter, project, task string) {
 	// with the multiagent orchestrator's per-agent run).
 	gated := budget.BuildGatedContext(adapter, root, project, task)
 	if gated.Sections != nil {
-		printContextSummary(gated.Sections)
+		printContextSummary(gated.Sections, proj)
 	}
 	if gated.Err != nil {
 		consolePrint("\n" + gated.Err.Error() + "\n")

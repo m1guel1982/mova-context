@@ -1,0 +1,29 @@
+{
+  "project": "chat-generico",
+  "description": "Consola de chat libre multipropósito sin restricciones de contexto ni especialidad",
+  "repo": ".",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "libre",
+
+  "tasks": {
+    "libre": {
+      "prompt": "general-assistant",
+      "variables": {},
+      "focus": []
+    }
+  },
+
+  
+  "llm_profile": {
+    "config": "lfm2.5-1.2b"
+  },
+
+  "budget": {
+    "max_tokens": 16000
+  },
+  
+  "token_history_path": "/projects/chat-generico/mova-token-history.json",
+  "budget_path": "/projects/chat-generico/mova-budget-example-report.md"
+
+}

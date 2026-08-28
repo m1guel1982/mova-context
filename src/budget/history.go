@@ -72,24 +72,32 @@ func LoadHistory(path string) (TokenHistory, error) {
 // Cloud (chat_completion con un proveedor Cloud configurado). Nunca se
 // guarda el prompt, la respuesta, ni ningún dato más allá de estos dos
 // números.
+//
+// Serializada con withFileLock: bajo alta concurrencia (CLI, Chat, MCP
+// y HTTP API invocando el mismo proyecto al mismo tiempo) un
+// read-modify-write sin lock perdería actualizaciones — dos goroutines
+// leerían el mismo estado viejo y la segunda escritura pisaría a la
+// primera.
 func RecordUsage(path, provider string, localTokens, apiTokens int) error {
-	history, err := LoadHistory(path)
-	if err != nil {
-		return err
-	}
-	acc := history[provider]
-	acc.TotalLocalTokens += localTokens
-	acc.TotalAPITokens += apiTokens
-	history[provider] = acc
+	return withFileLock(path, func() error {
+		history, err := LoadHistory(path)
+		if err != nil {
+			return err
+		}
+		acc := history[provider]
+		acc.TotalLocalTokens += localTokens
+		acc.TotalAPITokens += apiTokens
+		history[provider] = acc
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(history, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(history, "", "  ")
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(path, data, 0o644)
+	})
 }
 
 // DeviationPercent calcula (API - Local) / Local * 100 para un proveedor

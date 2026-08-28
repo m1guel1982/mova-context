@@ -35,9 +35,11 @@ Cada proyecto vive en `projects/<nombre>/project.json`. Esta es la única fuente
 | `default_task` | string | task usada cuando no se indica ninguna en la línea de comandos |
 | `variables` | object | `{nombre: valor}` inyectadas en prompts/agents/skills |
 | `agents` / `skills` | object | `{ "domain", "use": [...], "custom": [...] }` |
-| `tasks` | object | tasks nombradas — cada una puede sobreescribir `prompt`/`agents`/`skills`/`variables`/`focus`/`budget` |
+| `tasks` | object | tasks nombradas — cada una puede sobreescribir `prompt`/`agents`/`skills`/`variables`/`focus`/`exclude`/`budget` |
 | `archive` | object | configuración de gestión de memoria (ver [COMMANDS.md §4](COMMANDS.md#4-memoria)) |
-| `focus` | array | archivos/directorios/símbolos sobre los que trabajar en vez de todo el repo — ver **Trabajar sobre parte de `repo`** abajo |
+| `focus` | array | archivos/directorios/símbolos sobre los que trabajar en vez de todo el repo — ver **Trabajar sobre parte de `repo`** abajo. Soporta rutas absolutas multiplataforma (`"C:\\ejemplo\\archivo.py"`, `"/mnt/datos"`) además de rutas relativas al repo y globs — ver **Rutas absolutas en `focus`** abajo |
+| `exclude` | array | archivos/directorios/patrones que `focus` NUNCA debe leer, ni siquiera si se piden por nombre exacto — misma sintaxis que `focus` (nombre, ruta relativa, ruta absoluta multiplataforma, glob). Ver **Excluir de `focus` (`exclude`)** abajo |
+| `focus_display_limit` | number | cuántos nombres de archivo/directorio de `focus` muestra la línea `[Focus] Selected ...` (`mova chat`, chat_completion, Mova UI) antes de colapsar el resto en un badge `+N`. Por defecto `2` — ver **Mensaje `[Focus] Selected ...`** abajo |
 | `budget` | object | `{ "max_tokens": N }` — el techo de contexto (ver [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget)) |
 | `workflow_path` | string | dónde vive `workflow.md` para este proyecto — ver **Workflow** abajo |
 | `budget_path` | string | dónde se escribe `mova-budget-report.md` — ver **Reporte de Budget** abajo |
@@ -67,6 +69,68 @@ Si parte del trabajo toca solo una carpeta dentro de `repo` — un servicio en u
 Cada task se acota a su propio directorio con `focus` — ver la [sección de Focus en COMMANDS.md](COMMANDS.md#3-focus--acotar-el-contexto-a-parte-del-repo) para la sintaxis completa de glob/directorio (`"**/*"`, `"."`, `"src/"`, ...). Esto mantiene `project.json` simple (un `repo`, una ruta) y a la vez permite que cada task trabaje solo sobre su propia porción del repositorio.
 
 Si el trabajo realmente cruza dos repositorios NO relacionados — dueños distintos, ciclos de release distintos, nunca tocados por la misma task — la configuración más simple y honesta es dos proyectos separados (`projects/servicio-a/project.json`, `projects/servicio-b/project.json`), cada uno con su propio `repo`, `workflow_path`, `budget_path` y `token_history_path`. Ver **Más de un proyecto** abajo.
+
+## Rutas absolutas en `focus` (Windows / Linux / macOS)
+
+Además de rutas relativas al repo, un target de `focus` (o `memory`) puede ser una ruta absoluta del filesystem del host, para trabajar con un archivo o carpeta que vive **fuera de `repo` por completo**:
+
+```json
+{
+  "focus": [
+    "C:\\ejemploPython\\testSentence.py",
+    "d:\\test\\test.py",
+    "/mnt/archivo.java",
+    "/mnt"
+  ]
+}
+```
+
+Funciona igual sin importar en qué sistema operativo corre `mova` — una letra de unidad Windows (`C:\...`) o una ruta UNC (`\\server\share`) se resuelve directo; un `/algo` estilo Unix se prueba primero como ruta absoluta real (si existe en disco, se usa así), y si no existe cae al comportamiento de siempre (relativo a la raíz de `repo` — la convención histórica de `"/src"` sigue funcionando exactamente igual que antes). Un glob absoluto también funciona (`"/mnt/**/*.java"`).
+
+## Excluir de `focus` (`exclude`)
+
+`exclude` es la contraparte de `focus`: una lista de targets, con la **misma sintaxis multiplataforma** (nombre bare, ruta relativa, ruta absoluta del host, glob), pero para EXCLUSIÓN. Cualquier archivo o directorio que matchee un patrón de `exclude` nunca se lee — ni siquiera si `focus` lo pide por su nombre exacto — y por lo tanto nunca se agrega a `mova-context-cache.json`.
+
+```json
+{
+  "focus": ["."],
+  "exclude": [
+    "node_modules",
+    ".git",
+    "C:\\secrets",
+    "D:\\privado",
+    "/mnt/datos-sensibles",
+    "*.env"
+  ]
+}
+```
+
+Formas soportadas, igual que `focus`:
+
+| Patrón | Qué excluye |
+|---|---|
+| `"node_modules"`, `".git"` | esa carpeta/archivo por NOMBRE, en cualquier nivel del árbol — no hace falta conocer la ruta completa |
+| `"src/secretos"` | esa ruta puntual, relativa a `repo` |
+| `"C:\\secrets"`, `"/mnt/datos"` | esa ruta absoluta del host (y todo lo que esté debajo, si es un directorio) |
+| `"*.env"`, `"**/*.pem"` | cualquier archivo que matchee el glob, sin importar el directorio |
+
+`exclude` a nivel `tasks.<nombre>.exclude` sobreescribe (no combina con) el `exclude` de nivel proyecto — misma regla que `focus`. Si no se declara `exclude`, `focus` se comporta exactamente igual que antes de que esta clave existiera (además de la exclusión por defecto, siempre activa, de `.git`/`node_modules`/`vendor`/`dist`/`build`/`__pycache__`/`.venv`/`venv`/`.idea`/`.vscode`).
+
+## Mensaje `[Focus] Selected ...`
+
+Cuando `focus` está configurado, `mova chat`, el tool `chat_completion` (MCP/HTTP) y Mova UI muestran una línea de estado con lo que se va a analizar — por ejemplo:
+
+```
+[Focus] Selected 3 items (45 file(s) total): server.js, backend-test.py 📎+1.
+```
+
+Distingue archivo de directorio, cuenta archivos reales (no targets de configuración), y lista hasta `focus_display_limit` nombres antes de colapsar el resto en el badge `📎+N`:
+
+```json
+{ "focus_display_limit": 4 }
+```
+
+Si no se declara, el valor por defecto es `2`. Cualquier número configurado se respeta tal cual — al superarlo siempre aparece el `+N`, sea cual sea el límite.
 
 ## Ejemplo de workflow
 
@@ -351,3 +415,29 @@ para el comando completo. Ausente = se usan los valores por defecto
 |---|---|---|---|
 | `detail_level` | `"simple"` \| `"verbose"` | `"verbose"` | Nivel de detalle del diagrama — `--diagram` en la CLI puede pisar este valor por corrida |
 | `export_formats` | array de strings | `["svg"]` | Formatos por defecto cuando `mova run --diagram` se llama sin `--export` |
+
+## Arquitectura distribuida (endpoints remotos)
+
+`llm_profile` no distingue entre un modelo corriendo en `localhost` y uno corriendo en otra máquina — el único campo que cambia es `base_url`, dentro del archivo que `llm_profile.config` apunta (`config/models/<proveedor>/<archivo>.json`), nunca en `project.json` mismo. Esto es lo que permite un despliegue centralizado (ver [DEPLOY.md](DEPLOY.md)): una sola instancia — por ejemplo un contenedor Docker en Oracle Cloud o AWS corriendo `mova mcp start` + Ollama — sirve de coprocesador de inferencia para varios clientes locales, sin que ninguno de ellos tenga que correr el modelo por su cuenta.
+
+```json
+{
+  "base_url": "http://100.x.y.z:11434",
+  "model": "llama3.2:3b",
+  "timeout_seconds": 300
+}
+```
+
+`100.x.y.z` es, a propósito, una dirección de **red privada** (Tailscale, WireGuard, o la red virtual de un proveedor Cloud) — nunca una IP pública sin protección: ver DEPLOY.md § Seguridad de red para el porqué. El repositorio incluye un ejemplo completo y listo para probar en `config/models/ollama/llama3.2.3b-remote.json` y `projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/project_remote.json` — misma convención `project_local.json` / `project_cloud.json` / `project_remote.json` que ya usa el ejemplo de la Ley 21.719 para alternar entre modelo local, modelo Cloud, y modelo remoto sin cambiar una sola línea de código.
+
+**Separación estricta de responsabilidades — por qué el servidor remoto nunca ve el repositorio:**
+
+| Ocurre siempre en el CLIENTE (esta máquina) | Ocurre siempre en el SERVIDOR remoto |
+|---|---|
+| Lectura de `project.json`, `agents/`, `skills/`, `prompts/`, `memory.md` | Nada de lo anterior — el servidor remoto no tiene ni necesita el repositorio |
+| Sanitización (`budget.sanitize`) y deduplicación | — |
+| PII Masking (`budget.pii_masking`) | — |
+| Ensamblado del contexto final (Token Firewall completo) | — |
+| Envío del payload final ya listo a `base_url` | Recepción del payload e inferencia — coprocesador *stateless*, no persiste nada del contenido del proyecto |
+
+Esta separación no es una opción configurable: es cómo está construido el pipeline (`budget.BuildGatedContext` corre siempre localmente, antes de que `models.Session.Send` haga la llamada HTTP saliente) — el mismo motor sirve tanto para un modelo en `localhost` como para uno en Oracle Cloud, sin ninguna rama de código distinta entre ambos casos.

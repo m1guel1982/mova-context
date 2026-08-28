@@ -1,0 +1,19 @@
+{
+  "_comment_es": "Variante REMOTA del mismo modelo local (ver llama3.2.3b.json): mismos parámetros de inferencia, único cambio real es 'base_url', que en vez de localhost apunta a un Ollama corriendo en OTRA máquina dentro de una red privada (Tailscale, WireGuard, o la red virtual de un proveedor Cloud como Oracle Cloud/AWS). Reemplaza '100.x.y.z' por la IP privada real de esa máquina — nunca una IP pública sin protección: ver docs/i18n/es/PROJECT_JSON.md, sección 'Arquitectura distribuida', para el porqué. El cliente (esta máquina) sigue construyendo y sanitizando el contexto localmente; la máquina remota solo recibe el payload final ya listo para inferencia — nunca el proyecto ni los archivos fuente.",
+  "_comment_en": "REMOTE variant of the same local model (see llama3.2.3b.json): identical inference parameters, the only real change is 'base_url', which — instead of localhost — points to an Ollama instance running on ANOTHER machine inside a private network (Tailscale, WireGuard, or a Cloud provider's virtual network such as Oracle Cloud/AWS). Replace '100.x.y.z' with that machine's real private IP — never an unprotected public IP: see docs/i18n/en/PROJECT_JSON.md, 'Distributed architecture' section, for why. The client (this machine) still builds and sanitizes context locally; the remote machine only ever receives the final, inference-ready payload — never the project or its source files.",
+
+  "base_url": "http://100.x.y.z:11434",
+  "timeout_seconds": 300,
+  "model": "llama3.2:3b",
+  "top_k": 40,
+  "top_p": 0.9,
+  "num_ctx": 4096,
+  "threads": 6,
+  "mirostat": 0,
+  "keep_alive": "24h",
+  "num_predict": 512,
+  "temperature": 0,
+  "context_window": 131072,
+  "repeat_penalty": 1.1,
+  "stream": true
+}

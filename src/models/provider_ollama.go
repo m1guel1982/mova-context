@@ -68,7 +68,7 @@ func (p *ollamaProvider) ChatStream(ctx context.Context, model string, mc *Model
 	var usage Usage
 	var serverErr string
 
-	err := postJSONStream(ctx, p.cfg, "/api/chat", body, func(line []byte) {
+	err := postJSONStream(ctx, p.cfg, "/api/chat", body, func(line []byte) error {
 		var chunk struct {
 			Message struct {
 				Content string `json:"content"`
@@ -79,11 +79,11 @@ func (p *ollamaProvider) ChatStream(ctx context.Context, model string, mc *Model
 			EvalCount       int    `json:"eval_count"`
 		}
 		if err := json.Unmarshal(line, &chunk); err != nil {
-			return
+			return nil
 		}
 		if chunk.Error != "" {
 			serverErr = chunk.Error
-			return
+			return nil
 		}
 		if chunk.Message.Content != "" {
 			full += chunk.Message.Content
@@ -94,6 +94,7 @@ func (p *ollamaProvider) ChatStream(ctx context.Context, model string, mc *Model
 		if chunk.Done {
 			usage = Usage{PromptTokens: chunk.PromptEvalCount, CompletionTokens: chunk.EvalCount}
 		}
+		return nil
 	})
 	if err != nil {
 		return "", Usage{}, err

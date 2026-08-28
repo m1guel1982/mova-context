@@ -58,6 +58,16 @@ type Context struct {
 	// descender. Viene de project.json (contextCompiler.focus_exclude).
 	ExcludeDirs []string
 
+	// Exclude: la clave "exclude" de project.json (o su override a
+	// nivel task) — MISMA sintaxis multiplataforma que "focus" (nombre
+	// bare, ruta relativa, ruta absoluta del host, glob), pero para
+	// EXCLUSIÓN. A diferencia de ExcludeDirs (solo nombres de carpeta
+	// exactos), Exclude soporta rutas completas y archivos puntuales —
+	// ver core/focus/resolvers/exclude.go, que es quien realmente la
+	// interpreta (este campo solo la transporta hasta ahí sin crear un
+	// ciclo de import).
+	Exclude []string
+
 	// Stats acumula, de forma compartida entre TODOS los resolvers y
 	// TODOS los targets de un mismo `mova compile` (o `mova run`),
 	// cuántos archivos vio el escaneo del repo y por qué el resto no

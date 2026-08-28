@@ -5,6 +5,7 @@
 package models
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -51,6 +52,116 @@ func (p *anthropicProvider) Chat(ctx context.Context, model string, mc *ModelCon
 	}
 	usage := Usage{PromptTokens: out.Usage.InputTokens, CompletionTokens: out.Usage.OutputTokens}
 	return out.Content[0].Text, usage, nil
+}
+
+func (p *anthropicProvider) ChatStream(ctx context.Context, model string, mc *ModelConfig, messages []ChatMessage, onToken func(string)) (string, Usage, error) {
+	system, boundary, rest := splitSystemMessage(messages)
+
+	body := map[string]any{
+		"model":      model,
+		"max_tokens": orDefaultInt(mc.NumPredict, 1024),
+		"messages":   rest,
+		"stream":     true,
+	}
+	if system != "" {
+		body["system"] = systemField(system, boundary)
+	}
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return "", Usage{}, err
+	}
+
+	baseURL := strings.TrimSuffix(orDefault(p.cfg.BaseURL, "https://api.anthropic.com"), "/")
+	baseURL = strings.TrimSuffix(baseURL, "/v1/messages")
+	reqURL := baseURL + "/v1/messages"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payload))
+	if err != nil {
+		return "", Usage{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("x-api-key", p.cfg.APIKey)
+
+	resp, err := SharedClient.Do(req)
+	if err != nil {
+		return "", Usage{}, fmt.Errorf("could not reach anthropic: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(resp.Body)
+		return "", Usage{}, fmt.Errorf("anthropic responded %d: %s", resp.StatusCode, sanitizeResponseBody(data))
+	}
+
+	var full string
+	var usage Usage
+	var serverErr string
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(line, "data: ")
+
+		var event struct {
+			Type  string `json:"type"`
+			Delta struct {
+				Text string `json:"text"`
+			} `json:"delta"`
+			Message struct {
+				Usage struct {
+					InputTokens  int `json:"input_tokens"`
+					OutputTokens int `json:"output_tokens"`
+				} `json:"usage"`
+			} `json:"message"`
+			Usage struct {
+				OutputTokens int `json:"output_tokens"`
+			} `json:"usage"`
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			continue
+		}
+
+		if event.Type == "error" && event.Error.Message != "" {
+			serverErr = event.Error.Message
+			break
+		}
+
+		if event.Type == "message_start" {
+			usage.PromptTokens = event.Message.Usage.InputTokens
+		}
+
+		if event.Type == "content_block_delta" && event.Delta.Text != "" {
+			full += event.Delta.Text
+			if onToken != nil {
+				onToken(event.Delta.Text)
+			}
+		}
+
+		if event.Type == "message_delta" {
+			usage.CompletionTokens = event.Usage.OutputTokens
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", Usage{}, err
+	}
+	if serverErr != "" {
+		return "", Usage{}, fmt.Errorf("anthropic: %s", serverErr)
+	}
+
+	return full, usage, nil
 }
 
 // splitSystemMessage pulls the first "system"-role message out of a chat

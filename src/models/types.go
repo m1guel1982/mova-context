@@ -24,6 +24,10 @@ import (
 	"time"
 )
 
+// StreamCallback define el handler ejecutado por cada fragmento de texto
+// recibido durante la generación en tiempo real.
+type StreamCallback func(chunk string) error
+
 // ModelConfig — config/models/<provider>/<config>.json. Fuente de verdad
 // única para un modelo: conexión + parámetros de inferencia en un mismo
 // archivo. Los nombres de campo respetan exactamente el formato pedido
@@ -53,6 +57,9 @@ type ModelConfig struct {
 	Temperature   float64 `json:"temperature"`
 	ContextWindow int     `json:"context_window,omitempty"`
 	RepeatPenalty float64 `json:"repeat_penalty,omitempty"`
+
+	// ── Inferencia en Streaming ─────────────────────────────────────────
+	Stream bool `json:"stream,omitempty"` // true = habilita transmisión SSE / NDJSON en la respuesta de la API
 }
 
 // ResolvedBaseURL arma la URL final del servidor: base_url explícito gana,
@@ -91,6 +98,7 @@ func DefaultModelConfig(seed *ModelConfig) ModelConfig {
 		Tipo: "llm", TopK: 40, TopP: 0.9, NumCtx: 4096, Threads: 4,
 		Mirostat: 0, KeepAlive: "24h", NumPredict: 512,
 		Temperature: 0, ContextWindow: 131072, RepeatPenalty: 1.1,
+		Stream: true,
 	}
 	if seed != nil {
 		cfg.Provider = seed.Provider

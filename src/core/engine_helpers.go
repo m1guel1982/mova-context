@@ -90,6 +90,22 @@ func ResolveFocus(proj *Project, task *Task) []string {
 	return resolveTaskFocus(proj, task)
 }
 
+// resolveTaskExclude espeja resolveTaskFocus exactamente — Task.Exclude
+// (si trae al menos un elemento) sobreescribe Project.Exclude, nunca se
+// combinan.
+func resolveTaskExclude(proj *Project, task *Task) []string {
+	if len(task.Exclude) > 0 {
+		return task.Exclude
+	}
+	return proj.Exclude
+}
+
+// ResolveExclude expone resolveTaskExclude fuera del paquete — mismo
+// motivo que ResolveFocus.
+func ResolveExclude(proj *Project, task *Task) []string {
+	return resolveTaskExclude(proj, task)
+}
+
 func dedupe(items []string) []string {
 	seen := map[string]bool{}
 	var out []string

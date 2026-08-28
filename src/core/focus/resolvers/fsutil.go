@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -60,20 +61,32 @@ func listDir(path string) string {
 // orden que entregue el sistema operativo. Ignora las carpetas que
 // ctx.SkipDir marca (siempre .git/node_modules/vendor/dist/build/
 // __pycache__/.venv/venv/.idea/.vscode, más lo que project.json haya
-// agregado) y registra en ctx.Stats, si existe, tanto lo que escaneó como
-// lo que excluyó — nunca en silencio, para que contexto.report pueda
-// mostrarlo con honestidad.
+// agregado a "focus_exclude") Y las que la clave "exclude" de
+// project.json marque (ctx.Exclude — ver exclude.go, soporta nombres,
+// rutas completas y globs, no solo nombres de carpeta), y registra en
+// ctx.Stats, si existe, tanto lo que escaneó como lo que excluyó —
+// nunca en silencio, para que contexto.report pueda mostrarlo con
+// honestidad.
 func walkFiles(ctx focus.Context, dir string, fn func(path string)) {
+	m := newExcludeMatcher(ctx.RepoPath, ctx.Exclude)
+	walkFilesExcluding(ctx, m, dir, fn)
+}
+
+func walkFilesExcluding(ctx focus.Context, m *excludeMatcher, dir string, fn func(path string)) {
 	entries := listEntries(dir)
 	sort.Slice(entries, func(i, j int) bool { return entries[i].path < entries[j].path })
 	for _, e := range entries {
+		name := filepath.Base(e.path)
 		if e.isDir {
-			name := filepath.Base(e.path)
-			if ctx.SkipDir(name) {
+			if skipDirOrExcluded(ctx, m, name) {
 				ctx.RecordExcluded(e.path, name, countFiles(e.path))
 				continue
 			}
-			walkFiles(ctx, e.path, fn)
+			walkFilesExcluding(ctx, m, e.path, fn)
+			continue
+		}
+		if m.excludesPath(e.path) {
+			ctx.RecordExcluded(e.path, name, 1)
 			continue
 		}
 		ctx.RecordScanned(e.path)
@@ -106,11 +119,22 @@ func findByName(ctx focus.Context, dir, name string) string {
 	return found
 }
 
+// relOrBase da la etiqueta de Source más útil para un path ya resuelto:
+// si path vive DENTRO de root, la ruta relativa de siempre; si vive
+// FUERA (un target absoluto del host — ver isAbsoluteHostPath en este
+// mismo archivo, p. ej. "C:\ejemploPython\x.py" o "/mnt/archivo.java")
+// filepath.Rel puede devolver algo técnicamente válido pero inútil como
+// "../../../mnt/archivo.java" — en ese caso se usa el path absoluto
+// completo, que es la etiqueta clara para algo que está fuera del repo.
 func relOrBase(root, path string) string {
-	if rel, err := filepath.Rel(root, path); err == nil {
-		return rel
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return filepath.Base(path)
 	}
-	return filepath.Base(path)
+	if strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+		return path
+	}
+	return rel
 }
 
 // readFile lee un archivo devolviendo "" en caso de error — nunca panics,
@@ -166,3 +190,112 @@ func ReadFile(path string) string { return readFile(path) }
 
 // RelOrBase expone relOrBase — mismo motivo que WalkAllFiles.
 func RelOrBase(root, path string) string { return relOrBase(root, path) }
+
+// -----------------------------------------------------------------------------
+// Rutas absolutas del host, multiplataforma (Windows/Linux/macOS)
+// -----------------------------------------------------------------------------
+//
+// project.json's "focus"/"memory" siempre trató un target que empieza con
+// "/" como relativo a la RAÍZ DEL REPO (ver repoRelativePath más abajo:
+// "/src" == "<repo>/src"), nunca como una ruta absoluta del filesystem
+// del host — así evita que un project.json ajeno intente leer fuera del
+// repo por accidente. Pero hay un caso de uso real y explícito: el
+// usuario quiere apuntar `focus` a un archivo o carpeta que vive fuera
+// del repo por completo — "C:\ejemploPython\testSentence.py",
+// "d:\test\test.py", "/mnt/archivo.java", "/mnt" — y eso tiene que
+// funcionar igual en Windows, Linux y macOS sin importar en qué SO
+// corre el binario.
+//
+// Regla de resolución (backward-compatible, nunca rompe project.json
+// existentes):
+//  1. Una letra de unidad Windows ("C:\...", "d:/...") o una ruta UNC
+//     ("\\server\share\...") es INEQUÍVOCAMENTE absoluta — jamás tuvo
+//     sentido como target relativo al repo — así que se intenta
+//     directo, sin fallback.
+//  2. Un "/algo" estilo Unix sigue siendo AMBIGUO con la convención
+//     histórica ("/src" == "<repo>/src"): se intenta primero como ruta
+//     absoluta real del host (os.Stat); solo si EXISTE así se usa como
+//     absoluta. Si no existe como absoluta, cae exactamente al
+//     comportamiento de siempre (relativo a la raíz del repo) — ningún
+//     project.json existente cambia de comportamiento.
+var winDriveRe = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+
+// isWindowsDriveAbs reporta si target usa notación de unidad de Windows
+// ("C:\...", "d:/...") — inequívoco en cualquier SO donde corra Mova.
+func isWindowsDriveAbs(target string) bool { return winDriveRe.MatchString(target) }
+
+// isUNCPath reporta si target es una ruta de red UNC de Windows
+// ("\\server\share\..." o su variante con "/").
+func isUNCPath(target string) bool {
+	return strings.HasPrefix(target, `\\`) || strings.HasPrefix(target, "//")
+}
+
+// looksAbsoluteHostPath reporta si target TIENE FORMA de ruta absoluta
+// del host en cualquier plataforma — no confirma que exista (ver
+// resolveAbsoluteFile/Dir, que sí comprueban contra el disco antes de
+// usarla).
+func looksAbsoluteHostPath(target string) bool {
+	return isWindowsDriveAbs(target) || isUNCPath(target) || strings.HasPrefix(target, "/")
+}
+
+// normalizeHostPath convierte separadores "\" a "/" — Go's path/filepath
+// en Linux/macOS solo reconoce "/" como separador, así que una ruta
+// pegada literal de Windows ("C:\a\b.py") necesita normalizarse antes de
+// pasarla a os.Stat/os.ReadDir/filepath.WalkDir para que camine
+// correctamente sin importar en qué SO corre el binario. En Windows
+// mismo, el runtime de Go acepta "/" exactamente igual que "\", así que
+// esta normalización es un no-op funcional ahí.
+func normalizeHostPath(target string) string {
+	return strings.ReplaceAll(target, `\`, "/")
+}
+
+// resolveAbsoluteFile intenta target como ARCHIVO absoluto del host
+// (ver looksAbsoluteHostPath para qué formas califican). Solo devuelve
+// ok=true cuando el path realmente existe en disco y es un archivo —
+// nunca "inventa" una ruta que no está ahí, y nunca reclama un
+// directorio (eso es trabajo de resolveAbsoluteDir).
+func resolveAbsoluteFile(target string) (string, bool) {
+	if !looksAbsoluteHostPath(target) {
+		return "", false
+	}
+	norm := normalizeHostPath(target)
+	info, err := os.Stat(norm)
+	if err != nil || info.IsDir() {
+		return "", false
+	}
+	return norm, true
+}
+
+// resolveAbsoluteDir es el equivalente de resolveAbsoluteFile para
+// directorios.
+func resolveAbsoluteDir(target string) (string, bool) {
+	if !looksAbsoluteHostPath(target) {
+		return "", false
+	}
+	norm := normalizeHostPath(target)
+	info, err := os.Stat(norm)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+	return norm, true
+}
+
+// splitAbsoluteGlobRoot separa un patrón glob absoluto normalizado
+// ("/mnt/**/*.java", "C:/repos/**/*.go") en la porción de directorio
+// SIN metacaracteres ("/mnt", "C:/repos") y el patrón relativo a esa
+// raíz ("**/*.java", "**/*.go") — así un glob absoluto puede recorrer
+// desde esa raíz externa en vez de desde la raíz del repo. ok=false
+// cuando target no tiene ningún metacaracter glob (no es este caso) o
+// no tiene un directorio raíz identificable antes del primer
+// metacaracter.
+func splitAbsoluteGlobRoot(norm string) (root, pattern string, ok bool) {
+	idx := strings.IndexAny(norm, "*?[")
+	if idx < 0 {
+		return "", "", false
+	}
+	slash := strings.LastIndex(norm[:idx], "/")
+	if slash <= 0 {
+		return "", "", false
+	}
+	return norm[:slash], norm[slash+1:], true
+}

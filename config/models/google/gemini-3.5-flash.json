@@ -1,10 +1,11 @@
 {
   "type": "google",
   "base_url": "https://generativelanguage.googleapis.com",
-  "api_key": "xxxxxxx",
+  "api_key": "xxxxx",
   "timeout_seconds": 120,
   "model": "gemini-3.5-flash",
   "temperature": 0.2,
   "num_predict": 3500,
-  "context_window": 1048576
+  "context_window": 1048576,
+  "stream": true
 }

@@ -5,15 +5,51 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/mcp"
 	"mova.local/models"
 	"mova.local/sanitize"
 )
+
+// Estilos de Lip Gloss para formatear la salida en la terminal.
+var (
+	codeStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("86")).
+			PaddingLeft(2)
+
+	textStyle = lipgloss.NewStyle()
+)
+
+// Regex para detectar si toda la respuesta viene envuelta en un bloque de código markdown.
+// Se usa concatenación para evitar romper las comillas invertidas en Go.
+var outerCodeBlockRegex = regexp.MustCompile(`(?s)^` + "`{3}" + `[a-zA-Z0-9_-]*\r?\n?(.*?)\r?\n?` + "`{3}" + `$`)
+
+// formatTerminalOutput limpia artefactos, quita las etiquetas ```lenguaje
+// y aplica resaltado con Lip Gloss si el contenido es un bloque de código.
+func formatTerminalOutput(rawText string) string {
+	// 1. Limpieza estándar del protocolo MCP / mova
+	text := mcp.StripResidualToolArtifacts(rawText)
+	text = strings.TrimSpace(text)
+
+	// 2. Si el modelo envolvió la respuesta completa en ```lenguaje ... ```
+	if matches := outerCodeBlockRegex.FindStringSubmatch(text); len(matches) > 1 {
+		codeContent := strings.TrimSpace(matches[1])
+		// Renderizamos el código con color usando Lip Gloss sin mostrar las marcas ```
+		return codeStyle.Render(codeContent)
+	}
+
+	// 3. Si es texto plano o mixto, aplicamos estilo de texto
+	return textStyle.Render(text)
+}
 
 // applyProjectLLMProfile makes project.json's "llm_profile" the single
 // source of truth. "provider" is optional: when absent, it is resolved
@@ -55,21 +91,28 @@ func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Projec
 	if emit == nil {
 		emit = consolePrint
 	}
+
+	// Caso sin herramientas habilitadas / adapter nulo
 	if proj == nil || adapter == nil || !core.ToolsEnabled(proj.Tools) {
-		printedPrefix := false
+		var rawReply strings.Builder
+
+		// Interceptamos los tokens en buffer para evitar imprimir el prefijo [modelo]
+		// y procesar el formateo limpio al finalizar la respuesta.
 		reply, err = sess.SendStream(userText, func(tok string) {
-			if !printedPrefix {
-				emit("[" + sess.Model + "] ")
-				printedPrefix = true
-			}
-			emit(tok)
+			rawReply.WriteString(tok)
 		})
-		if err == nil {
-			emit("\n")
+		if err != nil {
+			return "", true, err
 		}
-		return reply, true, err
+
+		// Aplicamos limpieza y estilo estilizado a la salida
+		formattedReply := formatTerminalOutput(rawReply.String())
+		emit(formattedReply + "\n")
+
+		return formattedReply, true, nil
 	}
 
+	// Bucle normal de herramientas cuando sí están habilitadas
 	reply, err = sess.Send(userText)
 	if err != nil {
 		return "", false, err
@@ -92,7 +135,9 @@ func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Projec
 			return "", false, err
 		}
 	}
-	return reply, false, nil
+
+	formattedReply := formatTerminalOutput(reply)
+	return formattedReply, false, nil
 }
 
 // printTokenUsage shows, after every response, how many tokens the
@@ -106,12 +151,28 @@ func printTokenUsage(root string, sess *models.Session, proj *core.Project) {
 	if err != nil {
 		return
 	}
-	fallback := tokensOf(sess.System, proj)
+	fallback := totalSessionTokens(sess, proj)
 	consolePrint(models.UsageFor(sess, mc, fallback).FormatLine())
+}
+
+// totalSessionTokens calcula los tokens exactos acumulados en la sesión:
+// System prompt + todo el historial de la conversación en sess.History.
+func totalSessionTokens(sess *models.Session, proj *core.Project) int {
+	if sess == nil {
+		return 0
+	}
+	total := tokensOf(sess.System, proj)
+	for _, msg := range sess.History {
+		total += tokensOf(msg.Content, proj)
+	}
+	return total
 }
 
 // tokensOf is a tiny local estimate helper for the pre-send budget gate.
 func tokensOf(text string, proj *core.Project) int {
+	if text == "" {
+		return 0
+	}
 	modelHint := ""
 	if proj != nil && proj.LLMProfile != nil {
 		modelHint = proj.LLMProfile.Config
@@ -120,9 +181,10 @@ func tokensOf(text string, proj *core.Project) int {
 	return n
 }
 
-// printContextSummary prints the [Dedup]/[Focus] status lines.
-
-func printContextSummary(sections *core.ContextSections) {
+// printContextSummary prints the [Dedup]/[Focus] status lines. proj is
+// used only to resolve "focus_display_limit" (core.FocusDisplayLimit) —
+// pass nil for the built-in default of 2.
+func printContextSummary(sections *core.ContextSections, proj *core.Project) {
 	if sections.DuplicatesRemoved > 0 {
 		approxTokens := sections.DuplicatesRemovedChars / 4
 		if approxTokens == 0 && sections.DuplicatesRemovedChars > 0 {
@@ -130,9 +192,8 @@ func printContextSummary(sections *core.ContextSections) {
 		}
 		consolePrint(fmt.Sprintf("[Dedup] Removed %d duplicated paragraph(s) (~%d tokens saved).\n", sections.DuplicatesRemoved, approxTokens))
 	}
-	if sections.Focus != "" {
-		fileCount := strings.Count(sections.Focus, "FOCUS:")
-		consolePrint(fmt.Sprintf("[Focus] Selected %d file(s).\n", fileCount))
+	if line := core.FormatFocusSelection(sections.FocusItems, core.FocusDisplayLimit(proj)); line != "" {
+		consolePrint(line)
 	}
 }
 
@@ -141,7 +202,7 @@ func recordRealUsage(root, project string, proj *core.Project, sess *models.Sess
 	if project == "" || proj == nil || sess.LastUsage.PromptTokens <= 0 {
 		return
 	}
-	localEstimate := tokensOf(sess.System, proj)
+	localEstimate := totalSessionTokens(sess, proj)
 	if localEstimate <= 0 {
 		return
 	}
@@ -246,4 +307,99 @@ func modelHintOfProj(proj *core.Project) string {
 		return proj.LLMProfile.Config
 	}
 	return ""
+}
+
+// ── Hot reload de project.json durante un chat ya abierto ───────────
+//
+// runChat (chat_cmd.go) y newChatScreen (tui_chat.go) arman el contexto
+// UNA sola vez, al arrancar. Si mientras el chat sigue abierto alguien
+// edita project.json (cambia "focus", agrega/saca archivos del repo,
+// cambia "budget", etc.), ese cambio nunca se volvía a leer hasta
+// reiniciar `mova chat`. refreshProjectContext cierra ese hueco:
+// se llama antes de procesar cada mensaje, y si algo relevante cambió
+// reconstruye el contexto completo (mismo pipeline que
+// budget.BuildGatedContext: Sanitizer → PII → Circuit Breaker → Budget
+// gate) y reemplaza el system prompt de la sesión en caliente. Esto
+// también dispara de nuevo SanitizeCached (contextcache.go), que ya
+// escribe mova-context-cache.json apenas detecta el hash nuevo — así
+// que el cache queda al día sin necesidad de reiniciar el chat.
+
+// projectSignature identifica el estado completo de project.json en un
+// solo hash. Usamos el struct entero (no solo "focus") a propósito:
+// cualquier cambio que afecte el contexto o el gate — focus, memory,
+// agents, skills, budget, tools, llm_profile — tiene que disparar una
+// reconstrucción; es más barato re-hashear el struct completo que
+// mantener una lista de "campos que importan" sincronizada a mano cada
+// vez que core.Project gane un campo nuevo.
+func projectSignature(proj *core.Project) string {
+	if proj == nil {
+		return ""
+	}
+	data, err := json.Marshal(proj)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// refreshProjectContext re-lee project.json y, si su firma cambió desde
+// la última vez que este chat la cargó, reconstruye el contexto gated
+// y reemplaza sess.System/sess.CacheBoundary in place. Devuelve el
+// (posiblemente nuevo) proj/adapter y la firma a comparar la próxima
+// vez. emit sigue la misma convención que sendWithTools: nil imprime
+// directo a la terminal (REPL de `mova chat`); la TUI pasa su propio
+// emit que apenda al transcript en memoria.
+//
+// Si project.json quedó momentáneamente inválido (error de sintaxis
+// mientras alguien lo edita a mano, guardado a medias, etc.) o el
+// nuevo contexto no pasa el Budget/Circuit Breaker gate, se conserva el
+// contexto/adapter/proj VIEJOS — todavía válidos — en vez de dejar la
+// sesión sin system prompt.
+func refreshProjectContext(root, project, task string, sess *models.Session, proj *core.Project, adapter core.Adapter, lastSignature string, emit func(string)) (*core.Project, core.Adapter, string) {
+	if emit == nil {
+		emit = consolePrint
+	}
+	if project == "" || sess == nil {
+		return proj, adapter, lastSignature
+	}
+
+	fa := core.NewFileAdapter(root)
+	freshProj, err := fa.GetProject(project)
+	if err != nil {
+		return proj, adapter, lastSignature
+	}
+
+	signature := projectSignature(freshProj)
+	if signature == lastSignature {
+		return proj, adapter, lastSignature // nada relevante cambió
+	}
+
+	freshAdapter := newAdapter(root, freshProj)
+	applyProjectLLMProfile(sess, root, freshProj)
+
+	gated := budget.BuildGatedContext(freshAdapter, root, project, task)
+	if gated.Err != nil {
+		emit("[Project] project.json cambió, pero el nuevo contexto no pasó el gate: " + gated.Err.Error() + "\n")
+		return proj, adapter, lastSignature
+	}
+
+	systemText, boundary, _ := applyCacheLayoutQuiet(gated.Sections, freshProj)
+	sess.SetSystem(systemText + mcp.ToolsSystemPrompt(freshProj.Tools))
+	sess.CacheBoundary = boundary
+
+	emit("[Project] project.json cambió — contexto recargado.\n")
+	if gated.Sections != nil {
+		if line := core.FormatFocusSelection(gated.Sections.FocusItems, core.FocusDisplayLimit(freshProj)); line != "" {
+			emit(line)
+		}
+	}
+	if gated.Sanitize.LinesRemoved > 0 || gated.Sanitize.BlankRemoved > 0 || gated.Sanitize.CommentsRemoved > 0 {
+		emit(fmt.Sprintf("[Sanitizer] Cleaned %d repeated line(s), %d blank-line run(s).\n", gated.Sanitize.LinesRemoved, gated.Sanitize.BlankRemoved))
+	}
+	if gated.CircuitBreaker.Checked && gated.CircuitBreaker.Message != "" {
+		emit("[Circuit Breaker] " + gated.CircuitBreaker.Message + "\n")
+	}
+
+	return freshProj, freshAdapter, signature
 }

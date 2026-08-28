@@ -14,19 +14,19 @@
 //
 // Inside the chat:
 //
-//	set -model <name>        switch models, keeps history
-//	/memory                  saves the last exchange to memory.md (requires [project])
-//	/budget                  generates mova-budget-report.md for the active project (requires [project])
-//	/save "path"             saves the model's last reply to path — format auto-picked from extension
-//	/save -c "path"          saves ONLY the source code blocks from the model's last reply
-//	/save -d "path"          creates only that directory (requires [project])
-//	/save -append "path"     appends the model's last reply to an existing file instead of overwriting it
-//	/save -overwrite "path"  forces overwriting an existing file
+//	set -model <name>         switch models, keeps history
+//	/memory                   saves the last exchange to memory.md (requires [project])
+//	/budget                   generates mova-budget-report.md for the active project (requires [project])
+//	/save "path"              saves the model's last reply to path — format auto-picked from extension
+//	/save -c "path"           saves ONLY the source code blocks from the model's last reply
+//	/save -d "path"           creates only that directory (requires [project])
+//	/save -append "path"      appends the model's last reply to an existing file instead of overwriting it
+//	/save -overwrite "path"   forces overwriting an existing file
 //	/save -no-overwrite "path" fails instead of overwriting an existing file
 //	/delete "path" ["path2" ...]  deletes files/directories, confirming each one (Y/N) — see delete_cmd.go
-//	/tools                   lists every file/directory capability available in this chat
-//	/clear                   clears the terminal screen
-//	exit | quit              ends the session
+//	/tools                    lists every file/directory capability available in this chat
+//	/clear                    clears the terminal screen
+//	exit | quit               ends the session
 //
 // workflow.md: "lee workflow.md", "leer workflow.md", "ejecuta
 // workflow.md", "run workflow.md", "execute workflow.md",
@@ -99,7 +99,7 @@ func runChat(root, project, task string) {
 		// own copy of "build then gate".
 		gated := budget.BuildGatedContext(adapter, root, project, task)
 		if gated.Sections != nil {
-			printContextSummary(gated.Sections)
+			printContextSummary(gated.Sections, proj)
 		}
 		printSanitizeStatus(gated.Sanitize)
 		printCircuitBreakerStatus(gated.CircuitBreaker)
@@ -120,6 +120,11 @@ func runChat(root, project, task string) {
 	consolePrint(chatBanner(sess))
 
 	fileState := &chatFileState{}
+	// signature: firma de project.json (projectSignature) al momento de
+	// construir el contexto de arriba — ver refreshProjectContext, que
+	// compara contra esta antes de cada turno para detectar ediciones
+	// hechas mientras esta sesión de `mova chat` sigue abierta.
+	signature := projectSignature(proj)
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for {
@@ -130,6 +135,14 @@ func runChat(root, project, task string) {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
+		}
+
+		// Hot reload: antes de interpretar la línea (comando o turno de
+		// chat), releer project.json y — solo si algo relevante
+		// cambió — reconstruir contexto/system prompt en caliente.
+		// Nunca reconstruye si nada cambió (cheap: stat + hash).
+		if project != "" {
+			proj, adapter, signature = refreshProjectContext(root, project, task, sess, proj, adapter, signature, nil)
 		}
 
 		switch {

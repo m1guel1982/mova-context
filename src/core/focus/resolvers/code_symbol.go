@@ -32,6 +32,15 @@ type CodeSymbolResolver struct{}
 func NewCodeSymbolResolver() *CodeSymbolResolver { return &CodeSymbolResolver{} }
 
 func (r *CodeSymbolResolver) Match(ctx focus.Context, target string) bool {
+	// "." y cualquier patrón glob ("**/*", "*.go", ...) son territorio
+	// EXCLUSIVO de GlobResolver — un "." usado como symbol acá haría
+	// falso-positivo con la pasada LIKE de extractCodeSymbolLike (casi
+	// cualquier línea de código contiene un "." literal), interceptando
+	// "." antes de que GlobResolver reciba la oportunidad de resolverlo
+	// como "recorré todo el repo". Ver isGlobPattern (file.go).
+	if isGlobPattern(target) {
+		return false
+	}
 	return true // catch-all: la certeza real la da Resolve
 }
 

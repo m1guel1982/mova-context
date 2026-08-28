@@ -54,7 +54,7 @@ func postJSON(ctx context.Context, cfg *ModelConfig, path string, body any, out 
 	return json.Unmarshal(data, out)
 }
 
-func postJSONStream(ctx context.Context, cfg *ModelConfig, path string, body any, onLine func(line []byte)) error {
+func postJSONStream(ctx context.Context, cfg *ModelConfig, path string, body any, onLine func(line []byte) error) error {
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -94,7 +94,9 @@ func postJSONStream(ctx context.Context, cfg *ModelConfig, path string, body any
 		if len(line) == 0 {
 			continue
 		}
-		onLine(line)
+		if err := onLine(line); err != nil {
+			return err
+		}
 	}
 	return scanner.Err()
 }
