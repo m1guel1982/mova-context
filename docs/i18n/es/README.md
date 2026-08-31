@@ -29,8 +29,7 @@ Fuentes  ──▶  Firewall de Privacidad (PII)  ──▶  Agentes  ──▶ 
 8. [Job Engine, Cron y Multiagente](#8-job-engine-cron-y-multiagente)
 9. [Interfaz visual — `mova ui`](#9-interfaz-visual--mova-ui)
 10. [¿Necesito el CLI?](#10-necesito-el-cli) — tabla de decisión
-11. [Despliegue multiusuario — Docker / Oracle Cloud](#11-despliegue-multiusuario--docker--oracle-cloud)
-12. [Seguir profundizando](#12-seguir-profundizando)
+11. [Seguir profundizando](#11-seguir-profundizando)
 
 ---
  
@@ -427,31 +426,16 @@ Un solo comando, navegado con las flechas y Enter: chat, `project.json`, `workfl
 
 Con o sin CLI, la fuente de verdad nunca cambia: `workflow.md`, `agents/`, `skills/`, `prompts/`, `project.json`, `memory.md`. Sin CLI se pierde comodidad; con CLI se gana velocidad, auditoría automática y protección de datos por defecto — nunca al revés.
 
----
-
-## 11. Despliegue multiusuario — Docker / Oracle Cloud
-
-El mismo motor que corre en una laptop se empaqueta como imagen Docker y se instala una sola vez en una instancia centralizada (Oracle Cloud, AWS, o cualquier equipo con Docker), para que todo un equipo comparta un mismo servidor de inferencia sin que cada persona tenga que correr un modelo local:
-
-```bash
-docker build -t mova-context:latest .
-docker compose up -d        # levanta mova-context + ollama en una red privada
-```
-
-- La construcción del contexto, la sanitización y el PII Masking **siempre** ocurren en la máquina de cada usuario — el servidor centralizado solo recibe el payload final, ya listo, y actúa como coprocesador de inferencia *stateless* (nunca ve el repositorio ni `project.json`).
-- Apuntar a ese servidor desde cualquier `project.json` es solo cuestión de cambiar `base_url` en el `.json` del modelo — ver [PROJECT_JSON.md § Arquitectura distribuida](PROJECT_JSON.md#arquitectura-distribuida-endpoints-remotos).
-- Guía paso a paso completa (build, Docker Hub, Oracle Cloud, AWS, seguridad de red con Tailscale/WireGuard): **[DEPLOY.md](DEPLOY.md)**.
 
 ---
 
-## 12. Seguir profundizando
+## 11. Seguir profundizando
 
 | Se busca... | Documento |
 |---|---|
 | Ver todos los comandos (memoria, Focus, MCP, HTTP, diagramas, tokenomics) | [COMMANDS.md](COMMANDS.md) |
 | Leer la especificación completa que siguen los modelos | [workflow.md](../../../workflow.md) |
 | Entender el código fuente (Resolvers, Adapters, cómo extenderlo) | [SOURCE.md](../SOURCE.md) *(en inglés)* |
-| Desplegar en Docker / Oracle Cloud / AWS para todo un equipo | [DEPLOY.md](DEPLOY.md) |
 | Preguntas frecuentes — clasificación, arquitectura, gobernanza de contexto, costos | [FAQ.md](FAQ.md) |
 
 ---

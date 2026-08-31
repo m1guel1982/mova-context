@@ -327,7 +327,7 @@ Orden de resolución de raíz: `MOVA_PROJECT_PATH` → `MOVA_PROJECT_ROOT` → d
 | `MOVA_PROJECT_ROOT` | punto de partida extra para buscar `workflow.md` hacia arriba |
 | `MOVA_PROJECT_PATH` | usa esta ruta como raíz, sin búsqueda |
 
-`"repo"` en `project.json` acepta cualquier ruta absoluta — otra unidad de Windows, un punto de montaje de Linux, una ruta UNC, WSL, o un volumen de Docker. `MOVA_PROJECT_ROOT` es lo único que hace falta fijar aparte, para que `mova` encuentre su propia raíz al pararte fuera de ella.
+`"repo"` en `project.json` acepta cualquier ruta absoluta — otra unidad de Windows, un punto de montaje de Linux, una ruta UNC, WSL. `MOVA_PROJECT_ROOT` es lo único que hace falta fijar aparte, para que `mova` encuentre su propia raíz al pararte fuera de ella.
 
 ## 15. Tokenomics — `mova budget`
 
