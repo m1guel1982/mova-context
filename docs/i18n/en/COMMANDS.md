@@ -327,7 +327,7 @@ Root resolution order: `MOVA_PROJECT_PATH` → `MOVA_PROJECT_ROOT` → current w
 | `MOVA_PROJECT_ROOT` | extra starting point for the upward `workflow.md` search |
 | `MOVA_PROJECT_PATH` | uses this path as root directly, no search |
 
-`"repo"` in `project.json` accepts any absolute path — another Windows drive, a Linux mount point, a UNC path, WSL, or a Docker volume. `MOVA_PROJECT_ROOT` is the only thing you need to set separately, so `mova` can find its own root while standing outside it.
+`"repo"` in `project.json` accepts any absolute path — another Windows drive, a Linux mount point, a UNC path, WSL. `MOVA_PROJECT_ROOT` is the only thing you need to set separately, so `mova` can find its own root while standing outside it.
 
 
 ## 15. Tokenomics — `mova budget`

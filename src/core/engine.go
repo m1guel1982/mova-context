@@ -232,7 +232,7 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 	if items := resolveTaskFocus(proj, &task); len(items) > 0 {
 		text, stats := focusrender.RenderFocusContextWithSeen(root, proj.Repo, items, nil, resolveTaskExclude(proj, &task), dedupSeen)
 		sections.DuplicatesRemoved += stats.DuplicatesRemoved
-		sections.DuplicatesRemovedChars += stats.DuplicatesRemovedChars // ✅ Ahora sí recibirá el valor real
+		sections.DuplicatesRemovedChars += stats.DuplicatesRemovedChars 
 		sections.FocusItems = stats.Items
 		if strings.TrimSpace(text) != "" {
 			sections.Focus = "\n\n---\n## FOCUS\n" + text
@@ -247,7 +247,6 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 		}
 	}
 
-	// ── INSTRUCTION ─────────────────────────────────────────────────────────
 	// ── INSTRUCTION ─────────────────────────────────────────────────────────
 	var instruction strings.Builder
 	instruction.WriteString("\n\n---\n## INSTRUCTION\n")

@@ -29,8 +29,7 @@ Sources  ──▶  Privacy Firewall (PII)  ──▶  Agents  ──▶  Audita
 8. [Job Engine, Cron & Multiagent](#8-job-engine-cron--multiagent)
 9. [Visual interface — `mova ui`](#9-visual-interface--mova-ui)
 10. [Do I need the CLI?](#10-do-i-need-the-cli) — decision table
-11. [Multi-user deployment — Docker / Oracle Cloud](#11-multi-user-deployment--docker--oracle-cloud)
-12. [Go deeper](#12-go-deeper)
+11. [Go deeper](#11-go-deeper)
 
 ---
 
@@ -427,29 +426,13 @@ With or without the CLI, the source of truth never changes: `workflow.md`, `agen
 
 ---
 
-## 11. Multi-user deployment — Docker / Oracle Cloud
-
-The same engine that runs on a laptop packages as a Docker image and installs once on a centralized instance (Oracle Cloud, AWS, or any Docker-capable machine), so a whole team shares one inference server instead of everyone running a local model:
-
-```bash
-docker build -t mova-context:latest .
-docker compose up -d        # brings up mova-context + ollama on a private network
-```
-
-- Building context, sanitizing, and PII Masking **always** happen on each user's own machine — the centralized server only receives the final, ready payload, acting as a stateless inference coprocessor (it never sees the repository or `project.json`).
-- Pointing any `project.json` at that server is just a matter of changing `base_url` in the model's `.json` — see [PROJECT_JSON.md § Distributed architecture](PROJECT_JSON.md#distributed-architecture-remote-endpoints).
-- Full step-by-step guide (build, Docker Hub, Oracle Cloud, AWS, network security with Tailscale/WireGuard): **[DEPLOY.md](DEPLOY.md)**.
-
----
-
-## 12. Go deeper
+## 11. Go deeper
 
 | Looking for... | Document |
 |---|---|
 | Every command (memory, Focus, MCP, HTTP, diagrams, tokenomics) | [COMMANDS.md](COMMANDS.md) |
 | The full specification models follow | [workflow.md](../../../workflow.md) |
 | The source code (Resolvers, Adapters, how to extend it) | [SOURCE.md](../SOURCE.md) |
-| Deploy on Docker / Oracle Cloud / AWS for a whole team | [DEPLOY.md](DEPLOY.md) |
 | Frequently asked questions — classification, architecture, context governance, costs | [FAQ.md](FAQ.md) |
 
 ---
