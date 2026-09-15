@@ -1,10 +1,10 @@
 {
-  "total_clones": 396,
-  "total_uniques": 248,
-  "days_tracked": 41,
+  "total_clones": 417,
+  "total_uniques": 260,
+  "days_tracked": 42,
   "first_recorded": "2026-08-19T02:17:22Z",
-  "last_updated": "2026-09-14T16:22:10Z",
-  "last_sync_status": "success at 2026-09-14T16:22:10Z",
+  "last_updated": "2026-09-15T15:01:05Z",
+  "last_sync_status": "success at 2026-09-15T15:01:05Z",
   "clones": {
     "2026-08-04": {
       "count": 0,
@@ -210,6 +210,11 @@
       "count": 7,
       "uniques": 5,
       "synced_at": "2026-09-14T16:22:10Z"
+    },
+    "2026-09-14": {
+      "count": 21,
+      "uniques": 12,
+      "synced_at": "2026-09-15T15:01:05Z"
     }
   }
 }
