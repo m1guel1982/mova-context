@@ -4,7 +4,6 @@
   "description": "Ejemplo 2 de 3 — antes de enviar datos de clientes a un LLM, Mova detecta indicadores de PII/secretos, aplica enmascarado técnico y deja evidencia. Escenario ilustrativo: Ley 21.719 (Chile). Esto NO es una certificación de cumplimiento — es evidencia y control pre-inferencia.",
   "repo": "examples/02-pii-compliance-governance/repo",
   "lang": "es",
-  "debug":true,
   "adapter": "file",
   "default_task": "analizar",
   "egress_audit": {
