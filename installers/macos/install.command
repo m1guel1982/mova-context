@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.command — double-click entry point for the Mova Context macOS installer.
+# install.command -- double-click entry point for the Mova Context macOS installer.
 set -euo pipefail
 
 info()  { echo "[Mova Installer] $*"; }

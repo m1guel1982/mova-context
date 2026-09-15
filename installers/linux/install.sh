@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.sh — Mova Context installer for Linux.
+# install.sh -- Mova Context installer for Linux.
 set -euo pipefail
 
 info()  { echo "[Mova Installer] $*"; }
