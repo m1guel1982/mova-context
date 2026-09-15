@@ -36,6 +36,21 @@ func documentTool(adapter core.Adapter, root, tool string, args map[string]any) 
 		}
 		return result.Message, nil
 
+	case "rename_path":
+		result, err := documents.Rename(root, documents.RenameRequest{
+			From:    str(args, "from"),
+			To:      str(args, "to"),
+			Repo:    repoFor(adapter, args),
+			Confirm: boolArg(args, "confirm"),
+		})
+		if err != nil {
+			return "", err
+		}
+		if result.Pending {
+			return result.Prompt, nil
+		}
+		return result.Message, nil
+
 	case "create_directory":
 		path, ambiguousMsg, err := resolveSmartDir(adapter, root, args, "path")
 		if err != nil {

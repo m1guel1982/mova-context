@@ -15,3 +15,6 @@ projects/*/contexto.report.json
 
 # Local build script
 /Makefile
+
+# Logs (esta sola línea cubre todas las carpetas logs)
+logs/

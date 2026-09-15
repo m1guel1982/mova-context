@@ -94,7 +94,7 @@ type Report struct {
 	// Cloud API usage recorded for this project (see history.go).
 	HistoricalAccuracy []ProviderAccuracy
 
-	// Token Firewall — see budget_config.go, gated_context.go,
+	// Context Governance — see budget_config.go, gated_context.go,
 	// spend.go, cachelayout.go, contextcache.go, mova.local/sanitize.
 	// All zero-valued when a project never opts into any of it.
 	SanitizeStats  sanitize.Stats
@@ -152,7 +152,7 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 		return nil, err
 	}
 
-	// Token Firewall stage [1]: sanitize BEFORE counting, so every
+	// Context Governance stage [1]: sanitize BEFORE counting, so every
 	// number below (per-component and total) already reflects it —
 	// the report shows the real, optimized cost, not a "before" number
 	// with a separate "savings" footnote bolted on. The raw (pre-
@@ -224,7 +224,7 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 	report.SanitizeStats = sanitizeStats
 	report.PIIStats = piiStats
 
-	// Token Firewall stages [2]/[3] preview — `mova budget` never sends
+	// Context Governance stages [2]/[3] preview — `mova budget` never sends
 	// anything to a model, so a Circuit Breaker "abort" here is purely
 	// informational (the error, if any, is intentionally discarded);
 	// the actual enforcement happens in BuildGatedContext.

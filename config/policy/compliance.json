@@ -1,0 +1,6 @@
+{
+  "_comment_en": "Global compliance limits: the token budget context-trace's CANDIDATE selection respects by default when no project.json overrides it, and which detected categories are denied from ever reaching an external model (as opposed to being merely sanitized).",
+  "_comment_es": "Limites globales de cumplimiento: el presupuesto de tokens que respeta por defecto la seleccion CANDIDATE de context-trace cuando ningun project.json lo sobrescribe, y que categorias detectadas quedan prohibidas de llegar a un modelo externo (en vez de solo ser saneadas).",
+  "token_budget": 500000,
+  "external_model_deny_categories": ["personal-data pattern"]
+}

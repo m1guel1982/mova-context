@@ -1,0 +1,43 @@
+{
+  "project": "02-pii-compliance-governance",
+  "author": "system:default",
+  "description": "Ejemplo 2 de 3 — antes de enviar datos de clientes a un LLM, Mova detecta indicadores de PII/secretos, aplica enmascarado técnico y deja evidencia. Escenario ilustrativo: Ley 21.719 (Chile). Esto NO es una certificación de cumplimiento — es evidencia y control pre-inferencia.",
+  "repo": "examples/02-pii-compliance-governance/repo",
+  "lang": "es",
+  "debug":true,
+  "adapter": "file",
+  "default_task": "analizar",
+  "egress_audit": {
+  "dry_run": false,
+  "output_file": "egress_sanitized.md"
+  },
+
+
+  "agents": { "domain": "base", "use": ["ai-privacy-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": ["pii-context-reduction"], "custom": [] },
+
+  "tasks": {
+    "analizar": {
+      "prompt": "analizar-contexto-clientes-ia",
+      "variables": {
+        "query": "Busca la información relevante de los clientes y dime qué datos personales tenemos, para qué los usamos y qué sistemas o procesos están involucrados.",
+        "regulation": "Ley 21.719 (Chile)"
+      },
+      "focus": [
+        "customers.json",
+        "customer-profile.pdf",
+        "privacy-policy.docx",
+        "system-logs.txt"
+      ]
+    }
+  },
+
+  "llm_profile": { "config": "lm_qwen2.3.7b-instruct" },
+
+  "budget": {
+    "max_tokens": 20000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true,
+    "pii_masking": { "enabled": true }
+  }
+}

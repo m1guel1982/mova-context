@@ -1,0 +1,37 @@
+{
+  "language": "typescript",
+  "extensions": [".ts"],
+  "kinds": {
+    "func": [
+      { "type": "function_declaration" },
+      { "type": "method_definition" }
+    ],
+    "class": [
+      { "type": "class_declaration" },
+      { "type": "interface_declaration" }
+    ],
+    "interface": [
+      { "type": "interface_declaration" }
+    ],
+    "type": [
+      { "type": "type_alias_declaration" }
+    ],
+    "enum": [
+      { "type": "enum_declaration" }
+    ],
+    "namespace": [
+      { "type": "internal_module" }
+    ],
+    "const": [
+      { "type": "lexical_declaration", "requires_child_type": "const" }
+    ],
+    "var": [
+      { "type": "lexical_declaration", "requires_child_type": "let" },
+      { "type": "variable_declaration" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  },
+  "notes": "El .tsx (JSX) usa una gramática gotreesitter distinta (TsxLanguage, ver keywords_tsx.json) porque necesita parsear sintaxis JSX — los node-types de las declaraciones que aquí importan son los mismos."
+}

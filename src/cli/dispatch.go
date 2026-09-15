@@ -114,7 +114,7 @@ func dispatch(root string) {
 		name := needArg(2, "name")
 		dir := filepath.Join(root, "projects", name)
 		os.MkdirAll(dir, 0755)
-		os.WriteFile(filepath.Join(dir, "project.json"), []byte(projectTemplate(name)), 0644)
+		os.WriteFile(filepath.Join(dir, "project.json"), []byte(projectTemplate(root, name)), 0644)
 		os.WriteFile(filepath.Join(dir, "memory.md"), []byte(""), 0644)
 		consolePrint("created: projects/" + name + "/\n")
 
@@ -194,18 +194,38 @@ func dispatch(root string) {
 		}
 		runBudget(root, project, task, flagBool("--focus"))
 
-	case "jobs":
-		sub := needArg(2, "action (list|run|start)")
-		switch sub {
-		case "list":
-			runJobsList(root, needArg(3, "project"))
-		case "run":
-			runJobsRun(root, needArg(3, "project"), arg(4, ""))
-		case "start":
-			runJobsStart(root)
-		default:
-			die("usage: mova jobs list <project> | mova jobs run <project> [index|--all] | mova jobs start")
+	case "context-trace", "trace":
+		var project, task string
+		if flagStr("--repo", "") == "" {
+			// Filtrar los flags conocidos y sus valores para no confundirlos con project o task.
+			var pos []string
+			args := os.Args[2:]
+			for i := 0; i < len(args); i++ {
+				arg := args[i]
+				// Si encontramos un flag que consume el siguiente valor, saltamos ambos
+				if arg == "--export" || arg == "--output" || arg == "--path" {
+					i++ // saltar el valor del flag (ej: "pdf")
+					continue
+				}
+				// Si es cualquier otro flag que empiece con "-"
+				if strings.HasPrefix(arg, "-") {
+					continue
+				}
+				pos = append(pos, arg)
+			}
+
+			if len(pos) > 0 {
+				project = pos[0]
+			}
+			if len(pos) > 1 {
+				task = pos[1]
+			}
+
+			if project == "" {
+				project = runtime.AutoDetect(root)
+			}
 		}
+		runContextTrace(root, project, task)
 
 	case "agents":
 		sub := needArg(2, "action (list|run)")
@@ -219,17 +239,15 @@ func dispatch(root string) {
 			die("usage: mova agents list <group> | mova agents run <group> [agent|--all] (for token counts, use: mova run --count <group>)")
 		}
 
-	case "ui":
-		runUI(root, arg(2, ""))
-
 	default:
 		usage()
 	}
 }
 
-func projectTemplate(name string) string {
+func projectTemplate(root, name string) string {
 	return `{
   "project": "` + name + `",
+  "author": "` + core.ResolvePolicyAuthor(root, "") + `",
   "description": "",
   "repo": ".",
   "lang": "en",

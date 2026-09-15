@@ -25,6 +25,7 @@ func resolveRepoPath(root, repo string) string {
 // DefaultResolvers construye la lista de resolvers Community en orden de prioridad.
 func DefaultResolvers() []focus.Resolver {
 	return []focus.Resolver{
+		resolvers.NewAstSymbolResolver(),
 		resolvers.NewFileResolver(),
 		resolvers.NewDirectoryResolver(),
 		resolvers.NewJSONResolver(),
@@ -121,6 +122,13 @@ func renderFocusContext(root, repo string, items []string, extraExclude []string
 	for _, item := range items {
 		sb.WriteString("FOCUS:" + item + "\n")
 		blocks, err := engine.Resolve(ctx, item)
+		if err == nil {
+			for i := range blocks {
+				if blocks[i].Kind == "file" && blocks[i].Source != "" {
+					blocks[i].Content = resolvers.ApplyAstSymbolExcludes(exclude, blocks[i].Source, blocks[i].Content)
+				}
+			}
+		}
 		sb.WriteString(renderResult(item, blocks, err, seenParagraphs, stats))
 		sb.WriteString("\n")
 		if err == nil {

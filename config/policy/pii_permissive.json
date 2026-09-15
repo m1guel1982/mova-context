@@ -1,0 +1,29 @@
+{
+  "_comment_es": "Politica permisiva de PII. Usar en repositorios publicos/open-source. Elimina falsos positivos producidos por decoradores (@) y constantes de codigo.",
+  "_comment_external_model_options": {
+    "allow": "Permite el contenido enmascarado/detectado sin exigir sanitización previa en disco (ALLOWED / Safe to send). Ideal para benchmarking o proyectos open-source.",
+    "sanitize": "Exige transformar/enmascarar el contenido antes de contarlo como enviable. En Audit Mode lo marca como WOULD SANITIZE. Es la opción recomendada para proyectos corporativos.",
+    "deny": "Bloquea directamente los archivos que contengan indicadores de PII, impidiendo que lleguen a cualquier modelo externo (BLOCKED). Opción para entornos de alta seguridad o cumplimiento estricto."
+  },
+  "external_model": "allow",
+  "pii_masking": {
+    "min_score": 0.85,
+    "shape_weight": 0.50,
+    "entropy_weight": 0.50,
+    "min_token_length": 6,
+    "hash_length": 8,
+    "tag_format": "[PII_%s]",
+    "shape_rules": {
+      "digit_ratio_threshold": 0.45,
+      "digit_ratio_bonus": 0.15,
+      "separator_min_count": 2,
+      "separator_digit_ratio_threshold": 0.35,
+      "separator_bonus": 0.10,
+      "at_symbol_bonus": 0.0,
+      "long_token_bonus_len": 12,
+      "long_mixed_token_bonus": 0.10,
+      "upper_run_ratio_threshold": 0.8,
+      "upper_run_bonus": 0.05
+    }
+  }
+}

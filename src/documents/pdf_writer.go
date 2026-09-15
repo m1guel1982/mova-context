@@ -74,6 +74,32 @@ func winAnsiCode(r rune) byte {
 		return 0xBA
 	case 'ª':
 		return 0xAA
+	// Punctuation Mova Context's own generated reports actually use
+	// (em/en dash as section separators, curly quotes, ellipsis,
+	// bullets) — found missing here because `mova context-trace`'s
+	// PDF was rendering literal "?" glyphs wherever an em dash (—)
+	// appeared (see COMMANDS.md § context-trace); all of these DO
+	// exist in WinAnsiEncoding/CP1252, just weren't mapped yet.
+	case '—': // em dash
+		return 0x97
+	case '–': // en dash
+		return 0x96
+	case '…': // ellipsis
+		return 0x85
+	case '•': // bullet
+		return 0x95
+	case '\u2018', '\u2019': // left/right single curly quote
+		if r == '\u2018' {
+			return 0x91
+		}
+		return 0x92
+	case '\u201C', '\u201D': // left/right double curly quote
+		if r == '\u201C' {
+			return 0x93
+		}
+		return 0x94
+	case '™':
+		return 0x99
 	default:
 		return '?'
 	}

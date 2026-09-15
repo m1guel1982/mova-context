@@ -51,11 +51,11 @@ func IsAbsCrossPlatform(p string) bool {
 	return windowsDriveRe.MatchString(p) || windowsUNCRe.MatchString(p)
 }
 
-// normalizeAbsPath prepares a recognized absolute path for the current host
+// NormalizeAbsPath prepares a recognized absolute path for the current host
 // OS, and rejects a path style the host genuinely cannot satisfy — a
 // Windows drive letter has no meaning on Linux/macOS, so that combination
 // gets a clear, honest error instead of silently writing somewhere wrong.
-func normalizeAbsPath(p string) (string, error) {
+func NormalizeAbsPath(p string) (string, error) {
 	isWindowsStyle := windowsDriveRe.MatchString(p) || windowsUNCRe.MatchString(p)
 	if isWindowsStyle && runtime.GOOS != "windows" {
 		return "", fmt.Errorf(
@@ -81,7 +81,7 @@ func ResolveDirectoryPath(root, repo, requested string) (resolved string, ambigu
 	}
 
 	if IsAbsCrossPlatform(requested) {
-		normalized, err := normalizeAbsPath(requested)
+		normalized, err := NormalizeAbsPath(requested)
 		if err != nil {
 			return "", nil, err
 		}
@@ -108,7 +108,7 @@ func ResolveFilePath(root, repo, requested string) (resolved string, ambiguous [
 	}
 
 	if IsAbsCrossPlatform(requested) {
-		normalized, err := normalizeAbsPath(requested)
+		normalized, err := NormalizeAbsPath(requested)
 		if err != nil {
 			return "", nil, err
 		}
@@ -160,7 +160,7 @@ func repoDirFor(root, repo string) string {
 	case repo == "" || repo == ".":
 		return root
 	case IsAbsCrossPlatform(repo):
-		if normalized, err := normalizeAbsPath(repo); err == nil {
+		if normalized, err := NormalizeAbsPath(repo); err == nil {
 			return normalized
 		}
 		return repo

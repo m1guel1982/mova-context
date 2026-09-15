@@ -1,4 +1,4 @@
-// spend.go — the Token Firewall's third and last stage: a circuit
+// spend.go — the Context Governance's third and last stage: a circuit
 // breaker that can stop a run BEFORE anything is sent to a model, based
 // on two independent, optional ceilings declared in project.json's
 // "budget" (see core.BudgetConfig): "max_tokens_per_run" (this one
@@ -6,7 +6,7 @@
 // current calendar month). Distinct from the existing "max_tokens" +
 // EnforceLimit (limit.go) — that one is a hard content-size gate;
 // this one is a spend-governance gate, and is the only piece of the
-// Token Firewall that persists state between runs.
+// Context Governance that persists state between runs.
 //
 // State lives in its own small file, mova-spend.json, next to
 // mova-token-history.json — deliberately NOT merged into that file:

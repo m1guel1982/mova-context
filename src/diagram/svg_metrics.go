@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"mova.local/budget"
+	"mova.local/i18n"
 )
 
 // reductionPipelineRow draws one box per agent with real Report data,
@@ -32,7 +33,7 @@ func (c *canvas) reductionPipelineRow(d *Data) {
 	if agentsWithData == 0 {
 		return
 	}
-	c.sectionLabel("Token Reduction Pipeline (per resource)")
+	c.sectionLabel(i18n.T("diagrams.token_pipeline_title"))
 	labels := make([]string, 0, len(d.Metrics.PerAgent))
 	for _, am := range d.Metrics.PerAgent {
 		if am.RawTokens == 0 && len(am.Components) == 0 {
@@ -61,19 +62,23 @@ func pipelineLines(am AgentMetrics) string {
 		}
 	}
 	if am.DuplicatesRemoved > 0 {
-		lines = append(lines, fmt.Sprintf("Deduplication: %d duplicate paragraph(s) removed", am.DuplicatesRemoved))
+		lines = append(lines, i18n.T("diagrams.deduplication_removed", map[string]any{"count": am.DuplicatesRemoved}))
 	}
 	if am.SanitizedLines > 0 {
-		lines = append(lines, fmt.Sprintf("Sanitizer: %d repeated line(s) collapsed", am.SanitizedLines))
+		lines = append(lines, i18n.T("diagrams.sanitizer_collapsed", map[string]any{"count": am.SanitizedLines}))
 	}
 	if am.PIIScanned > 0 {
-		lines = append(lines, fmt.Sprintf("PII Masking: %d/%d token(s) pseudonymized (privacy, not a token reducer)", am.PIIMasked, am.PIIScanned))
+		lines = append(lines, i18n.T("diagrams.pii_masking_detail", map[string]any{"masked": am.PIIMasked, "scanned": am.PIIScanned}))
 	}
 	if fc := am.FocusComparison; fc != nil && fc.TokensWithoutFocus > 0 {
-		lines = append(lines, fmt.Sprintf("Budget & Focus: %d tok (whole repo) -> %d tok (focused), %.0f%% narrower", fc.TokensWithoutFocus, fc.TokensWithFocus, fc.SavingsPercent))
+		lines = append(lines, i18n.T("diagrams.budget_focus_detail", map[string]any{
+			"without": fc.TokensWithoutFocus, "with": fc.TokensWithFocus, "pct": fmt.Sprintf("%.0f", fc.SavingsPercent),
+		}))
 	}
 	if am.RawTokens > 0 {
-		lines = append(lines, fmt.Sprintf("Before Firewall: %d tok -> After: %d tok (%.0f%% reduction)", am.RawTokens, am.Tokens, am.SavingsPercent))
+		lines = append(lines, i18n.T("diagrams.firewall_reduction_detail", map[string]any{
+			"before": am.RawTokens, "after": am.Tokens, "pct": fmt.Sprintf("%.0f", am.SavingsPercent),
+		}))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -85,30 +90,34 @@ func pipelineLines(am AgentMetrics) string {
 // whole feature exists to show (see this feature's own value-
 // proposition note in README.md).
 func (c *canvas) finalSummaryRow(d *Data) {
-	c.sectionLabel("Final Summary")
+	c.sectionLabel(i18n.T("diagrams.final_summary"))
 	if d.Metrics == nil {
-		c.text(40, c.y+10, fmt.Sprintf("No report data available yet — run \"mova budget %s\" first.", d.ProjectName), colorMuted, 13, false)
+		c.text(40, c.y+10, i18n.T("diagrams.no_report_data", map[string]any{"project": d.ProjectName}), colorMuted, 13, false)
 		c.advance(30)
 		return
 	}
-	lines := []string{fmt.Sprintf("Tokens sent to the LLM (optimized): %d", d.Metrics.TotalTokens)}
+	lines := []string{i18n.T("diagrams.tokens_sent", map[string]any{"count": d.Metrics.TotalTokens})}
 
 	rawTotal, savingsPct := aggregateRaw(d.Metrics.PerAgent)
 	if rawTotal > d.Metrics.TotalTokens {
-		lines = append(lines, fmt.Sprintf("Tokens before Mova Context's reduction: %d", rawTotal))
-		lines = append(lines, fmt.Sprintf("Overall savings: %.0f%% fewer tokens sent", savingsPct))
+		lines = append(lines, i18n.T("diagrams.tokens_before_reduction", map[string]any{"count": rawTotal}))
+		lines = append(lines, i18n.T("diagrams.overall_savings", map[string]any{"pct": fmt.Sprintf("%.0f", savingsPct)}))
 	}
 
 	if anyCloudAgent(d.Metrics.PerAgent) {
 		for _, cost := range d.Metrics.Costs {
 			if cost.USD > 0 {
-				lines = append(lines, fmt.Sprintf("%s/%s: $%.4f USD (optimized)", cost.Provider, cost.Model, cost.USD))
+				lines = append(lines, i18n.T("diagrams.cost_optimized", map[string]any{
+					"provider": cost.Provider, "model": cost.Model, "usd": fmt.Sprintf("%.4f", cost.USD),
+				}))
 			}
 		}
 		if rawCost := aggregateRawCost(d.Metrics.PerAgent); rawCost != nil && rawCost.USD > 0 {
 			for _, cost := range d.Metrics.Costs {
 				if cost.Provider == rawCost.Provider && cost.Model == rawCost.Model && rawCost.USD > cost.USD {
-					lines = append(lines, fmt.Sprintf("Estimated money saved (%s/%s): $%.4f USD", rawCost.Provider, rawCost.Model, rawCost.USD-cost.USD))
+					lines = append(lines, i18n.T("diagrams.money_saved", map[string]any{
+						"provider": rawCost.Provider, "model": rawCost.Model, "usd": fmt.Sprintf("%.4f", rawCost.USD-cost.USD),
+					}))
 					break
 				}
 			}

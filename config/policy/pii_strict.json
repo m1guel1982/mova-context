@@ -1,0 +1,25 @@
+{
+  "_comment_es": "Politica estricta de PII. Usar en repositorios privados/corporativos. Exige sanitizacion activa antes de enviar a LLMs externos.",
+  "external_model": "sanitize",
+  "pii_masking": {
+    "min_score": 0.40,
+    "shape_weight": 0.65,
+    "entropy_weight": 0.35,
+    "min_token_length": 4,
+    "hash_length": 8,
+    "tag_format": "[PII_%s]",
+    "shape_rules": {
+      "digit_ratio_threshold": 0.3,
+      "digit_ratio_bonus": 0.3,
+      "separator_min_count": 2,
+      "separator_digit_ratio_threshold": 0.2,
+      "separator_bonus": 0.25,
+      "at_symbol_bonus": 0.65,
+      "long_token_bonus_len": 10,
+      "long_mixed_token_bonus": 0.15,
+      "upper_run_ratio_threshold": 0.6,
+      "upper_run_bonus": 0.15
+    }
+  }
+}
+ 

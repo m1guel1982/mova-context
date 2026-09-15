@@ -1,0 +1,10 @@
+{
+  "_comment_en": "Non-security relevance policy: what happens to documentation and generated/build artifacts BEFORE they would ever reach the security stage. generated_file_patterns is matched against a path suffix/substring - it never inspects file content.",
+  "_comment_es": "Politica de relevancia no relacionada con seguridad: que ocurre con la documentacion y los artefactos generados/de build ANTES de que lleguen siquiera a la etapa de seguridad. generated_file_patterns se compara contra un sufijo/subcadena de la ruta - nunca inspecciona el contenido del archivo.",
+  "documentation_action": "ALLOW",
+  "generated_files_action": "EXCLUDE",
+  "generated_file_patterns": [
+    "dist/", "build/", "vendor/", "node_modules/", ".git/",
+    "*.min.js", "*.lock", "coverage/", "__pycache__/", "*.pyc"
+  ]
+}

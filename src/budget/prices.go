@@ -16,9 +16,18 @@ import (
 )
 
 // PriceEntry son los precios de un modelo, en USD por unidad (ver Unit).
+// ContextWindow (opcional, en tokens) alimenta la tabla "MODEL
+// COMPATIBILITY" de `mova context-trace` (ver trace/analyzer.go) — 0
+// significa "no configurado" y se muestra como "-", nunca se inventa.
 type PriceEntry struct {
-	Input  float64 `json:"input"`
-	Output float64 `json:"output"`
+	Input         float64 `json:"input"`
+	Output        float64 `json:"output"`
+	ContextWindow int     `json:"context_window"`
+	// Local marca explícitamente un modelo de inferencia local
+	// (Ollama, LM Studio, vLLM, ...): su costo de API SIEMPRE es
+	// $0 — ver EstimateCost, que nunca calcula un costo > 0 para una
+	// entrada con Local=true, sin importar lo que digan Input/Output.
+	Local bool `json:"local"`
 }
 
 // ProviderPrices agrupa los modelos de un proveedor (openai, anthropic,

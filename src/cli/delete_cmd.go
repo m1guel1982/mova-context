@@ -8,7 +8,6 @@
 package main
 
 import (
-	"bufio"
 	"strings"
 
 	"mova.local/core"
@@ -16,10 +15,20 @@ import (
 )
 
 // runChatDelete implements `/delete "a.txt" "b.txt" "logs/"`.
-func runChatDelete(root string, proj *core.Project, rest string, scanner *bufio.Scanner) {
+// runChatDelete drives the SAME confirmation flow both `/delete` and
+// natural-language delete intent (nl_delete.go) use — one path prompt
+// per pending item, read via readLine (a plain *bufio.Scanner wrapper
+// on `mova chat`'s REPL, a menuChan-backed channel read on `mova ui
+// chat` — see chat_helpers.go's readLineFunc and tui_chat.go's
+// nlDeleteCmd) so both doors share one implementation instead of two
+// that could quietly drift apart.
+func runChatDelete(root string, proj *core.Project, rest string, readLine readLineFunc, emit func(string)) {
+	if emit == nil {
+		emit = consolePrint
+	}
 	paths := parseDeletePaths(rest)
 	if len(paths) == 0 {
-		consolePrint("Usage: /delete \"file.txt\" [\"another.txt\" \"dir/\" ...]\n")
+		emit("Usage: /delete \"file.txt\" [\"another.txt\" \"dir/\" ...]\n")
 		return
 	}
 	repo := "."
@@ -29,32 +38,33 @@ func runChatDelete(root string, proj *core.Project, rest string, scanner *bufio.
 
 	pending, err := documents.Delete(root, documents.DeleteRequest{Paths: paths, Repo: repo})
 	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
+		emit("Error: " + err.Error() + "\n")
 		return
 	}
 
 	var confirmed []string
 	for _, item := range pending.Items {
-		consolePrint(documents.FormatDeletePrompt([]documents.DeleteItem{item}) + " ")
-		if !scanner.Scan() {
+		emit(documents.FormatDeletePrompt([]documents.DeleteItem{item}) + " ")
+		text, ok := readLine()
+		if !ok {
 			return
 		}
-		answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+		answer := strings.ToLower(strings.TrimSpace(text))
 		if answer == "y" || answer == "yes" || answer == "s" || answer == "si" || answer == "sí" {
 			confirmed = append(confirmed, item.Requested)
 		}
 	}
 	if len(confirmed) == 0 {
-		consolePrint("Nothing deleted.\n")
+		emit("Nothing deleted.\n")
 		return
 	}
 
 	result, err := documents.Delete(root, documents.DeleteRequest{Paths: confirmed, Repo: repo, Confirm: true})
 	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
+		emit("Error: " + err.Error() + "\n")
 		return
 	}
-	consolePrint(result.Message + "\n")
+	emit(result.Message + "\n")
 }
 
 // parseDeletePaths splits /delete's argument text into individual path

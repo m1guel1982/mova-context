@@ -42,7 +42,15 @@ func EstimateCost(tokens int, prices *PricesConfig) []ModelCost {
 		sort.Strings(modelNames)
 		for _, modelName := range modelNames {
 			entry := prices.Providers[providerName].Models[modelName]
-			usd := (float64(tokens) / divisor) * entry.Input
+			// Local inference (Ollama, LM Studio, vLLM, ...) is
+			// ALWAYS $0 API cost, regardless of any Input/Output
+			// value present in the JSON — infrastructure cost is a
+			// separate, unrelated concern this function never
+			// estimates (see PriceEntry.Local's doc comment).
+			usd := 0.0
+			if !entry.Local {
+				usd = (float64(tokens) / divisor) * entry.Input
+			}
 			clp := usd * prices.ExchangeRateCLP
 			out = append(out, ModelCost{Provider: providerName, Model: modelName, USD: usd, CLP: clp})
 		}

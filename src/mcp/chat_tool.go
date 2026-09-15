@@ -77,7 +77,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 	if project != "" {
 		statusLog.WriteString("[Context] Building context...\n")
 		taskName := str(args, "task")
-		// budget.BuildGatedContext runs the full Token Firewall
+		// budget.BuildGatedContext runs the full Context Governance
 		// (Sanitizer → Circuit Breaker → the existing max_tokens gate)
 		// — the exact same pipeline `mova chat`/the TUI/`mova run`
 		// already go through, so MCP never has its own copy of
@@ -108,8 +108,12 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		}
 		sess.SetSystem(systemText + ToolsSystemPrompt(proj.Tools))
 		sess.CacheBoundary = boundary
+		sess.EgressAuditDryRun, sess.EgressAuditOutputFile = core.ResolveEgressAudit(root, project, proj)
 		if core.ToolsEnabled(proj.Tools) {
 			statusLog.WriteString("[Tools] Enabled for this call — the model may create/write files and directories (see project.json's \"tools\").\n")
+		}
+		if gated.Sections != nil && gated.Sections.DebugLog != "" {
+			statusLog.WriteString(gated.Sections.DebugLog)
 		}
 	}
 
@@ -124,6 +128,29 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 	}
 
 	label := providerLabelMCP(sess.Provider)
+	if applyReply, handled := applyAutoApplyConfirmationMCP(&statusLog, adapter, root, proj, project, sess, message); handled {
+		writeTokenUsage(&statusLog, root, sess, proj)
+		if project != "" && proj != nil {
+			recordRealUsageMCP(root, project, proj, sess)
+		}
+		return statusLog.String() + applyReply, nil
+	}
+	// Order matters: DELETE and READ are checked before EDIT — a real
+	// bug found in QA had "elimina el archivo X" going through the
+	// edit flow (which just emptied the file's content instead of
+	// removing it), because delete verbs used to also match
+	// editVerbRe. See nl_delete.go/nl_read.go.
+	if deleteReply, handled := applyNaturalLanguageDelete(&statusLog, root, proj, message, boolArg(args, "apply_delete")); handled {
+		writeTokenUsage(&statusLog, root, sess, proj)
+		return statusLog.String() + deleteReply, nil
+	}
+	if renameReply, handled := applyNaturalLanguageRename(&statusLog, root, proj, message, boolArg(args, "apply_rename")); handled {
+		writeTokenUsage(&statusLog, root, sess, proj)
+		return statusLog.String() + renameReply, nil
+	}
+	if readReply, handled := applyNaturalLanguageRead(root, proj, message); handled {
+		return statusLog.String() + readReply, nil
+	}
 	if editReply, handled := applyNaturalLanguageEdits(&statusLog, sess, root, proj, message, boolArg(args, "apply_edits")); handled {
 		writeTokenUsage(&statusLog, root, sess, proj)
 		if project != "" && proj != nil {
@@ -133,13 +160,26 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 	}
 
 	nlIntent := applyNaturalLanguageDirectories(&statusLog, root, proj, message)
-	statusLog.WriteString("[" + label + "] Sending request...\n")
-	reply, err := sendWithToolsMCP(&statusLog, sess, adapter, proj, root, message)
-	if err != nil {
-		return "", err
+	var reply string
+	if len(nlIntent.Files) > 0 {
+		// File-creation intent detected directly in the person's own
+		// message: handled entirely here (own forced apply_file_changes
+		// instruction, see applyNaturalLanguageFilesViaChanges), NOT
+		// through the ordinary sendWithToolsMCP turn below — mirrors
+		// cli/nl_save.go's handleNaturalLanguageSave, which also fully
+		// takes over instead of falling through to a normal chat turn.
+		reply, err = applyNaturalLanguageFilesViaChanges(&statusLog, sess, adapter, root, nlIntent, message)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		statusLog.WriteString("[" + label + "] Sending request...\n")
+		reply, err = sendWithToolsMCP(&statusLog, sess, adapter, proj, root, message)
+		if err != nil {
+			return "", err
+		}
+		statusLog.WriteString("[" + label + "] Response received.\n")
 	}
-	statusLog.WriteString("[" + label + "] Response received.\n")
-	applyNaturalLanguageFiles(&statusLog, root, proj, nlIntent, message, reply)
 	writeTokenUsage(&statusLog, root, sess, proj)
 	statusLog.WriteString("\n")
 
@@ -196,7 +236,20 @@ func sendWithToolsMCP(statusLog *strings.Builder, sess *models.Session, adapter 
 			break
 		}
 		statusLog.WriteString(fmt.Sprintf("[Tool] %s %v\n", name, args))
-		result, terr := RunAgentTool(adapter, root, name, args, proj.Tools)
+		var result string
+		var terr error
+		if name == "apply_file_changes" {
+			// MCP/HTTP have no terminal for the interactive menu
+			// cli/apply_file_changes.go shows — see
+			// DescribePendingChanges' doc comment. Never auto-writes.
+			if changes, ok := ParseApplyFileChanges(args); ok {
+				result = DescribePendingChanges(changes)
+			} else {
+				terr = fmt.Errorf(`"changes" must be a non-empty array of {"action","path","content"}`)
+			}
+		} else {
+			result, terr = RunAgentTool(adapter, root, name, args, proj.Tools)
+		}
 		if terr != nil {
 			result = "ERROR: " + terr.Error()
 		}

@@ -1,4 +1,4 @@
-// pii.go — Technical/Structural PII Masking: an OPTIONAL Token Firewall
+// pii.go — Technical/Structural PII Masking: an OPTIONAL Context Governance
 // stage (see budget/gated_context.go) that replaces candidate-PII
 // tokens in Focus/Memory with a deterministic [PII_xxxxxxxx] pseudonym
 // BEFORE anything is counted or sent to a model.

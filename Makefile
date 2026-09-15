@@ -1,10 +1,36 @@
 # Mova Context — Build
+#
+# CGO_ENABLED=0 on every target below is intentional, not incidental:
+# mova has NO C dependencies (see docs/PROJECT.md § "AST filtering" —
+# even the tree-sitter-compatible AST engine used by focus/
+# context-trace is github.com/odvcencio/gotreesitter, a pure-Go
+# runtime). That is what makes single-command cross-compilation to
+# windows/linux/darwin, amd64/arm64, from ONE machine below actually
+# work: a CGO build would need a matching C cross-compiler per target,
+# which this Makefile never sets up. If a future dependency ever pulls
+# in "import "C"", `go build` with CGO_ENABLED=0 fails loudly right
+# here instead of silently producing a binary that needs a C
+# toolchain the person building it doesn't have — see the "Refactor
+# to remove tree-sitter's CGo binding" note in CHANGELOG-worthy history
+# for exactly the situation this guards against.
+
+# GO_TAGS: the astfilter package (core/focus/astfilter) supports a
+# grammar_subset build mode that embeds ONLY the languages Mova
+# Context actually uses (see astfilter/languages.go and
+# docs/PROJECT.md § "AST filtering") instead of all ~200+ grammars the
+# gotreesitter registry ships — this is what keeps the pure-Go AST
+# engine from bloating the installer: a handful of MB for 11
+# languages instead of ~20MB for the full registry. Add a new
+# grammar_subset_<lang> tag here (comma-separated, no spaces — see
+# grammars/z_subset_blob_embed_*.go for the exact per-language tag
+# names) whenever astfilter/languages.go gains a new extension entry.
+GO_TAGS = grammar_subset,grammar_subset_go,grammar_subset_python,grammar_subset_javascript,grammar_subset_typescript,grammar_subset_java,grammar_subset_c_sharp,grammar_subset_c,grammar_subset_cpp,grammar_subset_php,grammar_subset_ruby,grammar_subset_rust
 
 ifeq ($(OS),Windows_NT)
     MKDIR_DIST = if not exist dist mkdir dist
     RM_RF = rmdir /s /q dist
-    GO_BUILD = go build -ldflags="-s -w"
-    
+    GO_BUILD = go build -tags "$(GO_TAGS)" -ldflags="-s -w"
+
     # Detectar arquitectura en Windows (AMD64 o ARM64)
     ARCH = amd64
     ifeq ($(PROCESSOR_ARCHITECTURE),ARM64)
@@ -16,10 +42,10 @@ ifeq ($(OS),Windows_NT)
 
 build-all:
 	$(MKDIR_DIST)
-	cmd /c "set GOOS=windows&& set GOARCH=amd64&& $(GO_BUILD) -o dist/mova-windows-amd64.exe ./src/cli"
-#	cmd /c "set GOOS=linux&& set GOARCH=amd64&& $(GO_BUILD) -o dist/mova-linux-amd64 ./src/cli"
-#	cmd /c "set GOOS=darwin&& set GOARCH=amd64&& $(GO_BUILD) -o dist/mova-macos-amd64 ./src/cli"
-#	cmd /c "set GOOS=darwin&& set GOARCH=arm64&& $(GO_BUILD) -o dist/mova-macos-arm64 ./src/cli"
+	cmd /c "set GOOS=windows&& set GOARCH=amd64&& set CGO_ENABLED=0&& $(GO_BUILD) -o dist/mova-windows-amd64.exe ./src/cli"
+#	cmd /c "set GOOS=linux&& set GOARCH=amd64&& set CGO_ENABLED=0&& $(GO_BUILD) -o dist/mova-linux-amd64 ./src/cli"
+#	cmd /c "set GOOS=darwin&& set GOARCH=amd64&& set CGO_ENABLED=0&& $(GO_BUILD) -o dist/mova-macos-amd64 ./src/cli"
+#	cmd /c "set GOOS=darwin&& set GOARCH=arm64&& set CGO_ENABLED=0&& $(GO_BUILD) -o dist/mova-macos-arm64 ./src/cli"
 
 install:
 	@for /f "delims=" %%g in ('go env GOPATH') do ( \
@@ -38,7 +64,7 @@ install:
 else
     MKDIR_DIST = mkdir -p dist
     RM_RF = rm -rf dist
-    GO_BUILD = go build -ldflags="-s -w"
+    GO_BUILD = CGO_ENABLED=0 go build -tags "$(GO_TAGS)" -ldflags="-s -w"
     
     GOPATH_DIR := $(shell go env GOPATH)
     
@@ -88,4 +114,4 @@ clean:
 	$(RM_RF)
 
 test:
-	cd src && go test ./...
+	cd src && CGO_ENABLED=0 go test ./...

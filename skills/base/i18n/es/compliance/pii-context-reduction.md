@@ -23,7 +23,7 @@ El algoritmo es **agnóstico al idioma**: no usa diccionarios, listas de palabra
 * **No es anonimización jurídica.** Es una mitigación heurística estructural — no cumple, por sí sola, ningún estándar legal de anonimización.
 * **No garantiza detectar el 100% de la información personal.** Un nombre común sin dígitos ni separadores estructurales puede no alcanzar el umbral y no ser enmascarado (falso negativo). Por el mismo motivo, también puede enmascarar tokens que NO son PII pero comparten una forma estructural parecida — por ejemplo, fechas con separadores tipo `2024-07-30` (falso positivo).
 * **No reemplaza asesoría legal, una política interna de privacidad, ni un programa de cumplimiento de la Ley 21.719, GDPR u otra normativa.**
-* No reemplaza el resto del Token Firewall (Sanitizer, Circuit Breaker) — es una etapa adicional y opcional, no un sustituto.
+* No reemplaza el resto del Context Governance (Sanitizer, Circuit Breaker) — es una etapa adicional y opcional, no un sustituto.
 
 ## Cuándo usarlo en este dominio (compliance)
 

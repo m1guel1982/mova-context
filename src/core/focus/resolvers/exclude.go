@@ -1,25 +1,3 @@
-// exclude.go — implementa la clave "exclude" de project.json (y su
-// override a nivel task): una lista de targets con la MISMA sintaxis
-// multiplataforma que "focus" — nombre bare de carpeta/archivo
-// ("node_modules", ".git"), ruta relativa al repo ("src/secrets"), ruta
-// absoluta del host ("C:\secrets", "D:\private", "/mnt/private") o glob
-// ("*.env", "**/*.pem") — pero para EXCLUSIÓN: cualquier archivo o
-// directorio que matchee un patrón de "exclude" NUNCA se resuelve — ni
-// siquiera si "focus" lo pide explícitamente por su nombre exacto — y
-// por lo tanto nunca llega a mova-context-cache.json (ver
-// budget/contextcache.go: solo se cachea lo que SanitizeCached recibe,
-// y lo que exclude bloquea nunca sale de aquí).
-//
-// Se comprueba en DOS niveles, igual que ctx.SkipDir ya hacía para el
-// default fijo (.git/node_modules/vendor/...):
-//   - por NOMBRE, durante cualquier recorrido recursivo (walkFiles,
-//     DirectoryResolver.Resolve, GlobResolver.Resolve) — para que
-//     "exclude": ["node_modules"] frene la carpeta apenas se la
-//     encuentra, sin necesidad de conocer su ruta completa.
-//   - por RUTA YA RESUELTA (absoluta), para los otros tres casos: un
-//     archivo puntual ("focus": ["server.js"] pero "server.js" está en
-//     exclude), una ruta relativa al repo más específica que un simple
-//     nombre ("src/secrets"), o una ruta absoluta del host.
 package resolvers
 
 import (
@@ -29,99 +7,112 @@ import (
 	"mova.local/core/focus"
 )
 
-// excludeMatcher precompila los patrones de "exclude" una sola vez por
-// llamada a Resolve (nunca por archivo) en las cuatro formas de match
-// que necesita — ver el comentario del archivo para el porqué de cada
-// una.
 type excludeMatcher struct {
-	bareNames map[string]bool // "node_modules", ".git", "secret.env" — cualquier nivel, por nombre
-	absPaths  []string        // resueltos y normalizados con "/" — "/mnt/private", "c:/secrets"
-	repoPaths []string        // filepath.Join(repoPath, ...), absolutos, normalizados con "/"
-	globs     []string        // "*.env", "**/*.pem" — normalizados con "/"
+	bareNames map[string]bool
+	absPaths  []string
+	repoPaths []string
+	globs     []string
 }
 
-// newExcludeMatcher interpreta cada patrón crudo de "exclude" con las
-// MISMAS reglas de detección que "focus" usa para reconocer una ruta
-// absoluta del host (looksAbsoluteHostPath) o un glob (isGlobPattern) —
-// un patrón nunca se interpreta de una forma para leer y de otra para
-// excluir.
+func normalizePath(p string) string {
+	p = strings.ReplaceAll(p, `\`, "/")
+	p = strings.TrimSpace(p)
+	return strings.ToLower(p)
+}
+
 func newExcludeMatcher(repoPath string, patterns []string) *excludeMatcher {
 	if len(patterns) == 0 {
 		return nil
 	}
 	m := &excludeMatcher{bareNames: map[string]bool{}}
+	cleanRepo := normalizePath(repoPath)
+
 	for _, raw := range patterns {
 		p := strings.TrimSpace(raw)
 		if p == "" || p == "." {
-			continue // "exclude": ["."] no tiene un significado útil — se ignora en vez de excluir todo el repo por accidente
+			continue
 		}
+
+		// Quitar la barra inicial si viene como "/mova_print/..." para normalizar a ruta relativa del repo
+		pClean := strings.TrimPrefix(p, "/")
+		pClean = strings.TrimPrefix(pClean, `\`)
+
 		switch {
 		case isGlobPattern(p):
-			m.globs = append(m.globs, normalizeHostPath(p))
+			m.globs = append(m.globs, normalizePath(p))
 		case looksAbsoluteHostPath(p):
-			m.absPaths = append(m.absPaths, normalizeHostPath(p))
+			m.absPaths = append(m.absPaths, normalizePath(p))
 		case !strings.ContainsAny(p, `/\`):
-			m.bareNames[p] = true
+			m.bareNames[strings.ToLower(p)] = true
 		default:
-			if rp := repoRelativePath(repoPath, p); rp != "" {
-				m.repoPaths = append(m.repoPaths, normalizeHostPath(filepath.Clean(rp)))
-			}
+			full := normalizePath(filepath.Join(cleanRepo, pClean))
+			m.repoPaths = append(m.repoPaths, full)
 		}
 	}
+
 	if len(m.bareNames) == 0 && len(m.absPaths) == 0 && len(m.repoPaths) == 0 && len(m.globs) == 0 {
 		return nil
 	}
 	return m
 }
 
-// excludesName reporta si una carpeta o archivo, identificado solo por
-// su NOMBRE (sin ruta), debe excluirse en cualquier nivel del árbol —
-// usado durante el recorrido recursivo, igual que ctx.SkipDir.
 func (m *excludeMatcher) excludesName(name string) bool {
 	if m == nil {
 		return false
 	}
-	return m.bareNames[name]
+	return m.bareNames[strings.ToLower(name)]
 }
 
-// excludesPath reporta si una ruta YA RESUELTA (absoluta) debe
-// excluirse — por nombre base, por estar dentro de una ruta
-// absoluta/relativa-al-repo excluida, o por matchear un glob.
 func (m *excludeMatcher) excludesPath(absPath string) bool {
 	if m == nil {
 		return false
 	}
-	norm := normalizeHostPath(absPath)
-	base := filepath.Base(absPath)
+	norm := normalizePath(absPath)
+	base := strings.ToLower(filepath.Base(absPath))
+
+	// 1. Coincidencia por nombre simple ("node_modules", "docs", etc.)
 	if m.bareNames[base] {
 		return true
 	}
-	for _, p := range m.absPaths {
-		if norm == p || strings.HasPrefix(norm, p+"/") {
+
+	// 2. Coincidencia si algún bareName existe como directorio en la ruta
+	for name := range m.bareNames {
+		if strings.Contains(norm, "/"+name+"/") || strings.HasSuffix(norm, "/"+name) {
 			return true
 		}
 	}
+
+	// 3. Coincidencia por ruta del repositorio ("mova_print/frontend/node_modules")
 	for _, p := range m.repoPaths {
 		if norm == p || strings.HasPrefix(norm, p+"/") {
 			return true
 		}
 	}
+
+	// 4. Coincidencia por ruta absoluta
+	for _, p := range m.absPaths {
+		if norm == p || strings.HasPrefix(norm, p+"/") {
+			return true
+		}
+	}
+
+	// 5. Coincidencia por Globs
 	for _, g := range m.globs {
+		// Probar contra el nombre base (ej. "imagen.jpg" contra "*.jpg")
 		if matched, _ := filepath.Match(g, base); matched {
 			return true
 		}
-		if matched, _ := filepath.Match(g, norm); matched {
-			return true
+		// Probar extensión directamente si el glob empieza con "*."
+		if strings.HasPrefix(g, "*.") {
+			ext := strings.TrimPrefix(g, "*")
+			if strings.HasSuffix(base, ext) {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// skipDirOrExcluded combina ctx.SkipDir (el default fijo:
-// .git/node_modules/vendor/dist/build/__pycache__/.venv/venv/.idea/
-// .vscode, más "focus_exclude") con el nuevo excludeMatcher — un solo
-// punto de verdad para "¿esta carpeta se descarta durante un
-// recorrido?", usado por walkFiles/DirectoryResolver/GlobResolver.
 func skipDirOrExcluded(ctx focus.Context, m *excludeMatcher, name string) bool {
-	return ctx.SkipDir(name) || m.excludesName(name)
+	return ctx.SkipDir(name) || (m != nil && m.excludesName(name))
 }

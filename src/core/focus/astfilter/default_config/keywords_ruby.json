@@ -1,0 +1,25 @@
+{
+  "language": "ruby",
+  "extensions": [".rb"],
+  "kinds": {
+    "func": [
+      { "type": "method" }
+    ],
+    "class": [
+      { "type": "class" }
+    ],
+    "namespace": [
+      { "type": "module" }
+    ],
+    "const": [
+      { "type": "assignment", "requires_child_type": "constant" }
+    ],
+    "var": [
+      { "type": "assignment", "requires_child_type": "identifier" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  },
+  "notes": "Ruby distingue constantes de variables por convención de mayúsculas a nivel de gramática: el lado izquierdo de la asignación es un nodo 'constant' (MAYUSCULA) o 'identifier' (minúscula) — se usa ese hijo para diferenciar 'const' de 'var'."
+}

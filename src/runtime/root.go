@@ -34,10 +34,13 @@ import (
 // mova desde dentro del árbol del proyecto, (b) sigue resolviendo
 // exactamente igual que antes.
 func FindRoot() (string, error) {
+	// 1. MOVA_PROJECT_PATH sigue siendo la ruta explícita absoluta (override total)
 	if p := os.Getenv("MOVA_PROJECT_PATH"); p != "" {
 		return filepath.Clean(p), nil
 	}
 
+	// 2. Construimos la lista de puntos de partida en orden de prioridad.
+	// Si MOVA_PROJECT_ROOT está definida, la probamos primero.
 	var starts []string
 	if envRoot := os.Getenv("MOVA_PROJECT_ROOT"); envRoot != "" {
 		starts = append(starts, filepath.Clean(envRoot))
@@ -49,6 +52,9 @@ func FindRoot() (string, error) {
 		starts = append(starts, filepath.Dir(filepath.Clean(exe)))
 	}
 
+	// 3. Buscamos workflow.md hacia arriba desde cada punto de partida.
+	// Si MOVA_PROJECT_ROOT no tiene workflow.md, pasa automáticamente
+	// al cwd y luego a la ruta del ejecutable.
 	for _, start := range starts {
 		if dir, ok := searchUpward(start); ok {
 			return dir, nil

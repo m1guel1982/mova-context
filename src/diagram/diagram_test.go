@@ -5,10 +5,50 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 
 	"mova.local/core"
+	"mova.local/i18n"
 )
+
+// TestMain loads a COPY of the real config/lang/ catalog (the one
+// that ships with Mova, two directories up from this package —
+// src/diagram -> src -> repo root) into a throwaway temp directory
+// before any test runs, forcing the active language to English —
+// so this package's tests exercise the exact same i18n.T lookups the
+// diagram feature makes in production (see svg.go/svg_metrics.go/
+// build.go) with deterministic, English assertions, regardless of
+// what config/lang/lang_active.json happens to be set to in this
+// checkout (it ships as "es" — see that file) and without ever
+// touching the real one (i18n's hot-reload poller would otherwise be
+// watching, and potentially rewriting via another test/process, the
+// actual shipped file). Best-effort: if the catalog can't be found
+// (e.g. this package is vendored somewhere without its sibling
+// config/ directory), tests still run — they'll just see literal
+// untranslated keys instead of real strings, same as before this
+// TestMain existed.
+func TestMain(m *testing.M) {
+	_, thisFile, _, ok := goruntime.Caller(0)
+	if ok {
+		realConfigLang := filepath.Join(filepath.Dir(thisFile), "..", "..", "config", "lang")
+		if enData, err := os.ReadFile(filepath.Join(realConfigLang, "en.json")); err == nil {
+			tmp, tmpErr := os.MkdirTemp("", "mova-diagram-i18n-*")
+			if tmpErr == nil {
+				defer os.RemoveAll(tmp)
+				langDir := filepath.Join(tmp, "config", "lang")
+				_ = os.MkdirAll(langDir, 0o755)
+				_ = os.WriteFile(filepath.Join(langDir, "en.json"), enData, 0o644)
+				if esData, err := os.ReadFile(filepath.Join(realConfigLang, "es.json")); err == nil {
+					_ = os.WriteFile(filepath.Join(langDir, "es.json"), esData, 0o644)
+				}
+				_ = os.WriteFile(filepath.Join(langDir, "lang_active.json"), []byte(`{"lang":"en"}`), 0o644)
+				_ = i18n.Init(tmp)
+			}
+		}
+	}
+	os.Exit(m.Run())
+}
 
 // writeProject is the shared fixture builder: a minimal but real
 // project.json under root/projects/<name>/, with a Focus file that
@@ -135,7 +175,7 @@ func TestRenderSVG_ContainsExpectedSections(t *testing.T) {
 		t.Fatal(err)
 	}
 	svg := RenderSVG(data)
-	for _, want := range []string{"<svg", "SOURCES", "TOKEN FIREWALL", "AVAILABLE INTERFACES"} {
+	for _, want := range []string{"<svg", "SOURCES", "CONTEXT GOVERNANCE", "AVAILABLE INTERFACES"} {
 		if !bytesContains(svg, want) {
 			t.Errorf("expected SVG output to contain %q", want)
 		}
@@ -143,19 +183,24 @@ func TestRenderSVG_ContainsExpectedSections(t *testing.T) {
 }
 
 func TestRenderSVG_NeverInventsDataOnEmptyFields(t *testing.T) {
-	// A project with no jobs must never show a "JOBS" section — this is
-	// the "no inventar datos, no dibujar lo que no existe" rule this
-	// whole feature is built around.
+	// A project with no Compiler stages exercised must never show a
+	// "CONTEXT COMPILER" section in simple detail mode, and a project
+	// with no jobs/agents-of-a-group must never fabricate rows for
+	// sections it has nothing real to draw for — this is the "no
+	// inventar datos, no dibujar lo que no existe" rule this whole
+	// feature is built around.
 	root := t.TempDir()
-	writeProject(t, root, "no-jobs", nil)
+	writeProject(t, root, "no-extras", map[string]any{
+		"diagram": map[string]any{"detail_level": "simple"},
+	})
 	adapter := core.NewFileAdapter(root)
-	data, err := BuildDiagram(adapter, root, "no-jobs", "", "", "")
+	data, err := BuildDiagram(adapter, root, "no-extras", "", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	svg := RenderSVG(data)
-	if bytesContains(svg, "JOBS (SCHEDULED)") {
-		t.Errorf("expected no Jobs section when project.json declares no jobs")
+	if bytesContains(svg, "CONTEXT COMPILER") {
+		t.Errorf("expected no Context Compiler section in simple detail mode")
 	}
 }
 

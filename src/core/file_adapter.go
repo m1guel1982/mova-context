@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"mova.local/documents"
 )
 
 type fileAdapter struct{ root string }
@@ -211,8 +213,44 @@ func (a *fileAdapter) getProjectByPath(path string) (*Project, error) {
 	return &p, nil
 }
 
+// MemoryPath resolves where memory.md lives for a file-adapter
+// project: project.json's own "memory_path" when set (absolute path
+// used as-is, relative path joined to root — same rule as
+// mova.local/budget.BudgetReportPath), otherwise the unchanged
+// default projects/<project>/memory.md. Reads project.json directly
+// (best-effort — any error just falls back to the default) instead of
+// widening the Adapter interface's GetMemory/AppendMemory/
+// ArchiveMemory signatures, which would also have to change on
+// dbAdapter for a file-only concept.
+func MemoryPath(root, project string) string {
+	def := filepath.Join(root, "projects", project, "memory.md")
+	data, err := os.ReadFile(ProjectJSONPath(root, project))
+	if err != nil {
+		return def
+	}
+	var p Project
+	if err := json.Unmarshal(data, &p); err != nil || p.MemoryPath == "" {
+		return def
+	}
+	// Cross-platform absolute-path check (documents.IsAbsCrossPlatform)
+	// instead of plain filepath.IsAbs — fixes a real bug: filepath.IsAbs
+	// only recognizes the CURRENT OS's own path style, so a Windows
+	// path like "C:\a\b.md" typed into project.json was silently
+	// treated as relative (and joined under root, landing nowhere near
+	// C:\a\b.md) whenever this ran on a non-Windows build, and a UNC
+	// share (\\server\share\...) or a bare "/mnt/..." path had the same
+	// problem the other way around. See documents/pathresolve.go.
+	if documents.IsAbsCrossPlatform(p.MemoryPath) {
+		if normalized, err := documents.NormalizeAbsPath(p.MemoryPath); err == nil {
+			return normalized
+		}
+		return p.MemoryPath
+	}
+	return filepath.Join(root, p.MemoryPath)
+}
+
 func (a *fileAdapter) GetMemory(project string) (string, error) {
-	return readFile(filepath.Join(a.root, "projects", project, "memory.md")), nil
+	return readFile(MemoryPath(a.root, project)), nil
 }
 
 func (a *fileAdapter) GetMemoryAll(project string) (string, error) {
@@ -239,7 +277,10 @@ func (a *fileAdapter) GetMemoryAll(project string) (string, error) {
 }
 
 func (a *fileAdapter) AppendMemory(project, entry string) error {
-	path := filepath.Join(a.root, "projects", project, "memory.md")
+	path := MemoryPath(a.root, project)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	existing := readFile(path)
 	updated := strings.TrimSpace(entry) + "\n\n---\n\n" + existing
 	return os.WriteFile(path, []byte(updated), 0644)

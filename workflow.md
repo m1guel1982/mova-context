@@ -444,38 +444,6 @@ ruta absoluta
 ```
 ---
 
-## JOB ENGINE
-
-```text
-SI project.json tiene "jobs"
-→ cada entrada combina "schedule" (cron, 5 campos) con acciones:
-   tasks | save | memory | memory_archive | delete | budget
-```
-
-Orden fijo de acciones dentro de un job (siempre, sin importar el
-orden en el JSON):
-
-```text
-1. tasks           — arma contexto (mismo motor que "Ejecutar" arriba)
-2. save            — guarda el resultado (mismo motor que /save)
-3. memory          — agrega a memory.md (mismo motor que "Actualizar memory.md")
-4. memory_archive  — archiva entradas viejas
-5. delete          — elimina archivos (glob patterns)
-6. budget          — genera mova-budget-report.md (con --focus opcional)
-```
-
-```text
-"tasks": ["*"] → ejecutar TODAS las tasks del proyecto, en orden alfabético
-```
-
-Ejecución: `mova jobs run <project>` (bajo demanda, ignora schedule) o
-`mova jobs start` (daemon, revisa cron cada minuto) — desde CLI, chat,
-HTTP (`POST /jobs/run`) o MCP (tool `run_job`), siempre el mismo motor
-(`mova.local/jobs`). Ver PROJECT_JSON.md § Jobs para el detalle
-completo de cada campo.
-
----
-
 ## MULTIAGENTE
 
 ```text
@@ -487,7 +455,7 @@ projects/[grupo]/[agente]/project.json  ← cada agente es un proyecto normal
 SI se referencia "[grupo]/[agente]" como nombre de proyecto
 → resolver project.json en projects/[grupo]/[agente]/project.json
 → el RESULTADO ESPERADO de arriba aplica sin cambios: cada agente
-  tiene su propio memory.md, budget, focus, tasks y jobs
+  tiene su propio memory.md, budget, focus y tasks
 ```
 
 Ejecución del grupo completo, secuencial (un agente después del otro):

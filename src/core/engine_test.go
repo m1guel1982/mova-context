@@ -149,3 +149,62 @@ func TestResolveFocus_TaskOverridesProject(t *testing.T) {
 		t.Fatalf("expected project focus when task has none, got: %v", got2)
 	}
 }
+
+// TestBuildContextSections_InlineTextFallback covers a real, documented
+// feature (see resolveKnowledgeOrLiteral, engine_helpers.go, and
+// PROJECT_JSON.md § "Agents / Skills / Prompts example"): an entry in
+// "agents.use"/"skills.use", or a task's "prompt", that does NOT match
+// any file under agents/<domain>/, skills/<domain>/, or prompts/<domain>/
+// is used VERBATIM as the section's content — a person is never
+// required to create a one-line .md file just to add a short
+// instruction directly inside project.json.
+func TestBuildContextSections_InlineTextFallback(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		full := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const inlineAgent = "Actua como un revisor de seguridad estricto."
+	const inlineSkill = "Nunca sugieras dependencias externas nuevas."
+	const inlinePrompt = "Revisa el diff y lista solo riesgos de seguridad."
+
+	// "dev" DOES resolve to a real file — mixed with inline entries in
+	// the same "use" array, to prove both forms can coexist.
+	write("agents/base/dev.md", "# Dev agent\nBe helpful.\n")
+	write("projects/inline-fixture/project.json", `{
+		"project": "inline-fixture",
+		"repo": ".",
+		"lang": "en",
+		"default_task": "review",
+		"agents": {"domain": "base", "use": ["dev", "`+inlineAgent+`"]},
+		"skills": {"domain": "base", "use": ["`+inlineSkill+`"]},
+		"tasks": {
+			"review": {"prompt": "`+inlinePrompt+`"}
+		}
+	}`)
+
+	adapter := NewFileAdapter(root)
+	sections, err := BuildContextSections(adapter, root, "inline-fixture", "")
+	if err != nil {
+		t.Fatalf("BuildContextSections: %v", err)
+	}
+
+	if !strings.Contains(sections.Agents, "Be helpful.") {
+		t.Errorf("expected the file-backed agent (dev.md) to still resolve normally, got Agents=%q", sections.Agents)
+	}
+	if !strings.Contains(sections.Agents, inlineAgent) {
+		t.Errorf("expected the inline agent text to appear verbatim in Agents, got %q", sections.Agents)
+	}
+	if !strings.Contains(sections.Skills, inlineSkill) {
+		t.Errorf("expected the inline skill text to appear verbatim in Skills, got %q", sections.Skills)
+	}
+	if !strings.Contains(sections.Prompt, inlinePrompt) {
+		t.Errorf("expected the inline prompt text to appear verbatim in Prompt, got %q", sections.Prompt)
+	}
+}

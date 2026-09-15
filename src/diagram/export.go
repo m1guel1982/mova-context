@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ValidFormats are the export formats CLI/HTTP/MCP callers may pass to
@@ -18,12 +19,45 @@ import (
 // name fails clearly instead of silently writing nothing.
 var ValidFormats = []string{"svg", "png", "pdf"}
 
+// splitFilePathTarget recognizes "path" as a full file destination
+// (not a directory) when it ends in ".<format>" — e.g.
+// "./diagramas/evidencia.png" with format "png" splits into
+// ("./diagramas", "evidencia"). ok is false for anything else
+// (including a bare directory, or an extension that doesn't match
+// format), so Export's normal directory behavior is unaffected.
+func splitFilePathTarget(path, format string) (dir, name string, ok bool) {
+	if path == "" || !strings.EqualFold(filepath.Ext(path), "."+format) {
+		return "", "", false
+	}
+	base := filepath.Base(path)
+	name = strings.TrimSuffix(base, filepath.Ext(base))
+	if name == "" {
+		return "", "", false
+	}
+	dir = filepath.Dir(path)
+	return dir, name, true
+}
+
 // Export renders data once and writes each requested format to
 // outDir/baseName.<format>, returning the absolute paths written (in
 // the same order as formats) or the first error encountered. An empty
 // outDir defaults to the current working directory — same "empty
 // means here" convention `mova run`'s other output flags already use.
+//
+// Convenience: when exactly one format was requested and outDir itself
+// ends in ".<format>" (e.g. "--path ./diagramas/evidencia.png" with
+// "--export png"), outDir is treated as the FULL destination file
+// path — its directory becomes the real outDir and its file name
+// (without extension) becomes baseName — instead of being (mis)read
+// as a directory literally named "evidencia.png". This is what makes
+// `mova run <project> --diagram --export png --path <file>.png` write
+// exactly that file, one command, no surprises.
 func Export(data *Data, formats []string, outDir, baseName string) ([]string, error) {
+	if len(formats) == 1 {
+		if dir, name, ok := splitFilePathTarget(outDir, formats[0]); ok {
+			outDir, baseName = dir, name
+		}
+	}
 	if len(formats) == 0 {
 		formats = []string{"svg"}
 	}
@@ -68,7 +102,7 @@ func Export(data *Data, formats []string, outDir, baseName string) ([]string, er
 }
 
 // sanitizeFileName turns a project/group name (which may contain "/"
-// for a group agent, e.g. "ejemplo-ley21719-pii-context/ai-privacy-
+// for a group agent, e.g. "02-pii-compliance-governance/ai-privacy-
 // reviewer") into a single safe file name component — "/" and other
 // path separators become "-" so Export never accidentally writes
 // outside outDir or fails on Windows' stricter path rules.

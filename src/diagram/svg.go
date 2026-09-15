@@ -1,6 +1,6 @@
 // svg.go — RenderSVG(data) turns a diagram.Data into a real, vectorial
 // SVG: a vertical "visual storytelling" flow (sources → context
-// compiler → token firewall → agents → jobs → interfaces → metrics),
+// compiler → context governance → agents → jobs → interfaces → metrics),
 // light theme (WCAG AA contrast or better on every text/background
 // pair — see the palette below), colored by category, every box drawn
 // from a real field on Data — nothing here invents a stage or a
@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"mova.local/i18n"
 )
 
 // Palette — light, high-contrast, presentation-safe. Every text/
@@ -31,7 +33,6 @@ const (
 	colorOff      = "#64748b" // slate (disabled/off)
 	colorTrigger  = "#b91c1c" // red — a limit actually tripped
 	colorAgent    = "#0e7490" // cyan
-	colorJob      = "#7e22ce" // purple
 	colorProvider = "#c2410c" // orange
 	colorMetrics  = "#a16207" // yellow/amber
 )
@@ -46,9 +47,9 @@ const canvasW = 1280
 // see png.go's drawTextLayer. Both paths originate from the exact same
 // c.text() calls below, so SVG and PNG/PDF never drift apart.
 type canvas struct {
-	body strings.Builder
-	y    int
-	maxY int
+	body  strings.Builder
+	y     int
+	maxY  int
 	texts []textOp
 }
 
@@ -86,8 +87,7 @@ func (c *canvas) advance(h int) {
 }
 
 // RenderSVG builds the full diagram for data. Every section below
-// checks whether it has anything real to draw before drawing it — an
-// empty Jobs slice simply skips the Jobs row entirely, for example.
+// checks whether it has anything real to draw before drawing it.
 func RenderSVG(data *Data) string {
 	c := build(data)
 	return c.finalize()
@@ -108,9 +108,6 @@ func build(data *Data) *canvas {
 	}
 	c.firewallRow(data)
 	c.agentsRow(data, verbose)
-	if len(data.Jobs) > 0 {
-		c.jobsRow(data)
-	}
 	c.interfacesRow(data)
 	c.metricsRow(data)
 	c.legend()
@@ -138,7 +135,20 @@ func (c *canvas) title(d *Data) {
 		subtitle += "  ·  " + truncate(d.Description, 110)
 	}
 	c.text(40, c.y+36, subtitle, colorMuted, 15, false)
-	c.advance(60)
+	c.advance(56)
+	identity := fmt.Sprintf("Agent: %s   ·   Target model: %s   ·   Policy author: %s", orNAd(d.AgentClient), orNAd(d.TargetModel), orNAd(d.PolicyAuthor))
+	c.text(40, c.y+10, identity, colorMuted, 13, false)
+	c.advance(30)
+}
+
+// orNAd renders "n/a" instead of an empty string — the diagram never
+// shows a blank identity field (see Data.AgentClient/TargetModel/
+// PolicyAuthor's doc comments in model.go).
+func orNAd(v string) string {
+	if strings.TrimSpace(v) == "" {
+		return "n/a"
+	}
+	return v
 }
 
 func (c *canvas) sectionLabel(label string) {
@@ -150,7 +160,7 @@ func (c *canvas) sourcesRow(d *Data) {
 	if len(d.Sources) == 0 {
 		return
 	}
-	c.sectionLabel("Sources (Focus)")
+	c.sectionLabel(i18n.T("diagrams.sources_focus"))
 	labels := make([]string, len(d.Sources))
 	for i, s := range d.Sources {
 		labels[i] = iconFor(s.Kind) + " " + s.Path
@@ -163,13 +173,13 @@ func (c *canvas) compilerRow(d *Data) {
 	if len(d.Compiler) == 0 {
 		return
 	}
-	c.sectionLabel("Context Compiler")
+	c.sectionLabel(i18n.T("diagrams.context_compiler"))
 	c.boxRow(d.Compiler, colorCompiler, nil)
 	c.arrowDown()
 }
 
 func (c *canvas) firewallRow(d *Data) {
-	c.sectionLabel("Token Firewall")
+	c.sectionLabel(i18n.T("diagrams.token_firewall"))
 	f := d.Firewall
 	type stage struct {
 		label string
@@ -177,18 +187,18 @@ func (c *canvas) firewallRow(d *Data) {
 		note  string
 	}
 	stages := []stage{
-		{"Sanitizer", f.SanitizerOn, sanitizerNote(f)},
-		{"PII Masking (opt-in)", f.PIIMaskingOn, "structural, off by default"},
-		{"Cache Layout Guard", f.CacheGuardOn, ""},
-		{"Circuit Breaker", f.CircuitBreakerOn, breakerNote(f)},
+		{i18n.T("diagrams.sanitizer"), f.SanitizerOn, sanitizerNote(f)},
+		{i18n.T("diagrams.pii_masking_optin"), f.PIIMaskingOn, i18n.T("diagrams.pii_masking_structural_note")},
+		{i18n.T("diagrams.cache_layout_guard"), f.CacheGuardOn, ""},
+		{i18n.T("diagrams.circuit_breaker"), f.CircuitBreakerOn, breakerNote(f)},
 	}
 	labels := make([]string, len(stages))
 	colors := make([]string, len(stages))
 	for i, s := range stages {
-		state := "ON"
+		state := i18n.T("diagrams.state_on")
 		colors[i] = colorOn
 		if !s.on {
-			state = "OFF"
+			state = i18n.T("diagrams.state_off")
 			colors[i] = colorOff
 		}
 		labels[i] = s.label + "\n[" + state + "]"
@@ -229,12 +239,12 @@ func breakerNote(f Firewall) string {
 }
 
 func (c *canvas) agentsRow(d *Data, verbose bool) {
-	label := "Agent"
+	label := i18n.T("diagrams.agent_label")
 	if d.IsGroup {
-		label = "Multi-Agent Group"
+		label = i18n.T("diagrams.multi_agent_group")
 	}
 	c.sectionLabel(label)
-	boxW := canvasW / max(1, min(len(d.Agents), 3)) - 40
+	boxW := canvasW/max(1, min(len(d.Agents), 3)) - 40
 	x := 40
 	rowH := 0
 	for _, a := range d.Agents {
@@ -260,21 +270,21 @@ func (c *canvas) drawAgentBox(x, y, w int, a AgentNode, verbose bool) int {
 	}
 	if verbose {
 		if len(a.AgentRoles) > 0 {
-			lines = append(lines, "Agents: "+strings.Join(a.AgentRoles, ", "))
+			lines = append(lines, i18n.T("diagrams.agents_list_prefix")+strings.Join(a.AgentRoles, ", "))
 		}
 		if len(a.Skills) > 0 {
-			lines = append(lines, "Skills: "+strings.Join(a.Skills, ", "))
+			lines = append(lines, i18n.T("diagrams.skills_list_prefix")+strings.Join(a.Skills, ", "))
 		}
 		if len(a.Tasks) > 0 {
-			lines = append(lines, "Tasks: "+strings.Join(a.Tasks, ", "))
+			lines = append(lines, i18n.T("diagrams.tasks_list_prefix")+strings.Join(a.Tasks, ", "))
 		}
 	}
 	if a.ModelName != "" {
-		where := "cloud"
+		where := i18n.T("diagrams.cloud")
 		if a.IsLocal {
-			where = "local"
+			where = i18n.T("diagrams.local")
 		}
-		model := "Model: " + a.ModelName
+		model := i18n.T("diagrams.model_prefix") + a.ModelName
 		if a.Provider != "" {
 			model += " (" + a.Provider + ", " + where + ")"
 		} else {
@@ -282,30 +292,14 @@ func (c *canvas) drawAgentBox(x, y, w int, a AgentNode, verbose bool) int {
 		}
 		lines = append(lines, model)
 	}
-	lines = append(lines, fmt.Sprintf("PII Masking: %v", a.PIIMasking))
+	piiState := i18n.T("diagrams.state_off")
+	if a.PIIMasking {
+		piiState = i18n.T("diagrams.state_on")
+	}
+	lines = append(lines, i18n.T("diagrams.pii_masking_bool", map[string]any{"value": piiState}))
 	h := 40 + len(lines)*20
 	c.drawBoxAt(x, y, w, h, colorAgent, lines)
 	return h
-}
-
-func (c *canvas) jobsRow(d *Data) {
-	c.sectionLabel("Jobs (scheduled)")
-	labels := make([]string, len(d.Jobs))
-	for i, j := range d.Jobs {
-		text := "[JOB] " + j.ScheduleHuman
-		if j.ScheduleHuman != j.Schedule {
-			text += "\n(cron: " + j.Schedule + ")"
-		}
-		if len(j.Tasks) > 0 {
-			text += "\n" + strings.Join(j.Tasks, ", ")
-		}
-		if j.Save != "" {
-			text += "\n-> " + j.Save
-		}
-		labels[i] = text
-	}
-	c.boxRow(labels, colorJob, nil)
-	c.arrowDown()
 }
 
 // interfacesRow draws the four doors a diagram render (or any other
@@ -314,12 +308,12 @@ func (c *canvas) jobsRow(d *Data) {
 // picture also answers "how was this run started?" — see model.go's
 // Data.Origin doc comment for who sets it.
 func (c *canvas) interfacesRow(d *Data) {
-	c.sectionLabel("Available interfaces (same execution engine)")
+	c.sectionLabel(i18n.T("diagrams.available_interfaces"))
 	labels := make([]string, len(d.Interfaces))
 	colors := make([]string, len(d.Interfaces))
 	for i, iface := range d.Interfaces {
 		if iface == d.Origin {
-			labels[i] = iface + "\n[THIS RUN]"
+			labels[i] = iface + "\n" + i18n.T("diagrams.this_run")
 			colors[i] = colorOn
 		} else {
 			labels[i] = iface

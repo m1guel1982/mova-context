@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "mova-context": {
+      "type": "stdio",
+      "command": "mova",
+      "args": ["mcp", "start", "--stdio"],
+      "env": {
+        "MOVA_PROJECT_ROOT": "/ruta/absoluta/a/tu/instalacion/de/mova-context"
+      }
+    }
+  }
+}

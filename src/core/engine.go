@@ -5,6 +5,7 @@ package core
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -53,6 +54,15 @@ type ContextSections struct {
 	// Selected ..." de `mova chat`/chat_completion (ver
 	// FormatFocusSelection) sin volver a resolver nada.
 	FocusItems []corefocus.FocusItem
+
+	// DebugLog: human-readable trace of what THIS run resolved
+	// (repo, each agent/skill/prompt's name and file path or
+	// "inline", each focus/exclude entry and its resolved absolute
+	// path) — only populated when project.json's "debug" is true
+	// (see core.Project.Debug). Every door (chat, mova ui chat, CLI,
+	// HTTP API, MCP) prints this exactly as-is when non-empty; none
+	// of them recomputes their own version.
+	DebugLog string
 }
 
 // Full concatenates every section in the exact order and format
@@ -146,6 +156,10 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 	dedupSeen := map[string]bool{}
 
 	sections := &ContextSections{}
+	var dbg strings.Builder
+	if proj.Debug {
+		fmt.Fprintf(&dbg, "[debug] repo: %s\n", resolveDebugPath(root, proj.Repo))
+	}
 
 	var header strings.Builder
 	header.WriteString(fmt.Sprintf("# Mova Context — %s / %s\n", proj.Project, taskName))
@@ -169,13 +183,20 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 			if name == coreFiles["agent"] {
 				continue
 			}
-			c, err := adapter.GetKnowledge("agent", domain, lang, name)
-			if err != nil || c == "" {
+			c, fromFile := resolveKnowledgeOrLiteral(adapter, "agent", domain, lang, name)
+			if c == "" {
 				continue
 			}
 			text := inject(adaptContent(c, profile), vars)
 			text = dedupSection(text, dedupSeen, sections)
-			agents.WriteString(fmt.Sprintf("\n<!-- agent: %s -->\n%s\n", name, text))
+			label := name
+			if !fromFile {
+				label = "inline"
+			}
+			agents.WriteString(fmt.Sprintf("\n<!-- agent: %s -->\n%s\n", label, text))
+			if proj.Debug {
+				fmt.Fprintf(&dbg, "[debug] agent: %s -> %s\n", name, debugKnowledgeLoc(fromFile, "agent", domain, lang, name))
+			}
 		}
 		sections.Agents = agents.String()
 	}
@@ -196,13 +217,20 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 			if name == coreFiles["skill"] {
 				continue
 			}
-			c, err := adapter.GetKnowledge("skill", proj.Skills.Domain, lang, name)
-			if err != nil || c == "" {
+			c, fromFile := resolveKnowledgeOrLiteral(adapter, "skill", proj.Skills.Domain, lang, name)
+			if c == "" {
 				continue
 			}
 			text := inject(adaptContent(c, profile), vars)
 			text = dedupSection(text, dedupSeen, sections)
-			skills.WriteString(fmt.Sprintf("\n<!-- skill: %s -->\n%s\n", name, text))
+			label := name
+			if !fromFile {
+				label = "inline"
+			}
+			skills.WriteString(fmt.Sprintf("\n<!-- skill: %s -->\n%s\n", label, text))
+			if proj.Debug {
+				fmt.Fprintf(&dbg, "[debug] skill: %s -> %s\n", name, debugKnowledgeLoc(fromFile, "skill", proj.Skills.Domain, lang, name))
+			}
 		}
 		sections.Skills = skills.String()
 	}
@@ -218,11 +246,18 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 			prompt.WriteString(fmt.Sprintf("\n<!-- core: %s -->\n%s\n", coreFiles["prompt"], text))
 		}
 
-		c, err := adapter.GetKnowledge("prompt", domain, lang, task.Prompt)
-		if err == nil && c != "" {
+		c, fromFile := resolveKnowledgeOrLiteral(adapter, "prompt", domain, lang, task.Prompt)
+		if c != "" {
 			text := inject(adaptContent(c, profile), vars)
 			text = dedupSection(text, dedupSeen, sections)
-			prompt.WriteString(fmt.Sprintf("\n<!-- prompt: %s -->\n%s\n", task.Prompt, text))
+			label := task.Prompt
+			if !fromFile {
+				label = "inline"
+			}
+			prompt.WriteString(fmt.Sprintf("\n<!-- prompt: %s -->\n%s\n", label, text))
+			if proj.Debug {
+				fmt.Fprintf(&dbg, "[debug] prompt: %s -> %s\n", task.Prompt, debugKnowledgeLoc(fromFile, "prompt", domain, lang, task.Prompt))
+			}
 		}
 		sections.Prompt = prompt.String()
 	}
@@ -230,12 +265,21 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 	// ── FOCUS ───────────────────────────────────────────────────────────────
 
 	if items := resolveTaskFocus(proj, &task); len(items) > 0 {
-		text, stats := focusrender.RenderFocusContextWithSeen(root, proj.Repo, items, nil, resolveTaskExclude(proj, &task), dedupSeen)
+		exclude := resolveTaskExclude(proj, &task)
+		text, stats := focusrender.RenderFocusContextWithSeen(root, proj.Repo, items, nil, exclude, dedupSeen)
 		sections.DuplicatesRemoved += stats.DuplicatesRemoved
-		sections.DuplicatesRemovedChars += stats.DuplicatesRemovedChars 
+		sections.DuplicatesRemovedChars += stats.DuplicatesRemovedChars
 		sections.FocusItems = stats.Items
 		if strings.TrimSpace(text) != "" {
 			sections.Focus = "\n\n---\n## FOCUS\n" + text
+		}
+		if proj.Debug {
+			for _, it := range stats.Items {
+				fmt.Fprintf(&dbg, "[debug] focus: %s -> %s\n", it.Name, resolveDebugPath(root, filepath.Join(proj.Repo, it.Name)))
+			}
+			for _, ex := range exclude {
+				fmt.Fprintf(&dbg, "[debug] exclude: %s -> %s\n", ex, resolveDebugPath(root, filepath.Join(proj.Repo, ex)))
+			}
 		}
 	}
 
@@ -260,6 +304,7 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 		instruction.WriteString("```memory\n## YYYY-MM-DD — session\n**Done:** <1-line summary>\n**Resolved:** <key findings fixed>\n**Pending:** <tech debt or future tasks>\n**Decisions:** <architecture/stack choices>\n**LLM Errors:** <none or notes>\n```\n")
 	}
 	sections.Instruction = instruction.String()
+	sections.DebugLog = dbg.String()
 
 	return sections, nil
 }
@@ -296,7 +341,22 @@ func FormatFocusSelection(items []corefocus.FocusItem, limit int) string {
 	if shownCount > len(names) {
 		shownCount = len(names)
 	}
-	list := strings.Join(names[:shownCount], ", ")
+	// Bug real reportado en QA: un target de `focus` literal "." (la
+	// raíz del proyecto, ver corefocus.FocusItem.Name) hacía que la
+	// lista terminara en "." — al concatenar el "." final fijo del
+	// formato de abajo, el mensaje quedaba
+	// "[Focus] Selected 1 directory (N file(s) total): ..\n" (dos
+	// puntos seguidos), que parece un path truncado o corrupto en vez
+	// de la raíz del proyecto. Se muestra "." como "(root)", legible,
+	// en vez del carácter crudo de project.json.
+	displayNames := make([]string, shownCount)
+	for i, n := range names[:shownCount] {
+		if n == "." {
+			n = "(root)"
+		}
+		displayNames[i] = n
+	}
+	list := strings.Join(displayNames, ", ")
 	if extra := len(names) - limit; extra > 0 {
 		list += fmt.Sprintf(" 📎+%d", extra)
 	}

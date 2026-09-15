@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -87,7 +88,7 @@ func applyProjectLLMProfile(sess *models.Session, root string, proj *core.Projec
 // writing to stdout mid-render would corrupt a Bubble Tea screen; the
 // model-calling/tool-loop logic itself is untouched either way — one
 // implementation, two output sinks.
-func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Project, root, userText string, emit func(string)) (reply string, streamed bool, err error) {
+func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Project, root, userText string, readLine readLineFunc, emit func(string)) (reply string, streamed bool, err error) {
 	if emit == nil {
 		emit = consolePrint
 	}
@@ -123,7 +124,17 @@ func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Projec
 			break
 		}
 		emit(fmt.Sprintf("[Tool] %s %v\n", name, args))
-		result, terr := mcp.RunAgentTool(adapter, root, name, args, proj.Tools)
+		var result string
+		var terr error
+		if name == "apply_file_changes" {
+			if changes, ok := mcp.ParseApplyFileChanges(args); ok {
+				result = confirmAndApplyFileChanges(adapter, root, changes, readLine, emit)
+			} else {
+				terr = fmt.Errorf(`"changes" must be a non-empty array of {"action","path","content"}`)
+			}
+		} else {
+			result, terr = mcp.RunAgentTool(adapter, root, name, args, proj.Tools)
+		}
 		if terr != nil {
 			result = "ERROR: " + terr.Error()
 		}
@@ -138,6 +149,57 @@ func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Projec
 
 	formattedReply := formatTerminalOutput(reply)
 	return formattedReply, false, nil
+}
+
+// sendWithForcedFileChanges is the variant of sendWithTools used
+// exclusively by nl_save.go's natural-language file-creation flow
+// (handleNaturalLanguageSave) and its TUI equivalent
+// (tui_chat.go's startNaturalLanguageSave). Unlike sendWithTools, it
+// ALWAYS parses the reply for an apply_file_changes call — regardless
+// of project.json's "tools": {"enabled": ...} — because this
+// capability must work exactly like /save already does, independent of
+// that project-wide flag.
+//
+// This fixes a real, reported bug: when tools.enabled was false (the
+// default for a brand-new project), sendWithTools took its "no tools"
+// branch above, so the apply_file_changes JSON the model produced (see
+// mcp.BuildApplyFileChangesInstruction) was streamed back as plain text
+// and NEVER parsed — the person saw the raw JSON payload printed to the
+// terminal and no file was ever written, even though the model did
+// exactly what it was told. Detecting "create hola.txt with X" is
+// already a deterministic, pre-confirmed decision by the person (see
+// documents.DetectSaveIntent) — it must not silently depend on a
+// separate, unrelated opt-in flag meant for the model calling tools
+// *on its own initiative* during ordinary conversation.
+func sendWithForcedFileChanges(sess *models.Session, adapter core.Adapter, root, userText string, readLine readLineFunc, emit func(string)) (reply string, err error) {
+	if emit == nil {
+		emit = consolePrint
+	}
+	reply, err = sess.Send(userText)
+	if err != nil {
+		return "", err
+	}
+	for i := 0; i < mcp.MaxAgentToolTurns; i++ {
+		name, args, ok := mcp.ParseAgentToolCall(reply)
+		if !ok || name != "apply_file_changes" {
+			break
+		}
+		emit(fmt.Sprintf("[Tool] %s %v\n", name, args))
+		var result string
+		if changes, ok := mcp.ParseApplyFileChanges(args); ok {
+			result = confirmAndApplyFileChanges(adapter, root, changes, readLine, emit)
+		} else {
+			result = `ERROR: "changes" must be a non-empty array of {"action","path","content"}`
+		}
+		emit("[Tool] " + result + "\n")
+		reply, err = sess.Send(fmt.Sprintf(
+			"TOOL_RESULT(%s): %s\n\nContinue the reply for the user using this real result. If you need another tool, emit another block; if you are done, answer in plain text.",
+			name, result))
+		if err != nil {
+			return "", err
+		}
+	}
+	return formatTerminalOutput(reply), nil
 }
 
 // printTokenUsage shows, after every response, how many tokens the
@@ -244,7 +306,7 @@ func providerLabel(provider string) string {
 	}
 }
 
-// ── Token Firewall display/layout helpers — shared by CLI chat
+// ── Context Governance display/layout helpers — shared by CLI chat
 // (chat_cmd.go) and the TUI chat screen (tui_chat.go). Provider-agnostic
 // on purpose: the Sanitizer and Circuit Breaker stages run identically
 // no matter which model answers (Claude, GPT, Gemini, a local Ollama
@@ -324,14 +386,19 @@ func modelHintOfProj(proj *core.Project) string {
 // escribe mova-context-cache.json apenas detecta el hash nuevo — así
 // que el cache queda al día sin necesidad de reiniciar el chat.
 
-// projectSignature identifica el estado completo de project.json en un
-// solo hash. Usamos el struct entero (no solo "focus") a propósito:
-// cualquier cambio que afecte el contexto o el gate — focus, memory,
-// agents, skills, budget, tools, llm_profile — tiene que disparar una
-// reconstrucción; es más barato re-hashear el struct completo que
-// mantener una lista de "campos que importan" sincronizada a mano cada
-// vez que core.Project gane un campo nuevo.
-func projectSignature(proj *core.Project) string {
+// contextSignature identifica el estado completo que puede afectar el
+// contexto/gate en un solo hash: el struct project.json completo (foco,
+// memory, agents, skills, budget, tools, llm_profile — más barato
+// re-hashear todo que mantener a mano una lista de "campos que
+// importan") MÁS el contenido YA RESUELTO de agents/skills/prompt.
+// Esa segunda parte es la que faltaba: sin ella, editar un archivo en
+// agents/base/i18n/{en,es}, prompts/base/i18n/{en,es} o
+// skills/base/i18n/{en,es} — sin tocar project.json — no cambiaba la
+// firma y el hot-reload nunca se disparaba en chat/mova ui chat/CLI/
+// HTTP API/MCP, aunque el archivo en disco ya fuera otro. sections
+// puede ser nil (p.ej. si BuildContextSections falló) sin que la firma
+// dependa solo de eso.
+func contextSignature(proj *core.Project, sections *core.ContextSections) string {
 	if proj == nil {
 		return ""
 	}
@@ -339,8 +406,30 @@ func projectSignature(proj *core.Project) string {
 	if err != nil {
 		return ""
 	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
+	h := sha256.New()
+	h.Write(data)
+	if sections != nil {
+		h.Write([]byte(sections.Agents))
+		h.Write([]byte(sections.Skills))
+		h.Write([]byte(sections.Prompt))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// printDebugLog imprime ContextSections.DebugLog (ver core.Project.Debug
+// y core/engine.go) — no hace nada cuando está vacío, que es el caso
+// por defecto (debug:false). Único punto compartido por chat, mova ui
+// chat y MCP/HTTP (mcp/chat_tool.go llama a esta misma función) para
+// que las 5 puertas muestren exactamente la misma traza, nunca una
+// versión distinta cada una.
+func printDebugLog(sections *core.ContextSections, emit func(string)) {
+	if sections == nil || sections.DebugLog == "" {
+		return
+	}
+	if emit == nil {
+		emit = consolePrint
+	}
+	emit(sections.DebugLog)
 }
 
 // refreshProjectContext re-lee project.json y, si su firma cambió desde
@@ -370,7 +459,14 @@ func refreshProjectContext(root, project, task string, sess *models.Session, pro
 		return proj, adapter, lastSignature
 	}
 
-	signature := projectSignature(freshProj)
+	// BuildContextSections en sí es barato (lee unos pocos .md) — se
+	// llama SIEMPRE para poder detectar cambios de contenido en
+	// agents/skills/prompt (ver contextSignature), y si la firma
+	// resulta igual, este mismo `sections` simplemente se descarta sin
+	// pasar por el resto del pipeline (Sanitizer/PII/tokenizer), que
+	// es la parte realmente costosa.
+	precheckSections, _ := core.BuildContextSections(fa, root, project, task)
+	signature := contextSignature(freshProj, precheckSections)
 	if signature == lastSignature {
 		return proj, adapter, lastSignature // nada relevante cambió
 	}
@@ -387,8 +483,10 @@ func refreshProjectContext(root, project, task string, sess *models.Session, pro
 	systemText, boundary, _ := applyCacheLayoutQuiet(gated.Sections, freshProj)
 	sess.SetSystem(systemText + mcp.ToolsSystemPrompt(freshProj.Tools))
 	sess.CacheBoundary = boundary
+	sess.EgressAuditDryRun, sess.EgressAuditOutputFile = core.ResolveEgressAudit(root, project, freshProj)
 
 	emit("[Project] project.json cambió — contexto recargado.\n")
+	printDebugLog(gated.Sections, emit)
 	if gated.Sections != nil {
 		if line := core.FormatFocusSelection(gated.Sections.FocusItems, core.FocusDisplayLimit(freshProj)); line != "" {
 			emit(line)
@@ -402,4 +500,21 @@ func refreshProjectContext(root, project, task string, sess *models.Session, pro
 	}
 
 	return freshProj, freshAdapter, signature
+}
+
+// scannerReadLine adapts a *bufio.Scanner (the CLI REPL's blocking
+// stdin reader) into a readLineFunc — the same abstraction
+// confirmAndApplyFileChanges/sendWithForcedFileChanges already use, so
+// runChatDelete/handleNaturalLanguageDelete/Rename/Edit (and their
+// callers) can share ONE confirmation-flow implementation between
+// `mova chat` (this adapter) and `mova ui chat` (tui_chat.go's own
+// menuChan-backed readLineFunc) instead of keeping two copies of the
+// same y/n logic that could quietly drift apart.
+func scannerReadLine(scanner *bufio.Scanner) readLineFunc {
+	return func() (string, bool) {
+		if !scanner.Scan() {
+			return "", false
+		}
+		return strings.TrimSpace(scanner.Text()), true
+	}
 }

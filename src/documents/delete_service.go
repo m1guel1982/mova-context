@@ -25,7 +25,9 @@ package documents
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -55,6 +57,13 @@ type DeleteItem struct {
 	Resolved  string // absolute path after pathresolve.go's rules
 	IsDir     bool
 	Existed   bool
+	// ContentsCount: for a directory, how many files+subdirectories it
+	// contains (recursively) — 0 for an empty directory or a plain
+	// file. Used by FormatDeletePrompt to warn before a recursive
+	// delete instead of silently wiping a non-empty tree — a real gap
+	// found in QA: "elimina el directorio X" gave no indication X had
+	// anything in it before removing it all.
+	ContentsCount int
 }
 
 // DeleteResult is what all three doors report back to whoever asked.
@@ -163,7 +172,28 @@ func statDeleteItem(requested, full string, hintDir bool) (DeleteItem, error) {
 	if statErr != nil {
 		return DeleteItem{Requested: requested, Resolved: full, IsDir: hintDir, Existed: false}, nil
 	}
-	return DeleteItem{Requested: requested, Resolved: full, IsDir: info.IsDir(), Existed: true}, nil
+	item := DeleteItem{Requested: requested, Resolved: full, IsDir: info.IsDir(), Existed: true}
+	if item.IsDir {
+		item.ContentsCount = countDirContents(full)
+	}
+	return item, nil
+}
+
+// countDirContents counts every file and subdirectory under dir
+// (recursively, not including dir itself) — used only to warn before a
+// recursive delete, so an exact count isn't critical; a stat error on
+// any entry just stops counting early rather than failing the whole
+// delete request over it.
+func countDirContents(dir string) int {
+	n := 0
+	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || path == dir {
+			return nil
+		}
+		n++
+		return nil
+	})
+	return n
 }
 
 // FormatDeletePrompt renders the exact confirmation text for one or many
@@ -181,6 +211,10 @@ func FormatDeletePrompt(items []DeleteItem) string {
 	var b strings.Builder
 	for _, item := range items {
 		label := deleteLabel(item)
+		if item.IsDir && item.ContentsCount > 0 {
+			fmt.Fprintf(&b, "El directorio %q contiene %d archivo(s)/subcarpeta(s). ¿Deseas forzar la eliminación recursiva y de todo su contenido?\n(Y/N)\n", label, item.ContentsCount)
+			continue
+		}
 		b.WriteString(fmt.Sprintf("Delete %q?\n(Y/N)\n", label))
 	}
 	return strings.TrimRight(b.String(), "\n")
