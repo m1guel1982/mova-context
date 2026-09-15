@@ -1,4 +1,4 @@
-﻿# install.ps1 - Mova Context installer for Windows.
+﻿# install.ps1 -- Mova Context installer for Windows.
 
 $ErrorActionPreference = "Stop"
 
