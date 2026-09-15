@@ -12,6 +12,7 @@ require (
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/odvcencio/gotreesitter v0.52.0
 )
 
 // PNG diagram export (mova.local/diagram, see COMMANDS.md § Diagram):
@@ -55,6 +56,23 @@ require (
 	golang.org/x/net v0.27.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.22.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 )
 
-require golang.org/x/image v0.0.0-20260811175644-3ebddc7c54bd // indirect (github.com/srwiley/oksvg's math/fixed + colornames)
+require golang.org/x/image v0.18.0 // indirect (github.com/srwiley/oksvg's math/fixed + colornames)
+
+// Espejo temporal: en redes que bloquean golang.org (proxies
+// corporativos, sandboxes de CI restringidos), "go build"/"go mod
+// tidy" no pueden resolver golang.org/x/* por su redirección propia.
+// Estos "replace" apuntan a los mismos módulos publicados en
+// github.com/golang/* (espejo oficial) y no cambian ningún
+// comportamiento. Si tu red llega a golang.org sin problema, esta
+// sección es opcional y puede eliminarse sin tocar el resto del
+// archivo.
+replace (
+	golang.org/x/image => github.com/golang/image v0.18.0
+	golang.org/x/net => github.com/golang/net v0.27.0
+	golang.org/x/sys => github.com/golang/sys v0.38.0
+	golang.org/x/term => github.com/golang/term v0.22.0
+	golang.org/x/text => github.com/golang/text v0.23.0
+)

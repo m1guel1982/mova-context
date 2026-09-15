@@ -36,6 +36,15 @@ const (
 	toolCallEnd   = "<<<END_MOVA_TOOL_CALL>>>"
 )
 
+// ToolCallStart/ToolCallEnd exponen los delimitadores del protocolo
+// anterior para quien necesite construir un ejemplo EXACTO del bloque
+// (p. ej. BuildApplyFileChangesInstruction más abajo, o cli/nl_save.go)
+// sin duplicar el literal y arriesgar que ambos textos diverjan.
+const (
+	ToolCallStart = toolCallStart
+	ToolCallEnd   = toolCallEnd
+)
+
 // MaxAgentToolTurns caps how many tool round-trips a single user message
 // can trigger in one go, so a confused model can't loop forever.
 const MaxAgentToolTurns = 4
@@ -51,6 +60,8 @@ func AgentToolNames() []string {
 		"read_file",
 		"patch_file",
 		"read_document_layer",
+		"apply_file_changes",
+		"rename_path",
 	}
 }
 
@@ -144,6 +155,12 @@ func argsHintFor(name string) string {
 		return `{"filename": "path/file.ext", "search": "exact unique text", "replace": "new text"}`
 	case "read_document_layer":
 		return `{"filename": "path/file.docx|.xlsx|.pdf"}`
+	case "apply_file_changes":
+		return `{"changes": [{"action": "create|modify|delete", "path": "folder/file.ext", "content": "... (empty/omitted for delete)"}, ...]}` +
+			` — the ONE preferred way to propose creating, editing, or deleting one or more files/directories in a single turn (instead of asking the person to run manual commands like "/save -c" for each file). Every proposed change is shown to the person for confirmation (apply to all, apply to specific files only, or cancel) BEFORE anything is written — never assume a change was applied just because you called this tool.`
+	case "rename_path":
+		return `{"from": "old/path.ext", "to": "new-name.ext or new/path.ext", "confirm": true|false}` +
+			` — renames/moves a file OR directory. "to" as a bare name ("adios.txt") renames in place (same directory); a path (including an absolute one — C:\..., \\server\share\..., /mnt/..., all supported) moves it there. Without confirm:true this only returns what WOULD happen.`
 	default:
 		return "{}"
 	}
@@ -156,12 +173,12 @@ func argsHintFor(name string) string {
 func ParseAgentToolCall(reply string) (name string, arguments map[string]any, ok bool) {
 	start := strings.Index(reply, toolCallStart)
 	if start == -1 {
-		return "", nil, false
+		return parseBareToolShape(reply)
 	}
 	rest := reply[start+len(toolCallStart):]
 	end := strings.Index(rest, toolCallEnd)
 	if end == -1 {
-		return "", nil, false
+		return parseBareToolShape(reply)
 	}
 	raw := strings.TrimSpace(rest[:end])
 	raw = stripFence(raw)
@@ -171,9 +188,91 @@ func ParseAgentToolCall(reply string) (name string, arguments map[string]any, ok
 		Arguments map[string]any `json:"arguments"`
 	}
 	if err := json.Unmarshal([]byte(raw), &call); err != nil || call.Name == "" {
-		return "", nil, false
+		return parseBareToolShape(reply)
 	}
 	return call.Name, call.Arguments, true
+}
+
+// parseBareToolShape is the fallback for a real, urgent bug found in
+// QA: a small/local model sometimes skips the taught
+// <<<MOVA_TOOL_CALL>>>{"name":...,"arguments":...}<<<END...>>> envelope
+// entirely and just emits the raw ARGUMENTS object as if that were its
+// whole answer — e.g. a bare `{"changes": [{"path": "hola.txt",
+// "action": "create", "content": ""}]}` with no wrapper at all. Before
+// this fix, that JSON was either shown to the person completely raw
+// (StripResidualToolArtifacts's probe requires the full {"name":...}
+// envelope, so it didn't even recognize this shape to strip it) or, if
+// it happened to be recognized as residue, silently discarded — in
+// neither case did the file actually get created. This recognizes each
+// whitelisted tool's OWN distinctive top-level argument keys directly,
+// with no envelope required, and returns the same (name, arguments,
+// true) a well-formed call would — the caller (sendWithTools /
+// mcp/chat_tool.go) then runs it exactly like any other tool call.
+func parseBareToolShape(reply string) (name string, arguments map[string]any, ok bool) {
+	body := firstBalancedJSONObject(reply)
+	if body == "" {
+		return "", nil, false
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		return "", nil, false
+	}
+	switch {
+	case isApplyFileChangesShape(m):
+		return "apply_file_changes", m, true
+	case isRenameShape(m):
+		return "rename_path", m, true
+	}
+	return "", nil, false
+}
+
+// isApplyFileChangesShape recognizes a bare apply_file_changes
+// arguments object: a top-level "changes" array of objects that each
+// have at least "action" and "path".
+func isApplyFileChangesShape(m map[string]any) bool {
+	changes, ok := m["changes"].([]any)
+	if !ok || len(changes) == 0 {
+		return false
+	}
+	first, ok := changes[0].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasAction := first["action"]
+	_, hasPath := first["path"]
+	return hasAction && hasPath
+}
+
+// isRenameShape recognizes a bare rename_path arguments object.
+func isRenameShape(m map[string]any) bool {
+	_, hasFrom := m["from"]
+	_, hasTo := m["to"]
+	return hasFrom && hasTo
+}
+
+// firstBalancedJSONObject returns the first top-level, brace-balanced
+// {...} substring in s — the model's reply may have prose before or
+// after the JSON (or a ```json fence around it), so this scans for the
+// object instead of assuming the WHOLE reply is JSON.
+func firstBalancedJSONObject(s string) string {
+	s = stripFence(strings.TrimSpace(s))
+	start := strings.Index(s, "{")
+	if start == -1 {
+		return ""
+	}
+	depth := 0
+	for i := start; i < len(s); i++ {
+		switch s[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return s[start : i+1]
+			}
+		}
+	}
+	return ""
 }
 
 // stripFence removes a single wrapping ```/```json Markdown fence around

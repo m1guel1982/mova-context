@@ -6,10 +6,10 @@
 // (see budget_config.go's doc comment on why each of those matters) —
 // one function, no second copy of "build then gate" anywhere.
 //
-// This is also the Token Firewall's single chokepoint: every stage
+// This is also the Context Governance's single chokepoint: every stage
 // (Sanitizer → Circuit Breaker) runs here, in this fixed order, BEFORE
 // the existing max_tokens gate — see mova.local/sanitize and spend.go.
-// A project.json that never opts into any Token Firewall field behaves
+// A project.json that never opts into any Context Governance field behaves
 // byte-for-byte like before this feature existed.
 package budget
 
@@ -28,7 +28,7 @@ type GatedContext struct {
 	Tokens   int
 	Err      error // set when a gate rejected this context — Text is "" in that case
 
-	// Token Firewall results — always populated (even when every stage
+	// Context Governance results — always populated (even when every stage
 	// is a no-op), so a caller can build a report without a nil check.
 	Sanitize       sanitize.Stats
 	CircuitBreaker CircuitBreakerResult
@@ -39,7 +39,7 @@ type GatedContext struct {
 }
 
 // BuildGatedContext assembles project/task's context and runs it
-// through the full Token Firewall pipeline before the Budget gate.
+// through the full Context Governance pipeline before the Budget gate.
 // Callers should check Err before using Text.
 func BuildGatedContext(adapter core.Adapter, root, project, task string) GatedContext {
 	proj, err := adapter.GetProject(project)
@@ -127,7 +127,7 @@ func modelHintOf(proj *core.Project) string {
 // applyPIIMasking runs sanitize.MaskPII over sections.Focus/Memory IN
 // PLACE, but only when the project explicitly opted in — a no-op
 // (PIIStats{}) otherwise, same "absent config = zero behavior change"
-// contract every other Token Firewall stage follows, except this one
+// contract every other Context Governance stage follows, except this one
 // requires an explicit `true` instead of defaulting to on (see
 // core.PIIMaskingEnabled's doc comment for why).
 func applyPIIMasking(root string, sections *core.ContextSections, cfg *core.BudgetConfig) sanitize.PIIStats {

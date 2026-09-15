@@ -1,23 +1,13 @@
-// pii_policy.go — loads config/policy.json, the ONLY place every
-// threshold/weight/tag the PII Masking stage (pii.go) uses is defined.
-// Same "no magic numbers, no hardcoded constants in Go" rule
-// budget/prices.go already follows for config/prices.json: nothing in
-// this file decides what counts as "PII-like" on its own — it only
-// reads numbers a person configured, with a conservative built-in
-// default for the (normal) case where config/policy.json is absent.
+// pii_policy.go — loads config/policy.json via LoadPolicySet, supporting
+// both legacy single-file format and the modular cascading policy engine.
 package sanitize
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 )
 
 // PIIShapeRules are the structural (word-shape) scoring knobs — see
 // config/policy.json's own "_comment" field for what each one means.
-// Every one of these is a plain number/threshold; none of them is a
-// word, a language rule, or a dictionary entry (see wordShapeScore in
-// pii.go for how they combine).
 type PIIShapeRules struct {
 	DigitRatioThreshold          float64 `json:"digit_ratio_threshold"`
 	DigitRatioBonus              float64 `json:"digit_ratio_bonus"`
@@ -31,7 +21,7 @@ type PIIShapeRules struct {
 	UpperRunBonus                float64 `json:"upper_run_bonus"`
 }
 
-// PIIPolicy maps config/policy.json's "pii_masking" object exactly.
+// PIIPolicy maps the "pii_masking" object configuration.
 type PIIPolicy struct {
 	MinScore       float64       `json:"min_score"`
 	ShapeWeight    float64       `json:"shape_weight"`
@@ -46,12 +36,8 @@ type policyFile struct {
 	PIIMasking PIIPolicy `json:"pii_masking"`
 }
 
-// DefaultPIIPolicy is used only if config/policy.json is missing or
-// unreadable — conservative values matching the ones this repository
-// ships in config/policy.json, so behavior is identical whether the
-// file is present or not (the file exists precisely so a person can
-// change these without touching Go code, not because the code needs it
-// to run).
+// DefaultPIIPolicy is used only if config/policy.json (and its sub-policies)
+// are missing, unreadable, or invalid — conservative values matching system defaults.
 func DefaultPIIPolicy() PIIPolicy {
 	return PIIPolicy{
 		MinScore:       0.62,
@@ -75,29 +61,15 @@ func DefaultPIIPolicy() PIIPolicy {
 	}
 }
 
-// PolicyPath resolves config/policy.json under root — same convention
-// as budget.LoadPrices resolving config/prices.json.
+// PolicyPath resolves config/policy.json under root.
 func PolicyPath(root string) string {
 	return filepath.Join(root, "config", "policy.json")
 }
 
-// LoadPIIPolicy reads config/policy.json. A missing file, invalid JSON,
-// or a "pii_masking" object with MinScore==0 (i.e. the field was never
-// set) all fall back to DefaultPIIPolicy() — this stage is off by
-// default per-project anyway (core.PIIMaskingEnabled), so a missing
-// policy file is never itself an error, only a signal to use the safe
-// built-in numbers.
+// LoadPIIPolicy delegates resolution to LoadPolicySet, ensuring that any
+// dynamic file listed in config/policy.json (like pii_permissive.json or custom JSONs)
+// is correctly evaluated and loaded into the PII Masking stage.
 func LoadPIIPolicy(root string) PIIPolicy {
-	data, err := os.ReadFile(PolicyPath(root))
-	if err != nil {
-		return DefaultPIIPolicy()
-	}
-	var f policyFile
-	if err := json.Unmarshal(data, &f); err != nil {
-		return DefaultPIIPolicy()
-	}
-	if f.PIIMasking.MinScore == 0 {
-		return DefaultPIIPolicy()
-	}
-	return f.PIIMasking
+	ps := LoadPolicySet(root)
+	return ps.PII
 }

@@ -346,7 +346,7 @@ func stripSymbolNotation(target string) string {
 }
 
 func isSymbolNotation(target string) bool {
-	return strings.HasSuffix(target, "()")
+	return strings.HasSuffix(target, "()") || strings.Contains(target, "::")
 }
 
 // repoRelativePath une target a la raíz del repo, tratando un "/"

@@ -1,5 +1,5 @@
 // report_pipeline.go — the three new mova-budget-report.md sections
-// for the Token Firewall (Sanitizer/Cache Layout/Circuit Breaker),
+// for the Context Governance (Sanitizer/Cache Layout/Circuit Breaker),
 // kept in their own file so report.go (already close to the 300-line
 // limit) doesn't have to grow for this. Called from RenderMarkdown
 // (report.go) — same report, same file, same generation call, just
@@ -68,7 +68,7 @@ func cacheLayoutSection(r *Report) string {
 	b.WriteString(fmt.Sprintf("Static prefix: %d tokens\n\n", l.StaticTokens))
 	b.WriteString(fmt.Sprintf("Prefix fingerprint: `%s` — compare this value run to run; an unchanged fingerprint means the prefix is byte-identical and a real provider cache is likely to hit.\n\n", l.Hash))
 	if l.StaticTokens > 0 {
-		b.WriteString(fmt.Sprintf("Estimated tokens reused on a cache hit: ~%d (~90%% of the static prefix — Anthropic's own published discount for cached input; other providers vary, see COMMANDS.md § Token Firewall for the per-provider table).\n\n", int(float64(l.StaticTokens)*0.9)))
+		b.WriteString(fmt.Sprintf("Estimated tokens reused on a cache hit: ~%d (~90%% of the static prefix — Anthropic's own published discount for cached input; other providers vary, see COMMANDS.md § Context Governance for the per-provider table).\n\n", int(float64(l.StaticTokens)*0.9)))
 	}
 	if l.StaticTokens < 1024 {
 		b.WriteString("Note: this prefix is under ~1,024 tokens, the approximate minimum several providers require before caching kicks in (the exact minimum varies by provider/model and changes over time) — caching may not activate yet for this project, but there is no downside to leaving \"cache_hint\" on.\n\n")
@@ -114,7 +114,7 @@ func circuitBreakerSection(r *Report) string {
 }
 
 // firewallSummarySection is the "big picture" comparison: total tokens
-// and estimated cost before vs. after the whole Token Firewall pipeline
+// and estimated cost before vs. after the whole Context Governance pipeline
 // ran, plus the two percentages the person actually cares about. Only
 // rendered when core.DetailedReportsEnabled populated RawTokens.
 func firewallSummarySection(r *Report) string {
@@ -122,7 +122,7 @@ func firewallSummarySection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Token Firewall — Summary\n\n")
+	b.WriteString("## Context Governance — Summary\n\n")
 	b.WriteString("Before vs. after the full pipeline (Sanitizer + Cache Layout Guard awareness + Circuit Breaker check):\n\n")
 	b.WriteString("| | Before | After | Savings |\n|---|---|---|---|\n")
 	b.WriteString(fmt.Sprintf("| Tokens | %d | %d | %.1f%% |\n", r.RawTokens, r.TotalTokens, r.MemorySavingsPercent))

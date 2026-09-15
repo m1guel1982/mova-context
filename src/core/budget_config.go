@@ -1,5 +1,5 @@
 // budget_config.go — BudgetConfig, SanitizeConfig, and ResolveBudget,
-// split out of types.go once the Token Firewall's new fields pushed
+// split out of types.go once the Context Governance's new fields pushed
 // that file over the 300-line limit. Conceptually still part of
 // Project's "budget" field (see types.go's Project struct) — just
 // filed separately for size, the same reason job/multiagent types got
@@ -15,7 +15,7 @@ package core
 type BudgetConfig struct {
 	MaxTokens int `json:"max_tokens"` // 0 = no limit configured, mova budget never flags anything
 
-	// ── Token Firewall (see mova.local/budget's gated_context.go,
+	// ── Context Governance (see mova.local/budget's gated_context.go,
 	// spend.go, cachelayout.go) — all optional, all off unless declared,
 	// zero behavior change for a project.json that doesn't set them. ──
 
@@ -45,12 +45,12 @@ type BudgetConfig struct {
 	// stable static-prefix + dynamic-tail layout and, for Anthropic,
 	// mark the prefix as cacheable — see budget.LayoutForCache. There
 	// is no real downside to leaving this on (see docs), so it
-	// defaults on like every other Token Firewall stage; set it to
+	// defaults on like every other Context Governance stage; set it to
 	// `false` explicitly to opt out.
 	CacheHint *bool `json:"cache_hint"`
 
 	// CircuitBreaker: enables/disables the spend-governance MECHANISM
-	// itself (nil/true = enabled, matching every other Token Firewall
+	// itself (nil/true = enabled, matching every other Context Governance
 	// stage). This is independent from whether a ceiling is actually
 	// configured — MaxTokensPerRun/MaxMonthlyUSD being 0 already means
 	// "no ceiling"; this flag lets you keep ceilings configured but
@@ -68,7 +68,7 @@ type BudgetConfig struct {
 	TokenEstimation *bool `json:"token_estimation"`
 
 	// DetailedReports: when true (default), mova-budget-report.md
-	// includes the full Token Firewall breakdown (per-file tokens,
+	// includes the full Context Governance breakdown (per-file tokens,
 	// Sanitizer/Cache Layout/Circuit Breaker sections, before/after
 	// cost comparison). Set to `false` for just the totals — useful
 	// for a project that wants a short report.
@@ -88,7 +88,7 @@ type BudgetConfig struct {
 	// replaces candidate-PII tokens in Focus/Memory with deterministic
 	// [TAG_HASH] pseudonyms BEFORE counting/sending anything, using
 	// only Shannon entropy + word-shape structure — no word lists, no
-	// language-specific rules. UNLIKE every other Token Firewall stage
+	// language-specific rules. UNLIKE every other Context Governance stage
 	// above, this one defaults OFF (nil/absent = disabled): it changes
 	// the actual content sent to the model, not just cosmetic noise, so
 	// it must be an explicit, informed opt-in per project. See
@@ -111,7 +111,7 @@ type PIIMaskingConfig struct {
 // SanitizeConfig mirrors sanitize.Config's JSON shape — kept in core
 // (not the sanitize package) so core.Project never has to import
 // sanitize, the same Adapter/adapters-style rule this codebase already
-// follows everywhere else (see e.g. core.JobSpec's doc comment).
+// follows everywhere else (see e.g. core.ToolsConfig's doc comment).
 type SanitizeConfig struct {
 	Enabled       bool `json:"enabled"`
 	DedupeLogs    bool `json:"dedupe_logs"`
@@ -130,12 +130,12 @@ func ResolveBudget(proj *Project, task *Task) *BudgetConfig {
 	return proj.Budget
 }
 
-// ── Token Firewall toggles — every one of these defaults to enabled
+// ── Context Governance toggles — every one of these defaults to enabled
 // (an absent field, or an explicit `true`, both mean "on"); only an
 // explicit `false` turns a stage off. This is the opposite default
 // from core.ToolsEnabled (tools default OFF) because these stages are
 // meant to be safe-by-default protections, not opt-in extras — see
-// docs/SOURCE.md § Token Firewall for the reasoning. ──────────────────
+// docs/SOURCE.md § Context Governance for the reasoning. ──────────────────
 
 // CacheGuardEnabled reports whether the Cache Layout Guard should run.
 func CacheGuardEnabled(cfg *BudgetConfig) bool {
@@ -164,7 +164,7 @@ func TokenEstimationEnabled(cfg *BudgetConfig) bool {
 }
 
 // DetailedReportsEnabled reports whether mova-budget-report.md should
-// include the full Token Firewall breakdown.
+// include the full Context Governance breakdown.
 func DetailedReportsEnabled(cfg *BudgetConfig) bool {
 	if cfg == nil {
 		return true
@@ -182,7 +182,7 @@ func ContextCacheEnabled(cfg *BudgetConfig) bool {
 }
 
 // PIIMaskingEnabled reports whether the technical/structural PII
-// pseudonymization stage should run — the ONE Token Firewall stage
+// pseudonymization stage should run — the ONE Context Governance stage
 // that defaults OFF (nil/absent = false), unlike every helper above.
 // See PIIMasking's doc comment for why.
 func PIIMaskingEnabled(cfg *BudgetConfig) bool {

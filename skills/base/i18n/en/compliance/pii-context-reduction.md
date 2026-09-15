@@ -23,7 +23,7 @@ The algorithm is **language-agnostic**: no dictionaries, no word lists, no Spani
 * **Not legal anonymization.** It's a heuristic structural mitigation — it does not, by itself, satisfy any legal anonymization standard.
 * **Does not guarantee detecting 100% of personal information.** A common name with no digits or structural separators may not clear the threshold and won't be masked (false negative). For the same reason, it can also mask tokens that are NOT PII but share a similar structural shape — for example, separator-formatted dates like `2024-07-30` (false positive).
 * **Does not replace legal advice, an internal privacy policy, or a Ley 21.719/GDPR/other-regulation compliance program.**
-* Does not replace the rest of the Token Firewall (Sanitizer, Circuit Breaker) — it's an additional, optional stage, not a substitute.
+* Does not replace the rest of the Context Governance (Sanitizer, Circuit Breaker) — it's an additional, optional stage, not a substitute.
 
 ## When to use it in this domain (compliance)
 

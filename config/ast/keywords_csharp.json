@@ -1,0 +1,35 @@
+{
+  "language": "csharp",
+  "extensions": [".cs"],
+  "kinds": {
+    "func": [
+      { "type": "method_declaration" },
+      { "type": "constructor_declaration" }
+    ],
+    "class": [
+      { "type": "class_declaration" },
+      { "type": "interface_declaration" },
+      { "type": "struct_declaration" }
+    ],
+    "interface": [
+      { "type": "interface_declaration" }
+    ],
+    "struct": [
+      { "type": "struct_declaration" }
+    ],
+    "enum": [
+      { "type": "enum_declaration" }
+    ],
+    "namespace": [
+      { "type": "namespace_declaration" }
+    ],
+    "var": [
+      { "type": "variable_declaration" },
+      { "type": "field_declaration" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  },
+  "notes": "El modificador 'const' de C# vive dentro de un nodo 'modifier' hermano, no un hijo directo del campo — demasiado profundo para requires_child_type — por eso los campos const también se filtran bajo 'var'."
+}

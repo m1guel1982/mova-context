@@ -23,7 +23,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"strings"
 
@@ -42,8 +41,14 @@ type chatFileState struct {
 // handleNaturalLanguageEdit returns true when it handled the message
 // itself (verb detected) — even if nothing ended up resolvable to an
 // existing file, so the caller does not also send it as an ordinary,
-// confusing chat turn.
-func handleNaturalLanguageEdit(adapter core.Adapter, root string, proj *core.Project, sess *models.Session, line string, state *chatFileState, scanner *bufio.Scanner) bool {
+// confusing chat turn. Shared by `mova chat` and `mova ui chat` —
+// readLine/emit abstract the confirmation prompt so both doors run the
+// exact same decision logic (see chat_helpers.go's scannerReadLine and
+// tui_chat.go's nlEditCmd).
+func handleNaturalLanguageEdit(adapter core.Adapter, root string, proj *core.Project, sess *models.Session, line string, state *chatFileState, readLine readLineFunc, emit func(string)) bool {
+	if emit == nil {
+		emit = consolePrint
+	}
 	intent := documents.DetectEditIntent(line)
 	if !intent.VerbDetected {
 		return false
@@ -69,20 +74,20 @@ func handleNaturalLanguageEdit(adapter core.Adapter, root string, proj *core.Pro
 	for _, ref := range targets {
 		full, ambiguous, exists, err := documents.ResolveExistingFile(root, repo, ref)
 		if err != nil {
-			consolePrint(fmt.Sprintf("[Edit] Error resolving %q: %s\n", ref, err.Error()))
+			emit(fmt.Sprintf("[Edit] Error resolving %q: %s\n", ref, err.Error()))
 			continue
 		}
 		if len(ambiguous) > 0 {
-			consolePrint(fmt.Sprintf("[Edit] %q matches more than one file — be more specific (%s).\n", ref, strings.Join(ambiguous, ", ")))
+			emit(fmt.Sprintf("[Edit] %q matches more than one file — be more specific (%s).\n", ref, strings.Join(ambiguous, ", ")))
 			continue
 		}
 		if !exists {
-			consolePrint(fmt.Sprintf("[Edit] %q does not exist yet — use a creation phrase instead (e.g. \"Generate %s\") if you meant to create it.\n", ref, ref))
+			emit(fmt.Sprintf("[Edit] %q does not exist yet — use a creation phrase instead (e.g. \"Generate %s\") if you meant to create it.\n", ref, ref))
 			continue
 		}
 		content, err := documents.ReadEditableContent(full)
 		if err != nil {
-			consolePrint(fmt.Sprintf("[Edit] Could not read %q: %s\n", full, err.Error()))
+			emit(fmt.Sprintf("[Edit] Could not read %q: %s\n", full, err.Error()))
 			continue
 		}
 		files = append(files, editable{full: full, content: content})
@@ -93,61 +98,63 @@ func handleNaturalLanguageEdit(adapter core.Adapter, root string, proj *core.Pro
 
 	applyAll, askedApplyAll := false, false
 	for _, f := range files {
-		consolePrint(fmt.Sprintf("[Edit] Asking the model to update %s...\n", f.full))
+		emit(fmt.Sprintf("[Edit] Asking the model to update %s...\n", f.full))
 		reply, err := sess.Send(documents.BuildEditPrompt(f.full, f.content, line))
 		if err != nil {
-			consolePrint("[Edit] Error: " + err.Error() + "\n")
+			emit("[Edit] Error: " + err.Error() + "\n")
 			continue
 		}
 		newContent := documents.ExtractEditedContent(reply)
 
 		diff := documents.DiffLines(f.content, newContent)
 		if !diff.Changed {
-			consolePrint("[Edit] No changes proposed for " + f.full + ".\n")
+			emit("[Edit] No changes proposed for " + f.full + ".\n")
 			continue
 		}
-		consolePrint(fmt.Sprintf("[Edit] Proposed changes for %s (+%d/-%d lines):\n%s", f.full, diff.LinesAdded, diff.LinesRemoved, diff.Text))
+		emit(fmt.Sprintf("[Edit] Proposed changes for %s (+%d/-%d lines):\n%s", f.full, diff.LinesAdded, diff.LinesRemoved, diff.Text))
 		if documents.IsRegeneratedFormat(f.full) {
-			consolePrint("[Edit] Note: this format is regenerated from its text content, not byte-patched — layout/formatting will be reapplied.\n")
+			emit("[Edit] Note: this format is regenerated from its text content, not byte-patched — layout/formatting will be reapplied.\n")
 		}
 
 		apply := applyAll
 		if !apply {
 			if len(files) > 1 && !askedApplyAll {
 				askedApplyAll = true
-				consolePrint(fmt.Sprintf("Apply this change to ALL %d files without asking again? (y/n): ", len(files)))
-				if readYesNo(scanner) {
+				emit(fmt.Sprintf("Apply this change to ALL %d files without asking again? (y/n): ", len(files)))
+				if readYesNo(readLine) {
 					applyAll, apply = true, true
 				}
 			}
 			if !apply {
-				consolePrint("Apply this change? (y/n): ")
-				apply = readYesNo(scanner)
+				emit("Apply this change? (y/n): ")
+				apply = readYesNo(readLine)
 			}
 		}
 		if !apply {
-			consolePrint("[Edit] Skipped " + f.full + ".\n")
+			emit("[Edit] Skipped " + f.full + ".\n")
 			continue
 		}
 
 		result, err := documents.Save(root, documents.SaveRequest{Path: f.full, Content: newContent})
 		if err != nil {
-			consolePrint("[Edit] Error saving " + f.full + ": " + err.Error() + "\n")
+			emit("[Edit] Error saving " + f.full + ": " + err.Error() + "\n")
 			continue
 		}
-		consolePrint("[Edit] " + result.Message + "\n")
+		emit("[Edit] " + result.Message + "\n")
 		state.lastFile = f.full
 	}
 	return true
 }
 
-// readYesNo reads one line from scanner and reports whether it means
-// "yes" — accepts y/yes/s/si/sí (the person's input, not a CLI message,
-// so both languages are accepted regardless of the English-only output).
-func readYesNo(scanner *bufio.Scanner) bool {
-	if !scanner.Scan() {
+// readYesNo reads one line via readLine and reports whether it means
+// "yes" — accepts y/yes/s/si/sí (the person's input, not a CLI
+// message, so both languages are accepted regardless of the
+// English-only output).
+func readYesNo(readLine readLineFunc) bool {
+	text, ok := readLine()
+	if !ok {
 		return false
 	}
-	answer := strings.ToLower(strings.TrimSpace(scanner.Text()))
+	answer := strings.ToLower(strings.TrimSpace(text))
 	return answer == "y" || answer == "yes" || answer == "s" || answer == "si" || answer == "sí"
 }

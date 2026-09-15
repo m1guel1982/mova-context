@@ -1,0 +1,8 @@
+{
+  "_comment_en": "Secret-indicator policy (see mova.local/sanitize's secrets.go for pattern shapes: API keys, JWTs, PEM private keys, generic credential assignments, IP addresses). Every flag below decides an ACTION, not a detection rule - detection itself is always structural/shape-based and cannot be turned off per pattern (turning off detection would defeat the report's own auditability requirement).",
+  "_comment_es": "Politica de indicadores de secretos (ver secrets.go en mova.local/sanitize para las formas de patron: API keys, JWT, llaves privadas PEM, asignaciones de credenciales genericas, direcciones IP). Cada bandera decide una ACCION, no una regla de deteccion - la deteccion en si siempre es estructural/por forma y no puede desactivarse por patron (desactivarla anularia el propio requisito de auditabilidad del reporte).",
+  "block_on_private_key": true,
+  "block_on_api_key": false,
+  "sanitize_on_generic_credential": true,
+  "sanitize_on_jwt": true
+}

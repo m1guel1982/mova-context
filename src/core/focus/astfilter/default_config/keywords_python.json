@@ -1,0 +1,19 @@
+{
+  "language": "python",
+  "extensions": [".py"],
+  "kinds": {
+    "func": [
+      { "type": "function_definition" }
+    ],
+    "class": [
+      { "type": "class_definition" }
+    ],
+    "var": [
+      { "type": "assignment" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  },
+  "notes": "Python no tiene nodos de declaración propios para constantes (la convención MAYUSCULA no está en la gramática) ni un nodo dedicado de namespace/package a nivel de archivo — solo 'func', 'class', 'var' y 'comment' están soportados aquí."
+}

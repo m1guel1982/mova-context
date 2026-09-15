@@ -34,6 +34,17 @@ type Session struct {
 	// — see cli/chat_helpers.go, cli/tui_chat.go. Threaded into the
 	// system ChatMessage built below, read only by provider_anthropic.go.
 	CacheBoundary int
+
+	// EgressAuditDryRun / EgressAuditOutputFile: this project's
+	// resolved "egress_audit" config (see core.ResolveEgressAudit,
+	// core.EgressAuditConfig). Set by each door right after SetSystem
+	// — same call-site pattern as CacheBoundary above — so Send/
+	// SendStream stay the ONE place that actually audits/dry-runs,
+	// shared by CLI/Chat, MCP, and HTTP (see egress_audit.go).
+	// Zero value ("", false) = feature fully disabled, today's
+	// behavior unchanged.
+	EgressAuditDryRun     bool
+	EgressAuditOutputFile string
 }
 
 // NewSession arranca una sesión usando el proveedor/modelo activo
@@ -146,6 +157,16 @@ func (s *Session) Send(userText string) (string, error) {
 		modelTag = mc.ModelName
 	}
 
+	// egress_audit: log the sanitized context and/or stop here on a
+	// dry run — see egress_audit.go. Runs after context/messages are
+	// fully assembled and right before the only network call this
+	// function makes, per project.json's documented pipeline order
+	// (selection → governance → sanitization → egress_audit → provider).
+	if outcome := s.applyEgressAudit(); outcome.stop {
+		s.History = s.History[:len(s.History)-1]
+		return outcome.reply, outcome.err
+	}
+
 	reply, usage, err := pv.Chat(ctx, modelTag, mc, messages)
 	if err != nil {
 		// no dejamos el turno del usuario "colgado" sin respuesta en el historial
@@ -207,6 +228,18 @@ func (s *Session) SendStream(userText string, onToken func(string)) (string, err
 	modelTag := s.Model
 	if mc.ModelName != "" {
 		modelTag = mc.ModelName
+	}
+
+	// egress_audit — same check, same rules as Send() above (see
+	// egress_audit.go); a dry run also gets its confirmation reply
+	// pushed through onToken once, exactly like the "provider doesn't
+	// support streaming" fallback a few lines up already does.
+	if outcome := s.applyEgressAudit(); outcome.stop {
+		s.History = s.History[:len(s.History)-1]
+		if outcome.err == nil && onToken != nil {
+			onToken(outcome.reply)
+		}
+		return outcome.reply, outcome.err
 	}
 
 	reply, usage, err := sp.ChatStream(ctx, modelTag, mc, messages, onToken)

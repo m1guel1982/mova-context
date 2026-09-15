@@ -25,6 +25,41 @@ type Request struct {
 	Params  map[string]any  `json:"params"`
 }
 
+// currentAgentClient holds the "clientInfo.name/version" the MCP
+// client declares during "initialize" — answers the audit question
+// "who requested it?" (see README § Audit Matrix, #10) for every MCP
+// tool called afterwards, without each tool having to re-read the
+// "initialize" request. A mova process serves one MCP session at a
+// time (stdio, or one HTTP socket per connection), so this package
+// variable is safe.
+var currentAgentClient = "mcp-agent"
+
+// AgentClientName returns the MCP client identified in the last
+// "initialize" handshake — "mcp-agent" by default when the client
+// didn't send "clientInfo" (see captureClientInfo).
+func AgentClientName() string { return currentAgentClient }
+
+// captureClientInfo reads params.clientInfo.name/version (standard
+// MCP shape, e.g. {"name":"Claude-Code","version":"1.2.0"}) and
+// builds a readable identifier like "Claude-Code/1.2.0". When the
+// client doesn't declare "clientInfo", or declares it empty,
+// currentAgentClient keeps its default "mcp-agent" — never empty.
+func captureClientInfo(params map[string]any) {
+	ci, ok := params["clientInfo"].(map[string]any)
+	if !ok {
+		return
+	}
+	name, _ := ci["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return
+	}
+	if version, _ := ci["version"].(string); strings.TrimSpace(version) != "" {
+		name = name + "/" + strings.TrimSpace(version)
+	}
+	currentAgentClient = name
+}
+
 // StartStdio inicia el servidor usando Entrada/Salida estándar (requerido
 // por Claude Desktop/Cursor).
 func StartStdio(adapter core.Adapter, root string) error {
@@ -66,6 +101,7 @@ func Process(adapter core.Adapter, root string, req Request) []byte {
 
 	switch req.Method {
 	case "initialize":
+		captureClientInfo(req.Params)
 		resp = serializeResult(map[string]any{
 			"protocolVersion": "2024-11-05",
 			"serverInfo":      map[string]string{"name": "mova-context", "version": "3"},
@@ -176,10 +212,8 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 		result, err = budgetTool(adapter, root, args)
 	case "generate_diagram":
 		result, err = diagramTool(adapter, root, args)
-	case "list_jobs":
-		result, err = listJobsTool(root, args)
-	case "run_job":
-		result, err = runJobTool(adapter, root, args)
+	case "context_trace":
+		result, err = traceTool(adapter, root, args)
 	case "list_agents":
 		result, err = listAgentsTool(root, args)
 	case "run_agent":
@@ -226,6 +260,24 @@ func str(m map[string]any, k string) string {
 	}
 	v, _ := m[k].(string)
 	return v
+}
+
+// splitCommaArg splits a comma-separated MCP argument (e.g.
+// "ignore":"docs/**,scripts/**") into a clean slice - MCP has no
+// native repeated-flag concept like the CLI's flagStrAll, so comma
+// separation is the one form it supports.
+func splitCommaArg(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func serializeResult(result any, id json.RawMessage) map[string]any {

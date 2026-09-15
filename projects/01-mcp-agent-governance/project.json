@@ -1,0 +1,35 @@
+{
+  "project": "01-mcp-agent-governance",
+  "author": "system:default",
+  "description": "Ejemplo 1 de 3 — un agente MCP (Claude Code, Cursor, Windsurf) pide contexto sobre este repo; Mova decide qué entra, detecta un secreto y deja evidencia antes de la inferencia.",
+  "repo": "examples/01-mcp-agent-governance/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "revisar-api",
+  "egress_audit": {
+  "dry_run": false,
+  "output_file": "egress_sanitized.md"
+  },
+
+  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
+  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+
+  "tasks": {
+    "revisar-api": {
+      "prompt": "review-project",
+      "variables": {
+        "module": "pedidos",
+        "description": "Revisar el endpoint de creación de pedidos y su configuración"
+      },
+      "focus": ["api.js", "config.txt"]
+    }
+  },
+
+  "llm_profile": { "config": "llama3.2.3b" },
+
+  "budget": {
+    "max_tokens": 20000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true
+  }
+}

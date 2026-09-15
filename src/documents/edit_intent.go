@@ -9,7 +9,6 @@ package documents
 
 import (
 	"regexp"
-	"strings"
 )
 
 // editVerbRe recognizes edit/modify verbs in Spanish and English —
@@ -27,7 +26,7 @@ var editVerbRe = regexp.MustCompile(`(?i)\b(` +
 	`reemplaza|reemplazar|reempl[aá]zale|reemplazale|` +
 	`ajusta|ajustar|aj[uú]stale|ajustale|` +
 	`revisa|revisar|rev[ií]sale|revisale|` +
-	`agrega|agregar|a[ñn]ade|a[ñn]adir|quita|quitar|elimina|eliminar|borra|borrar|` +
+	`agrega|agregar|a[ñn]ade|a[ñn]adir|quita|quitar|` +
 	`modify|edit|change|update|fix|correct|repair|replace|adjust|revise|alter|rewrite|refactor` +
 	`)\b`)
 
@@ -50,8 +49,8 @@ func DetectEditIntent(text string) EditIntent {
 			continue
 		}
 		out.VerbDetected = true
-		for _, m := range pathTokenRe.FindAllString(clause, -1) {
-			out.Files = append(out.Files, strings.Trim(m, `"'`))
+		if target, ok := extractFileTarget(clause); ok {
+			out.Files = append(out.Files, target)
 		}
 	}
 	return out

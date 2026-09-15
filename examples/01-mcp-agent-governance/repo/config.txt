@@ -1,0 +1,4 @@
+# config.txt — variables de entorno del servicio (ejemplo ficticio)
+DATABASE_URL=postgres://app:app@localhost:5432/pedidos
+STRIPE_SECRET_KEY=sk_live_51NfakeKeyForMovaExample000000000000
+API_KEY=mv-demo-3f9a7c21b6e84d0a9c3d2f1e0a7b5c6d

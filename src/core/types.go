@@ -6,8 +6,13 @@ import "path/filepath"
 
 // Project maps project.json exactly.
 type Project struct {
-	Project     string            `json:"project"`
-	Description string            `json:"description"`
+	Project     string `json:"project"`
+	Description string `json:"description"`
+	// Author: who authorizes this project's governance policy — audit
+	// question "who authorized it?" (see README § Audit Matrix, #3,
+	// and core.ResolvePolicyAuthor). Empty resolves to
+	// "system:default", never left without an owner.
+	Author      string            `json:"author,omitempty"`
 	Repo        string            `json:"repo"`        // the project's single repository — for more than one directory inside it, use "focus" (see ResolveFocus), not a second repo
 	Lang        string            `json:"lang"`        // "es", "en", "fr", "" (legacy)
 	Adapter     string            `json:"adapter"`     // "file" | "db"
@@ -46,14 +51,25 @@ type Project struct {
 	BudgetPath string `json:"budget_path,omitempty"`
 	// TokenHistoryPath: where mova-token-history.json is written (see
 	// "10. token_history_path") — see mova.local/budget.HistoryPath.
-	TokenHistoryPath string       `json:"token_history_path,omitempty"`
-	Tools            *ToolsConfig `json:"tools"` // optional: lets mova chat / chat_completion call MCP file/document tools mid-conversation (see ToolsConfig)
-	// Jobs: optional list of scheduled background jobs for this project
-	// (cron "schedule" + one or more actions: tasks/save/memory/
-	// memory_archive/delete/budget). See mova.local/jobs for the engine
-	// that reads this field and PROJECT_JSON.md § Jobs for the full
-	// spec. Empty/omitted = no scheduled jobs for this project.
-	Jobs []JobSpec `json:"jobs,omitempty"`
+	TokenHistoryPath string `json:"token_history_path,omitempty"`
+	// MemoryPath: where memory.md lives for this project — same
+	// resolution rule as BudgetPath/WorkflowPath (absolute path used
+	// as-is, relative path joined to MOVA_PROJECT_ROOT). "" (the
+	// default) keeps the existing projects/<project>/memory.md
+	// location, so every project that doesn't set this is 100%
+	// unaffected. See mova.local/core.MemoryPath.
+	MemoryPath string `json:"memory_path,omitempty"`
+	// Debug: when true, every door (chat, mova ui chat, CLI, HTTP API,
+	// MCP) prints what it resolved before running a task — repo path;
+	// each agent/skill/prompt's name AND resolved file path (or
+	// "inline" for free-text entries, see resolveKnowledgeOrLiteral);
+	// the exact "focus" and "exclude" entries with their resolved
+	// absolute paths. Defaults to false and is intentionally NEVER
+	// written into a generated project.json template — see
+	// docs/PROJECT.md § debug for the full explanation; this key is
+	// documentation-only until a person adds it by hand.
+	Debug bool         `json:"debug,omitempty"`
+	Tools *ToolsConfig `json:"tools"` // optional: lets mova chat / chat_completion call MCP file/document tools mid-conversation (see ToolsConfig)
 	// Diagram: optional visual-diagram preferences (see
 	// mova.local/diagram and `mova run <project> --diagram`). Nil/
 	// absent = every default (verbose detail, svg export) applies —
@@ -68,6 +84,35 @@ type Project struct {
 	// configurado se respeta tal cual: al superarlo SIEMPRE aparece el
 	// "+N", sea cual sea el límite.
 	FocusDisplayLimit int `json:"focus_display_limit,omitempty"`
+	// EgressAudit: optional pre-provider audit log of the SANITIZED
+	// context about to leave for an LLM, and/or a dry-run switch that
+	// skips the actual provider call — see EgressAuditConfig and
+	// core.ResolveEgressAudit. Nil/absent = fully disabled (DryRun
+	// false, OutputFile ""), zero behavior change — same "declare
+	// nothing, get today's behavior" rule as Diagram/Archive above.
+	EgressAudit *EgressAuditConfig `json:"egress_audit,omitempty"`
+}
+
+// EgressAuditConfig maps project.json's optional "egress_audit" object:
+//
+//	"egress_audit": { "dry_run": true, "output_file": ".mova/egress_sanitized.log" }
+//
+// See core.ResolveEgressAudit for how OutputFile is resolved to an
+// absolute path (always relative to THIS project's own directory, never
+// the process's working directory) and models.Session.Send/SendStream
+// for where it's actually written and DryRun is honored — one
+// implementation shared by CLI/Chat, MCP, and HTTP (see PROJECT_JSON.md
+// § egress_audit).
+type EgressAuditConfig struct {
+	// DryRun: when true, the sanitized context is (optionally) logged
+	// but the LLM provider is never called — Send/SendStream return a
+	// confirmation reply instead. Defaults to false.
+	DryRun bool `json:"dry_run,omitempty"`
+	// OutputFile: where to append the sanitized-context audit log.
+	// Relative paths resolve under projects/<project>/ (NOT the
+	// working directory). "" (the default) disables audit logging
+	// entirely, independent of DryRun.
+	OutputFile string `json:"output_file,omitempty"`
 }
 
 // DiagramConfig maps project.json's optional "diagram" object — see
@@ -78,34 +123,6 @@ type Project struct {
 type DiagramConfig struct {
 	DetailLevel   string   `json:"detail_level,omitempty"`   // "simple" | "verbose" (default "verbose")
 	ExportFormats []string `json:"export_formats,omitempty"` // e.g. ["svg"], ["svg","png","pdf"] — default ["svg"] when both this and --export are absent
-}
-
-// JobSpec maps one entry of project.json's "jobs" array. Kept in package
-// core (next to Project) rather than inside mova.local/jobs so that
-// core.Project — the single source of truth for project.json — never
-// needs to import the jobs package; mova.local/jobs imports core, not
-// the other way around (same rule as Adapter/adapters).
-type JobSpec struct {
-	Comment       string            `json:"comment,omitempty"`        // free-text note, never interpreted
-	Schedule      string            `json:"schedule"`                 // 5-field cron: "min hour dom month dow"
-	Tasks         []string          `json:"tasks,omitempty"`          // task names from this project's "tasks", or ["*"] for all
-	Save          string            `json:"save,omitempty"`           // output path; supports "{date}" (see jobs.ExpandDate)
-	Memory        string            `json:"memory,omitempty"`         // text appended to memory.md via AppendMemory when the job runs
-	MemoryArchive *JobMemoryArchive `json:"memory_archive,omitempty"` // archives memory.md entries older than Days
-	Delete        []string          `json:"delete,omitempty"`         // glob patterns (relative to repo), e.g. "reports/temp_*.csv"
-	Budget        *JobBudget        `json:"budget,omitempty"`         // when set, also writes a budget report (mova budget)
-}
-
-// JobMemoryArchive maps a job's "memory_archive" block.
-type JobMemoryArchive struct {
-	Days int `json:"days"` // 0 = use ArchiveConfig's default (30, see RetentionDays)
-}
-
-// JobBudget maps a job's "budget" block — distinct from BudgetConfig
-// (project.json's own "budget", a hard token ceiling): this one is a
-// job ACTION ("also produce a budget/focus report"), not a gate.
-type JobBudget struct {
-	Focus bool `json:"focus"` // true = compare full-repo vs. focus-only token cost, like `mova budget --focus`
 }
 
 // ResolveWorkflowPath decides which workflow.md file applies to a run of
@@ -224,7 +241,7 @@ type ArchiveConfig struct {
 //	model_config.num_predict (config/models/.../*.json)  → OUTPUT ceiling, sent to the provider AS a request parameter
 //
 // See core/budget_config.go for BudgetConfig/SanitizeConfig/ResolveBudget
-// — split into its own file once the Token Firewall's fields pushed
+// — split into its own file once the Context Governance's fields pushed
 // this one over the 300-line limit.
 
 // MemoryDeleteRequest describes a delete operation (CLI → Adapter).

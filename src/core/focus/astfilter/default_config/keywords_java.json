@@ -1,0 +1,33 @@
+{
+  "language": "java",
+  "extensions": [".java"],
+  "kinds": {
+    "func": [
+      { "type": "method_declaration" },
+      { "type": "constructor_declaration" }
+    ],
+    "class": [
+      { "type": "class_declaration" },
+      { "type": "interface_declaration" },
+      { "type": "enum_declaration" }
+    ],
+    "interface": [
+      { "type": "interface_declaration" }
+    ],
+    "enum": [
+      { "type": "enum_declaration" }
+    ],
+    "namespace": [
+      { "type": "package_declaration" }
+    ],
+    "var": [
+      { "type": "field_declaration" },
+      { "type": "local_variable_declaration" }
+    ],
+    "comment": [
+      { "type": "line_comment" },
+      { "type": "block_comment" }
+    ]
+  },
+  "notes": "Java no tiene una palabra clave 'const' real (lo más cercano es 'final', un modificador anidado dos niveles debajo de field_declaration, demasiado profundo para el filtro requires_child_type de un solo nivel) — los campos 'final' se filtran igual bajo 'var'."
+}

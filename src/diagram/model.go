@@ -41,9 +41,16 @@ type Data struct {
 	Compiler   []string    // Context Compiler stage names actually exercised (see build.go's compilerStages)
 	Firewall   Firewall
 	Agents     []AgentNode // exactly one entry when !IsGroup (this project itself); one per group agent otherwise
-	Jobs       []JobNode
-	Interfaces []string // CLI/Chat/HTTP/MCP — always the same four doors, informational (not project-specific) — see Origin for WHICH one triggered this specific render
-	Metrics    *Metrics // nil when no report could be built (e.g. adapter/read error) — never fabricated
+	Interfaces []string    // CLI/Chat/HTTP/MCP — always the same four doors, informational (not project-specific) — see Origin for WHICH one triggered this specific render
+	Metrics    *Metrics    // nil when no report could be built (e.g. adapter/read error) — never fabricated
+
+	// AgentClient/TargetModel/PolicyAuthor: same 3 audit questions as
+	// trace.Data (see README § Audit Matrix, #10/#11/#3) — so the
+	// PNG/SVG diagram shows the same execution identity as
+	// context-trace and pii-audit-log.json.
+	AgentClient  string
+	TargetModel  string
+	PolicyAuthor string
 }
 
 // SourceRef is one Focus entry.
@@ -52,7 +59,7 @@ type SourceRef struct {
 	Kind string // "file" | "dir" | "glob" | "symbol" | "" — best-effort, from core/focus's own resolver naming
 }
 
-// Firewall mirrors core.BudgetConfig's Token Firewall fields exactly —
+// Firewall mirrors core.BudgetConfig's Context Governance fields exactly —
 // see core/budget_config.go's *Enabled helpers, which this reads
 // through rather than re-deciding defaults itself.
 type Firewall struct {
@@ -81,14 +88,6 @@ type AgentNode struct {
 	ModelName   string   // the REAL model tag from config/models/<provider>/<config>.json's own "model" field (e.g. "llama3.2:3b", "gemini-3-flash-preview") — see build.go's resolveModel. Falls back to ModelConfig if the file couldn't be read.
 	IsLocal     bool     // derived from the RESOLVED model config's own "type" (see build.go's resolveModel) — NOT from llm_profile.type, which most projects never set
 	PIIMasking  bool     // this SPECIFIC agent's own budget.pii_masking.enabled — see core.PIIMaskingEnabled. Independent of Data.Firewall.PIIMaskingOn, which is only "representative" for a group (see build.go)
-}
-
-// JobNode is one project.json "jobs" entry.
-type JobNode struct {
-	Schedule       string // raw cron expression, exactly as project.json wrote it
-	ScheduleHuman  string // best-effort human-readable form (e.g. "Daily at 02:00") — see build.go's humanizeCron; falls back to Schedule verbatim for patterns it doesn't recognize, never a guessed/wrong translation
-	Tasks          []string
-	Save           string
 }
 
 // Metrics carries a real orchestrator.Count result — token counts and

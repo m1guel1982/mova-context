@@ -96,6 +96,47 @@ func TestFormatFocusSelection_MixedFilesAndDirs(t *testing.T) {
 	}
 }
 
+// TestFormatFocusSelection_RootDirDoesNotDoubleDot cubre un bug real
+// reportado en QA: `focus: ["."]` (la raíz del proyecto) hacía que el
+// mensaje terminara en DOS puntos seguidos —
+// "[Focus] Selected 1 directory (N file(s) total): ..\n" — porque el
+// nombre resuelto ("." tal como aparece en project.json) se concatenaba
+// justo antes del punto final fijo del formato. Se ve como un path
+// truncado o corrupto en vez de la raíz del proyecto.
+func TestFormatFocusSelection_RootDirDoesNotDoubleDot(t *testing.T) {
+	items := []focus.FocusItem{
+		{Name: ".", Kind: "dir", Files: 8},
+	}
+	got := FormatFocusSelection(items, 2)
+
+	if strings.Contains(got, "..") {
+		t.Fatalf("expected no double-dot artifact for a root (\".\") focus target, got %q", got)
+	}
+	if !strings.Contains(got, "(root)") {
+		t.Fatalf("expected the root target to be shown as \"(root)\", got %q", got)
+	}
+	if !strings.HasSuffix(got, "(root).\n") {
+		t.Fatalf("expected exactly one trailing period, got %q", got)
+	}
+}
+
+// TestFormatFocusSelection_RootDirMixedWithOthers cubre el mismo bug
+// cuando "." no es el único target listado (posición intermedia).
+func TestFormatFocusSelection_RootDirMixedWithOthers(t *testing.T) {
+	items := []focus.FocusItem{
+		{Name: "src", Kind: "dir", Files: 4},
+		{Name: ".", Kind: "dir", Files: 8},
+	}
+	got := FormatFocusSelection(items, 2)
+
+	if strings.Contains(got, "..") {
+		t.Fatalf("expected no double-dot artifact, got %q", got)
+	}
+	if !strings.Contains(got, "src, (root)") {
+		t.Fatalf("expected \"src, (root)\" in the list, got %q", got)
+	}
+}
+
 func TestFocusDisplayLimit_DefaultsToTwo(t *testing.T) {
 	if got := FocusDisplayLimit(nil); got != DefaultFocusDisplayLimit {
 		t.Fatalf("expected default limit %d for nil project, got %d", DefaultFocusDisplayLimit, got)

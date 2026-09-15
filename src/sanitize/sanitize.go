@@ -1,4 +1,4 @@
-// Package sanitize implements the Token Firewall's first stage: cheap,
+// Package sanitize implements the Context Governance's first stage: cheap,
 // 100%-deterministic noise removal from text BEFORE it's counted or
 // sent to a model — no AI, no network call, no new dependency. Every
 // rule here is reversible-in-spirit (nothing is summarized or

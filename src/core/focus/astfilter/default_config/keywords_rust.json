@@ -1,0 +1,42 @@
+{
+  "language": "rust",
+  "extensions": [".rs"],
+  "kinds": {
+    "func": [
+      { "type": "function_item" }
+    ],
+    "class": [
+      { "type": "struct_item" },
+      { "type": "enum_item" },
+      { "type": "trait_item" }
+    ],
+    "struct": [
+      { "type": "struct_item" }
+    ],
+    "enum": [
+      { "type": "enum_item" }
+    ],
+    "trait": [
+      { "type": "trait_item" }
+    ],
+    "impl": [
+      { "type": "impl_item" }
+    ],
+    "namespace": [
+      { "type": "mod_item" }
+    ],
+    "const": [
+      { "type": "const_item" }
+    ],
+    "var": [
+      { "type": "let_declaration" }
+    ],
+    "macro": [
+      { "type": "macro_definition" }
+    ],
+    "comment": [
+      { "type": "line_comment" }
+    ]
+  },
+  "notes": "'impl' resuelve por el PRIMER identificador de tipo que aparece en el nodo impl_item — en un 'impl Trait for Tipo', eso es el nombre del trait, no el del tipo destino; para casos simples 'impl Tipo { ... }' (sin trait) coincide correctamente con el tipo."
+}

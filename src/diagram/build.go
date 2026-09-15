@@ -14,8 +14,6 @@
 package diagram
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 
 	"mova.local/budget"
@@ -52,6 +50,9 @@ func BuildDiagram(adapter core.Adapter, root, name, task, detail, origin string)
 		Origin:      normalizeOrigin(origin),
 		Interfaces:  []string{"CLI", "Chat", "MCP", "API HTTP"},
 	}
+	d.AgentClient = agentClientFromOrigin(d.Origin)
+	d.TargetModel = core.TargetModelFor(root, name)
+	d.PolicyAuthor = core.ResolvePolicyAuthor(root, name)
 
 	if isGroup {
 		cfg, err := orchestrator.LoadGroupConfig(root, name)
@@ -72,9 +73,8 @@ func BuildDiagram(adapter core.Adapter, root, name, task, detail, origin string)
 					d.Sources = append(d.Sources, s)
 				}
 			}
-			d.Jobs = append(d.Jobs, jobsFrom(proj)...)
 			if d.Firewall == (Firewall{}) {
-				d.Firewall = firewallFrom(proj) // representative — Token Firewall config is per-project, shown once from the first agent that sets one
+				d.Firewall = firewallFrom(proj) // representative — Context Governance config is per-project, shown once from the first agent that sets one
 			}
 		}
 	} else {
@@ -86,7 +86,6 @@ func BuildDiagram(adapter core.Adapter, root, name, task, detail, origin string)
 		d.Lang = proj.Lang
 		d.Agents = []AgentNode{buildAgentNode(root, name, proj)}
 		d.Sources = sourcesFrom(proj)
-		d.Jobs = jobsFrom(proj)
 		d.Firewall = firewallFrom(proj)
 	}
 
@@ -107,6 +106,21 @@ func BuildDiagram(adapter core.Adapter, root, name, task, detail, origin string)
 // falling back to "MCP" for anything unrecognized, since raw MCP
 // stdio/tool calls are the one door with no more specific signal to
 // go on (see mcp/diagram_tool.go).
+// agentClientFromOrigin answers the audit question "who requested
+// it?" (README § Audit Matrix, #10) for the diagram — "mova-cli" for
+// terminal doors, "mcp-agent" for MCP/API HTTP when no more specific
+// MCP client is available here (see mcp.AgentClientName, which does
+// capture it during the "initialize" handshake and is used in
+// context-trace).
+func agentClientFromOrigin(origin string) string {
+	switch origin {
+	case "CLI", "Chat":
+		return "mova-cli"
+	default:
+		return "mcp-agent"
+	}
+}
+
 func normalizeOrigin(origin string) string {
 	norm := strings.ToLower(strings.TrimSpace(origin))
 	for _, valid := range ValidOrigins {
@@ -256,73 +270,6 @@ func containsGlob(s string) bool {
 		}
 	}
 	return false
-}
-
-func jobsFrom(proj *core.Project) []JobNode {
-	out := make([]JobNode, 0, len(proj.Jobs))
-	for _, j := range proj.Jobs {
-		out = append(out, JobNode{
-			Schedule:      j.Schedule,
-			ScheduleHuman: humanizeCron(j.Schedule),
-			Tasks:         j.Tasks,
-			Save:          j.Save,
-		})
-	}
-	return out
-}
-
-// humanizeCron turns the handful of cron patterns project.json's own
-// job scheduler (mova.local/jobs) actually supports into plain text —
-// only for patterns it can translate with full confidence; anything
-// else (an unusual step value, a weekday LIST, "L"/"#" extensions,
-// ...) is returned completely unchanged rather than risk showing a
-// WRONG human-readable time. A person can always read the raw cron
-// expression; showing a mistranslated one would be worse than not
-// translating at all.
-func humanizeCron(cron string) string {
-	fields := strings.Fields(cron)
-	if len(fields) != 5 {
-		return cron
-	}
-	min, hour, day, month, weekday := fields[0], fields[1], fields[2], fields[3], fields[4]
-
-	if month != "*" {
-		return cron // monthly/yearly-with-specific-month patterns: not worth the risk of a wrong translation
-	}
-
-	m, mErr := strconv.Atoi(min)
-	h, hErr := strconv.Atoi(hour)
-
-	switch {
-	case min == "*" && hour == "*" && day == "*" && weekday == "*":
-		return "Every minute"
-	case mErr == nil && hour == "*" && day == "*" && weekday == "*":
-		return fmt.Sprintf("Every hour, at minute %d", m)
-	case mErr == nil && hErr == nil && day == "*" && weekday == "*":
-		return fmt.Sprintf("Daily at %02d:%02d", h, m)
-	case mErr == nil && hErr == nil && day == "*" && isSingleWeekday(weekday):
-		return fmt.Sprintf("Weekly on %s at %02d:%02d", weekdayName(weekday), h, m)
-	case mErr == nil && hErr == nil && weekday == "*" && isSingleDay(day):
-		return fmt.Sprintf("Monthly on day %s at %02d:%02d", day, h, m)
-	default:
-		return cron
-	}
-}
-
-func isSingleWeekday(w string) bool {
-	n, err := strconv.Atoi(w)
-	return err == nil && n >= 0 && n <= 6
-}
-
-func isSingleDay(d string) bool {
-	n, err := strconv.Atoi(d)
-	return err == nil && n >= 1 && n <= 31
-}
-
-func weekdayName(w string) string {
-	names := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
-	n, _ := strconv.Atoi(w)
-	return names[n]
 }
 
 func firewallFrom(proj *core.Project) Firewall {

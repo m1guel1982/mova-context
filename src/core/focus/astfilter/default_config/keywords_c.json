@@ -1,0 +1,29 @@
+{
+  "language": "c",
+  "extensions": [".c", ".h"],
+  "kinds": {
+    "func": [
+      { "type": "function_definition" }
+    ],
+    "class": [
+      { "type": "struct_specifier" }
+    ],
+    "struct": [
+      { "type": "struct_specifier" }
+    ],
+    "type": [
+      { "type": "type_definition" }
+    ],
+    "var": [
+      { "type": "declaration" }
+    ],
+    "macro": [
+      { "type": "preproc_def" },
+      { "type": "preproc_function_def" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  },
+  "notes": "'declaration' cubre tanto variables normales como 'const' (el calificador 'const' es un nodo hermano, no un hijo distintivo de un solo nivel) — no se distinguen por separado."
+}

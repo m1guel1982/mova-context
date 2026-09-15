@@ -32,7 +32,10 @@ var workflowArgsPattern = regexp.MustCompile(`(?i)^workflow\.md(?:\s+(\S+))?(?:\
 // lists. Returns true (and has already printed a result) when the line
 // matched, so chat_cmd.go's default branch knows not to also treat the
 // line as an ordinary chat turn or a natural-language save/edit.
-func handleWorkflowCommand(sessionProject, sessionTask string, sess *models.Session, root, line string) bool {
+func handleWorkflowCommand(sessionProject, sessionTask string, sess *models.Session, root, line string, emit func(string)) bool {
+	if emit == nil {
+		emit = consolePrint
+	}
 	line = strings.TrimSpace(line)
 
 	project, task := sessionProject, sessionTask
@@ -52,14 +55,14 @@ func handleWorkflowCommand(sessionProject, sessionTask string, sess *models.Sess
 	}
 
 	if project == "" {
-		consolePrint("workflow.md requires a project — try \"workflow.md <project>\" or start the chat with one (mova chat <project>).\n")
+		emit("workflow.md requires a project — try \"workflow.md <project>\" or start the chat with one (mova chat <project>).\n")
 		return true
 	}
 
 	fa := core.NewFileAdapter(root)
 	proj, err := fa.GetProject(project)
 	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
+		emit("Error: " + err.Error() + "\n")
 		return true
 	}
 	adapter := newAdapter(root, proj)
@@ -67,15 +70,15 @@ func handleWorkflowCommand(sessionProject, sessionTask string, sess *models.Sess
 	result, err := budget.LoadWorkflow(adapter, root, project, task, "", "")
 	if result != nil {
 		for _, l := range result.Log {
-			consolePrint(l + "\n")
+			emit(l + "\n")
 		}
 	}
 	if err != nil {
-		consolePrint("\n" + err.Error() + "\n")
+		emit("\n" + err.Error() + "\n")
 		return true
 	}
 
-	consolePrint("\n" + renderMarkdown(result.Content) + "\n")
+	emit("\n" + renderMarkdown(result.Content) + "\n")
 	sess.SetSystem(strings.TrimSpace(sess.System + "\n\n" + result.Content))
 	return true
 }

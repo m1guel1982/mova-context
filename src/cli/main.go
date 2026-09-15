@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 
+	"mova.local/core/focus/astfilter"
+	"mova.local/i18n"
 	"mova.local/logging"
 	"mova.local/runtime"
 )
@@ -32,6 +34,31 @@ func main() {
 	logging.SetDefault(logger)
 	defer logger.Close()
 	logger.Info("cli", "command: %s", strings.Join(os.Args[1:], " "))
+
+	// i18n.Init loads config/lang/{es,en}.json + lang_active.json and
+	// starts the hot-reload poller (see mova.local/i18n) - called once
+	// here, at the CLI's single entry point, so every subcommand (and
+	// the same call in mcp.Process / http's server bootstrap) shares
+	// one translator. Errors here are non-fatal: i18n.T falls back to
+	// the literal key when nothing loaded, so a broken config/lang/
+	// tree degrades output readability, not availability.
+	if err := i18n.Init(root); err != nil {
+		logger.Info("i18n", "could not load config/lang/: %v", err)
+	}
+
+	// astfilter.Init loads config/ast/keywords_*.json (embedded
+	// defaults + optional project-level overrides under root) — see
+	// mova.local/core/focus/astfilter's config.go. Called here, right
+	// after i18n.Init, for the exact same reason: this is the single
+	// entry point every subcommand (chat, context-trace, mcp, ui, the
+	// http server — see dispatch()) is routed through, so one call
+	// here is enough for every door. Errors are non-fatal: a language
+	// whose JSON fails to parse just isn't available for AST filtering
+	// (Extract/Strip report ok=false for it), it doesn't break
+	// anything else.
+	if err := astfilter.Init(root); err != nil {
+		logger.Info("astfilter", "could not fully load config/ast/: %v", err)
+	}
 
 	dispatch(root)
 }
@@ -91,6 +118,35 @@ func flagStr(flag, def string) string {
 		}
 	}
 	return def
+}
+
+// flagStrAll collects EVERY occurrence of flag (e.g. multiple
+// "--ignore x --ignore y" invocations), each split on commas - used
+// by --ignore so both "acepta cadenas separadas por comas" and
+// "invocaciones múltiples" are supported natively, per spec.
+func flagStrAll(flag string) []string {
+	var out []string
+	for i, a := range os.Args {
+		if a == flag && i+1 < len(os.Args) {
+			for _, part := range strings.Split(os.Args[i+1], ",") {
+				part = strings.TrimSpace(part)
+				if part != "" {
+					out = append(out, part)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// flagIgnorePatterns is --ignore's own reader: accepts the flag as
+// "--ignore" or its short form "-i", either given once with several
+// comma-separated glob patterns ("--ignore \"docs/**, tests/**,
+// *.lock\"") or repeated ("--ignore docs/** --ignore tests/**") — both
+// forms merge into the same list (flagStrAll already splits on comma
+// per occurrence; this just also checks "-i" and combines both).
+func flagIgnorePatterns() []string {
+	return append(flagStrAll("--ignore"), flagStrAll("-i")...)
 }
 
 func flagInt(flag string, def int) int {

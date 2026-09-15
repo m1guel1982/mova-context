@@ -229,7 +229,14 @@ func componentTable(r *Report) string {
 // already rely on a custom path.
 func BudgetReportPath(root, project string, proj *core.Project) string {
 	if proj != nil && proj.BudgetPath != "" {
-		if filepath.IsAbs(proj.BudgetPath) {
+		// Cross-platform absolute check (documents.IsAbsCrossPlatform)
+		// instead of plain filepath.IsAbs — same fix as core.MemoryPath,
+		// so a Windows/UNC/Unix absolute path in budget_path is honored
+		// regardless of which OS built the running binary.
+		if documents.IsAbsCrossPlatform(proj.BudgetPath) {
+			if normalized, err := documents.NormalizeAbsPath(proj.BudgetPath); err == nil {
+				return normalized
+			}
 			return proj.BudgetPath
 		}
 		return filepath.Join(root, proj.BudgetPath)

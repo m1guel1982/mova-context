@@ -1,0 +1,24 @@
+{
+  "language": "javascript",
+  "extensions": [".js", ".jsx", ".mjs", ".cjs"],
+  "kinds": {
+    "func": [
+      { "type": "function_declaration" },
+      { "type": "method_definition" }
+    ],
+    "class": [
+      { "type": "class_declaration" }
+    ],
+    "const": [
+      { "type": "lexical_declaration", "requires_child_type": "const" }
+    ],
+    "var": [
+      { "type": "lexical_declaration", "requires_child_type": "let" },
+      { "type": "variable_declaration" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  },
+  "notes": "'lexical_declaration' cubre tanto 'const' como 'let' — se distinguen exigiendo un hijo directo de tipo 'const' o 'let' (el propio token de la palabra clave)."
+}

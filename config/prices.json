@@ -1,29 +1,46 @@
 {
+  "_comment_en": "Model/pricing catalog consumed by mova.local/budget (EstimateCost) and mova.local/trace (context-trace's MODEL COMPATIBILITY table). All input/output prices are THEORETICAL / ESTIMATED and exclude output tokens, tool calls, caching, and other provider-specific charges - see reports' own disclaimer line. context_window is in tokens; 0 means 'not configured / provider-dependent', rendered as '-' and never guessed. Entries marked local:true (Ollama, LM Studio, vLLM) always cost $0 in EstimateCost regardless of the input/output numbers present here - see budget/estimate_helpers.go.",
+  "_comment_es": "Catalogo de modelos y precios que consume mova.local/budget (EstimateCost) y mova.local/trace (tabla MODEL COMPATIBILITY de context-trace). Todos los precios de entrada/salida son TEORICOS / ESTIMADOS y excluyen tokens de salida, tool calls, cache y otros cargos propios de cada proveedor. context_window esta en tokens; 0 significa 'no configurado / depende del proveedor', se muestra como '-' y nunca se adivina. Las entradas marcadas local:true (Ollama, LM Studio, vLLM) siempre cuestan $0 en EstimateCost sin importar los numeros de input/output presentes aqui.",
   "currency": "USD",
   "exchange_rate_clp": 950,
-  "unit": "per_1k_tokens",
+  "unit": "per_1m_tokens",
   "providers": {
     "openai": {
       "models": {
-        "gpt-5": {
-          "input": 0.005,
-          "output": 0.015
-        }
+        "gpt-4o": { "input": 2.5, "output": 10, "context_window": 128000 },
+        "gpt-4o-mini": { "input": 0.15, "output": 0.6, "context_window": 128000 },
+        "gpt-4.1": { "input": 2, "output": 8, "context_window": 1000000 }
       }
     },
     "anthropic": {
       "models": {
-        "claude": {
-          "input": 0.003,
-          "output": 0.015
+        "claude-sonnet": {
+          "_comment_en": "Uncertain: Anthropic does not publish one single universal context window across all Claude Sonnet deployments - actual limit depends on the specific model version and provider configuration. context_window left at 0 (shown as '-') on purpose; do not treat this as 'no limit'.",
+          "input": 3, "output": 15, "context_window": 0
+        },
+        "claude-haiku": {
+          "_comment_en": "Same uncertainty note as claude-sonnet above.",
+          "input": 0.8, "output": 4, "context_window": 0
         }
       }
     },
     "google": {
       "models": {
-        "gemini": {
-          "input": 0.00125,
-          "output": 0.005
+        "gemini-pro": { "input": 1.25, "output": 5, "context_window": 1000000 },
+        "gemini-flash": { "input": 0.075, "output": 0.3, "context_window": 1000000 }
+      }
+    },
+    "local": {
+      "models": {
+        "ollama": {
+          "_comment_en": "Local inference (Ollama). API Cost is always $0 - see local:true. context_window depends entirely on which model the person has pulled locally, so it is left at 0 ('-') rather than guessed.",
+          "input": 0, "output": 0, "context_window": 0, "local": true
+        },
+        "lm-studio": {
+          "input": 0, "output": 0, "context_window": 0, "local": true
+        },
+        "vllm": {
+          "input": 0, "output": 0, "context_window": 0, "local": true
         }
       }
     }

@@ -17,6 +17,7 @@
 //	set -model <name>         switch models, keeps history
 //	/memory                   saves the last exchange to memory.md (requires [project])
 //	/budget                   generates mova-budget-report.md for the active project (requires [project])
+//	/context-trace            runs `context-trace` for the active project, or --repo <url> for a remote one
 //	/save "path"              saves the model's last reply to path — format auto-picked from extension
 //	/save -c "path"           saves ONLY the source code blocks from the model's last reply
 //	/save -d "path"           creates only that directory (requires [project])
@@ -59,6 +60,7 @@ import (
 
 	"mova.local/budget"
 	"mova.local/core"
+	"mova.local/documents"
 	"mova.local/mcp"
 	"mova.local/models"
 	"mova.local/orchestrator"
@@ -70,6 +72,7 @@ func runChat(root, project, task string) {
 
 	var adapter core.Adapter
 	var proj *core.Project
+	var gatedSections *core.ContextSections
 	if project != "" {
 		// Multiagent groups (projects/<group>/config.json) have no
 		// project.json of their own — GetProject below fails for them.
@@ -92,12 +95,13 @@ func runChat(root, project, task string) {
 		applyProjectLLMProfile(sess, root, proj)
 
 		consolePrint("[Context] Building context...\n")
-		// budget.BuildGatedContext runs the full Token Firewall
+		// budget.BuildGatedContext runs the full Context Governance
 		// (Sanitizer → Circuit Breaker → the existing max_tokens gate)
 		// — the exact same pipeline `mova run`/`mova jobs run`/
 		// `mova agents run` already go through, so chat never has its
 		// own copy of "build then gate".
 		gated := budget.BuildGatedContext(adapter, root, project, task)
+		gatedSections = gated.Sections
 		if gated.Sections != nil {
 			printContextSummary(gated.Sections, proj)
 		}
@@ -111,20 +115,25 @@ func runChat(root, project, task string) {
 		systemText, boundary := applyCacheLayout(gated.Sections, proj)
 		sess.SetSystem(systemText + mcp.ToolsSystemPrompt(proj.Tools))
 		sess.CacheBoundary = boundary
+		sess.EgressAuditDryRun, sess.EgressAuditOutputFile = core.ResolveEgressAudit(root, project, proj)
 		if core.ToolsEnabled(proj.Tools) {
 			consolePrint("[Tools] Enabled for this chat — the model may create/write files and directories (see project.json's \"tools\").\n")
 		}
 		consolePrint("[Context] Project loaded: " + project + "\n")
+		printDebugLog(gatedSections, nil)
 	}
 
 	consolePrint(chatBanner(sess))
 
 	fileState := &chatFileState{}
-	// signature: firma de project.json (projectSignature) al momento de
-	// construir el contexto de arriba — ver refreshProjectContext, que
-	// compara contra esta antes de cada turno para detectar ediciones
-	// hechas mientras esta sesión de `mova chat` sigue abierta.
-	signature := projectSignature(proj)
+	// signature: firma de project.json + contenido resuelto de
+	// agents/skills/prompt (contextSignature) al momento de construir
+	// el contexto de arriba — ver refreshProjectContext, que compara
+	// contra esta antes de cada turno para detectar ediciones hechas
+	// mientras esta sesión de `mova chat` sigue abierta, incluyendo
+	// ediciones a los archivos base de agents/prompts/skills (no solo
+	// a project.json).
+	signature := contextSignature(proj, gatedSections)
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for {
@@ -171,6 +180,9 @@ func runChat(root, project, task string) {
 		case strings.HasPrefix(line, "/diagram"):
 			runChatDiagram(root, adapter, project, task, strings.TrimSpace(strings.TrimPrefix(line, "/diagram")))
 
+		case strings.HasPrefix(line, "/context-trace"):
+			runChatTrace(root, adapter, project, task, strings.TrimSpace(strings.TrimPrefix(line, "/context-trace")), scanner)
+
 		case line == "/tools":
 			consolePrint(mcp.FileToolsHelp())
 
@@ -181,7 +193,7 @@ func runChat(root, project, task string) {
 			runChatSave(adapter, root, proj, sess, strings.TrimSpace(strings.TrimPrefix(line, "/save")), fileState, nil)
 
 		case strings.HasPrefix(line, "/delete"):
-			runChatDelete(root, proj, strings.TrimSpace(strings.TrimPrefix(line, "/delete")), scanner)
+			runChatDelete(root, proj, strings.TrimSpace(strings.TrimPrefix(line, "/delete")), scannerReadLine(scanner), nil)
 
 		// No explicit command matched: try workflow.md first ("lee
 		// workflow.md", "ejecuta workflow.md", "workflow.md <project>
@@ -190,28 +202,57 @@ func runChat(root, project, task string) {
 		// natural-language CREATE intent (a NEW file/directory — see
 		// nl_save.go). Only falls through to an ordinary chat turn if
 		// the message carries none of these.
+		//
+		// Order matters: DELETE is checked before EDIT (both share
+		// "elimina"/"borra"-style phrasing in Spanish — a bug found in
+		// QA had "elimina el archivo X" going through the edit flow,
+		// which just emptied the file's content instead of actually
+		// removing it). READ needs no model call and no confirmation,
+		// so it's cheap to check early too.
 		default:
-			if handleWorkflowCommand(project, task, sess, root, line) {
+			if handleWorkflowCommand(project, task, sess, root, line, nil) {
 				continue
 			}
-			if handleNaturalLanguageEdit(adapter, root, proj, sess, line, fileState, scanner) {
+			if handleAutoApplyConfirmation(adapter, root, proj, sess, project, line, nil) {
 				continue
 			}
-			if handleNaturalLanguageSave(adapter, root, proj, sess, project, line, fileState) {
+			if handleNaturalLanguageDelete(root, proj, line, fileState, scannerReadLine(scanner), nil) {
 				continue
 			}
-			runChatTurn(sess, adapter, proj, root, project, line)
+			if handleNaturalLanguageRename(root, proj, line, scannerReadLine(scanner), nil) {
+				continue
+			}
+			if handleNaturalLanguageRead(root, proj, line, fileState, nil) {
+				continue
+			}
+			if handleNaturalLanguageEdit(adapter, root, proj, sess, line, fileState, scannerReadLine(scanner), nil) {
+				continue
+			}
+			if handleNaturalLanguageSave(adapter, root, proj, sess, project, line, fileState, scanner) {
+				continue
+			}
+			if documents.DetectMemoryIntent(line) {
+				runChatMemory(adapter, project, sess, nil)
+				continue
+			}
+			runChatTurn(sess, adapter, proj, root, project, line, scanner)
 		}
 	}
 }
 
 // runChatTurn sends one ordinary chat message and prints the reply, the
 // token-usage line, and records real usage for the Feedback Loop.
-func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project, root, project, line string) {
+func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project, root, project, line string, scanner *bufio.Scanner) {
 	label := providerLabel(sess.Provider)
 	consolePrint("[" + label + "] Sending request...\n")
 
-	reply, streamed, err := sendWithTools(sess, adapter, proj, root, line, nil)
+	replLine := func() (string, bool) {
+		if !scanner.Scan() {
+			return "", false
+		}
+		return strings.TrimSpace(scanner.Text()), true
+	}
+	reply, streamed, err := sendWithTools(sess, adapter, proj, root, line, replLine, nil)
 	if err != nil {
 		consolePrint("Error: " + err.Error() + "\n")
 		return

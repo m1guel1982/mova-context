@@ -1,0 +1,29 @@
+{
+  "language": "php",
+  "extensions": [".php"],
+  "kinds": {
+    "func": [
+      { "type": "function_definition" },
+      { "type": "method_declaration" }
+    ],
+    "class": [
+      { "type": "class_declaration" }
+    ],
+    "interface": [
+      { "type": "interface_declaration" }
+    ],
+    "trait": [
+      { "type": "trait_declaration" }
+    ],
+    "namespace": [
+      { "type": "namespace_definition" }
+    ],
+    "const": [
+      { "type": "const_declaration" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  },
+  "notes": "PHP no tiene un nodo de 'declaración' para variables ($nombre = ...) — son simples asignaciones sin distinción sintáctica — por eso 'var' no está soportado aquí."
+}

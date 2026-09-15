@@ -1,4 +1,4 @@
-// cachelayout.go — the Token Firewall's second stage: lays out the
+// cachelayout.go — the Context Governance's second stage: lays out the
 // system prompt so its FIRST bytes are a stable, byte-identical prefix
 // across runs (agents + skills + prompt — curated project files that
 // don't change between one task run and the next), with everything

@@ -125,33 +125,6 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 		w.Write(responseBytes)
 	})
 
-	mux.HandleFunc("/jobs/run", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "POST required", http.StatusMethodNotAllowed)
-			return
-		}
-		var args map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
-			mcpErrorHTTP(w, -32700, "parse error", nil)
-			return
-		}
-		// Body: {"project": "...", "index": "0"} (index optional — runs
-		// every job for the project when omitted). Same convenience-shape
-		// convention as /save, /delete, /workflow above: reexpressed as
-		// tools/call so it runs through mcp.Process → executeTool →
-		// "run_job" → mova.local/jobs.RunJob — the exact same flow
-		// `mova jobs run` uses. See mova.local/jobs/engine.go.
-		req := mcp.Request{
-			JSONRPC: "2.0",
-			ID:      json.RawMessage("1"),
-			Method:  "tools/call",
-			Params:  map[string]any{"name": "run_job", "arguments": args},
-		}
-		responseBytes := mcp.Process(adapter, root, req)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(responseBytes)
-	})
-
 	mux.HandleFunc("/agents/run", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -208,6 +181,40 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 			ID:      json.RawMessage("1"),
 			Method:  "tools/call",
 			Params:  map[string]any{"name": "generate_diagram", "arguments": args},
+		}
+		responseBytes := mcp.Process(adapter, root, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(responseBytes)
+	})
+
+	mux.HandleFunc("/api/v1/context-trace", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		var args map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&args); err != nil {
+			mcpErrorHTTP(w, -32700, "parse error", nil)
+			return
+		}
+		// Body: {"project": "...", "task": "...", "repo": "https://...",
+		// "branch": "...", "export": "pdf"|"md" (default "md"), "output": "...",
+		// "generate_project_json": "true"}. Same "re-expressed as
+		// tools/call" convention every endpoint above follows — goes
+		// through mcp.Process -> executeTool -> "context_trace" ->
+		// mova.local/trace, the same engine the CLI
+		// (`mova context-trace`) and `/context-trace` in `mova chat` use.
+		// "origin" is set here, server-side, same as /diagram does with
+		// generate_diagram.
+		if args == nil {
+			args = map[string]any{}
+		}
+		args["origin"] = "API HTTP"
+		req := mcp.Request{
+			JSONRPC: "2.0",
+			ID:      json.RawMessage("1"),
+			Method:  "tools/call",
+			Params:  map[string]any{"name": "context_trace", "arguments": args},
 		}
 		responseBytes := mcp.Process(adapter, root, req)
 		w.Header().Set("Content-Type", "application/json")

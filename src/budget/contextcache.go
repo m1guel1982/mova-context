@@ -145,7 +145,7 @@ func SanitizeCached(root, project string, sections *core.ContextSections, cfg sa
 		}
 
 		if changed {
-			_ = saveContextCacheFile(path, cacheFile) // a failed write never blocks the run — same rule every other Token Firewall state file follows
+			_ = saveContextCacheFile(path, cacheFile) // a failed write never blocks the run — same rule every other Context Governance state file follows
 		}
 		return nil
 	})

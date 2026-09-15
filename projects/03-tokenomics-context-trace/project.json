@@ -1,0 +1,39 @@
+{
+  "project": "03-tokenomics-context-trace",
+  "author": "system:default",
+  "description": "Ejemplo 3 de 3 — focus + exclude (incl. AST) + task + presupuesto/circuit breaker actuando juntos sobre un log con líneas repetidas y una función legacy dentro de un archivo que sí se necesita completo.",
+  "repo": "examples/03-tokenomics-context-trace/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "revisar-checkout",
+  "egress_audit": {
+  "dry_run": false,
+  "output_file": "egress_sanitized.md"
+  },
+
+  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
+  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+
+  "tasks": {
+    "revisar-checkout": {
+      "prompt": "create-module",
+      "variables": {
+        "module_name": "checkout",
+        "description": "Revisar el módulo de checkout y su log de errores recientes, sin el flujo de pago legacy"
+      },
+      "focus": ["checkout.js", "server.log"],
+      "exclude": ["checkout.js::func=procesarPagoLegacy"]
+    }
+  },
+
+  "llm_profile": { "config": "llama3.2.3b" },
+
+  "budget": {
+    "max_tokens": 20000,
+    "max_tokens_per_run": 5000,
+    "max_monthly_usd": 5.0,
+    "on_exceed": "warn",
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
+    "cache_hint": true
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "type": "openai",
+  "base_url": "http://localhost:1234/v1",
+  "api_key": "lm-studio",
+  "timeout_seconds": 600,
+  "model": "Qwen/Qwen2.5-Coder-14B-Instruct-GGUF",
+  "temperature": 0.1,
+  "max_tokens": 4096,
+  "stream": true,
+  "context_window": 12288
+}

@@ -1,443 +1,71 @@
-# PROJECT.JSON — referencia de campos
+# project.json — referencia mínima
 
-Cada proyecto vive en `projects/<nombre>/project.json`. Esta es la única fuente de configuración de ese proyecto — los precios de modelos (`config/prices.json`) y los umbrales del PII Masking opcional (`config/policy.json`) son lo único que vive en otro lado, ya que son configuración global compartida por todos los proyectos (ver [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget) y [COMMANDS.md §20](COMMANDS.md#20-token-firewall)).
+Vive siempre en `projects/<nombre>/project.json` (ruta fija, el motor no busca en otro lado).
 
-## Ejemplo mínimo
+## Ejemplo mínimo real (ver `examples/01-mcp-agent-governance/project/project.json`)
 
 ```json
 {
   "project": "mi-proyecto",
-  "repo": "examples/mi-proyecto-repo",
+  "author": "equipo-plataforma",
+  "description": "una línea",
+  "repo": "ruta/al/codigo",
   "lang": "es",
   "adapter": "file",
   "default_task": "revisar",
-
   "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
   "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
-
   "tasks": {
-    "revisar": { "prompt": "review-project" }
+    "revisar": { "prompt": "review-project", "variables": {}, "focus": ["archivo.js"] }
   },
-
-  "llm_profile": {  "config": "llama3.2.3b" }
+  "llm_profile": { "type": "local", "provider": "ollama", "config": "llama3.2.3b" },
+  "budget": { "max_tokens": 20000, "sanitize": { "enabled": true } }
 }
 ```
 
-## Todos los campos
+## Campos clave
 
-| Campo | Tipo | Para qué |
-|---|---|---|
-| `project` | string | nombre del proyecto — coincide con la carpeta bajo `projects/` |
-| `description` | string | texto libre, se muestra en `mova projects` |
-| `repo` | string | el único repositorio del proyecto. Un repositorio por proyecto, una sola ruta — ver **¿Más de un directorio?** abajo si la tentación es agregar un segundo |
-| `lang` | string | `"es"`, `"en"`, ... — qué variante de idioma de prompts/agents/skills cargar |
-| `llm_profile` | object | `{  "config" }` — la forma moderna de elegir modelo (ver [COMMANDS.md §6](COMMANDS.md#6-modelos-y-proveedores)) |
-| `default_task` | string | task usada cuando no se indica ninguna en la línea de comandos |
-| `variables` | object | `{nombre: valor}` inyectadas en prompts/agents/skills |
-| `agents` / `skills` | object | `{ "domain", "use": [...], "custom": [...] }` |
-| `tasks` | object | tasks nombradas — cada una puede sobreescribir `prompt`/`agents`/`skills`/`variables`/`focus`/`exclude`/`budget` |
-| `archive` | object | configuración de gestión de memoria (ver [COMMANDS.md §4](COMMANDS.md#4-memoria)) |
-| `focus` | array | archivos/directorios/símbolos sobre los que trabajar en vez de todo el repo — ver **Trabajar sobre parte de `repo`** abajo. Soporta rutas absolutas multiplataforma (`"C:\\ejemplo\\archivo.py"`, `"/mnt/datos"`) además de rutas relativas al repo y globs — ver **Rutas absolutas en `focus`** abajo |
-| `exclude` | array | archivos/directorios/patrones que `focus` NUNCA debe leer, ni siquiera si se piden por nombre exacto — misma sintaxis que `focus` (nombre, ruta relativa, ruta absoluta multiplataforma, glob). Ver **Excluir de `focus` (`exclude`)** abajo |
-| `focus_display_limit` | number | cuántos nombres de archivo/directorio de `focus` muestra la línea `[Focus] Selected ...` (`mova chat`, chat_completion, Mova UI) antes de colapsar el resto en un badge `+N`. Por defecto `2` — ver **Mensaje `[Focus] Selected ...`** abajo |
-| `budget` | object | `{ "max_tokens": N }` — el techo de contexto (ver [COMMANDS.md §15](COMMANDS.md#15-tokenomics--mova-budget)) |
-| `workflow_path` | string | dónde vive `workflow.md` para este proyecto — ver **Workflow** abajo |
-| `budget_path` | string | dónde se escribe `mova-budget-report.md` — ver **Reporte de Budget** abajo |
-| `token_history_path` | string | dónde se escribe `mova-token-history.json` — ver **Historial de tokens** abajo |
-| `tools` | object | `{ "enabled": true/false }` — permite que el chat llame tools de archivos/documentos durante la conversación |
-| `jobs` | array | jobs programados en segundo plano (cron `schedule` + acciones) — ver **Jobs** más abajo |
-
-`repo`, `workflow_path`, `budget_path` y `token_history_path` son todos strings únicos — a propósito. Un solo valor por campo mantiene un project.json fácil de leer y de razonar; ninguno de ellos tiene forma de array.
-
-`repo` no tiene que vivir cerca de la instalación de Mova — acepta una ruta absoluta que apunte a cualquier lado, incluida una unidad o volumen totalmente distinto (`"repo": "D:\\mi-app"` en Windows, `"repo": "/mnt/data/mi-app"` en Linux, `"repo": "/Volumes/Data/mi-app"` en macOS), y cada acción de focus/save/delete/jobs ya la resuelve correctamente. Ver [COMMANDS.md § Trabajar entre distintas unidades/ubicaciones](COMMANDS.md#trabajar-entre-distintas-unidadesubicaciones-windowslinuxmacos) para la explicación completa y cómo correr `mova` desde adentro de esa carpeta externa.
-
-## Trabajar sobre parte de `repo`, en vez de un segundo repositorio
-
-Si parte del trabajo toca solo una carpeta dentro de `repo` — un servicio en un monorepo, un módulo, un directorio — para eso está `focus`, no un segundo `repo` (no existe tal campo):
-
-```json
-{
-  "project": "mi-proyecto-monorepo",
-  "repo": "examples/mi-monorepo",
-  "tasks": {
-    "revisar-api": { "prompt": "review-api", "focus": ["services/api/"] },
-    "revisar-web": { "prompt": "review-ui", "focus": ["services/web/"] }
-  }
-}
-```
-
-Cada task se acota a su propio directorio con `focus` — ver la [sección de Focus en COMMANDS.md](COMMANDS.md#3-focus--acotar-el-contexto-a-parte-del-repo) para la sintaxis completa de glob/directorio (`"**/*"`, `"."`, `"src/"`, ...). Esto mantiene `project.json` simple (un `repo`, una ruta) y a la vez permite que cada task trabaje solo sobre su propia porción del repositorio.
-
-Si el trabajo realmente cruza dos repositorios NO relacionados — dueños distintos, ciclos de release distintos, nunca tocados por la misma task — la configuración más simple y honesta es dos proyectos separados (`projects/servicio-a/project.json`, `projects/servicio-b/project.json`), cada uno con su propio `repo`, `workflow_path`, `budget_path` y `token_history_path`. Ver **Más de un proyecto** abajo.
-
-## Rutas absolutas en `focus` (Windows / Linux / macOS)
-
-Además de rutas relativas al repo, un target de `focus` (o `memory`) puede ser una ruta absoluta del filesystem del host, para trabajar con un archivo o carpeta que vive **fuera de `repo` por completo**:
-
-```json
-{
-  "focus": [
-    "C:\\ejemploPython\\testSentence.py",
-    "d:\\test\\test.py",
-    "/mnt/archivo.java",
-    "/mnt"
-  ]
-}
-```
-
-Funciona igual sin importar en qué sistema operativo corre `mova` — una letra de unidad Windows (`C:\...`) o una ruta UNC (`\\server\share`) se resuelve directo; un `/algo` estilo Unix se prueba primero como ruta absoluta real (si existe en disco, se usa así), y si no existe cae al comportamiento de siempre (relativo a la raíz de `repo` — la convención histórica de `"/src"` sigue funcionando exactamente igual que antes). Un glob absoluto también funciona (`"/mnt/**/*.java"`).
-
-## Excluir de `focus` (`exclude`)
-
-`exclude` es la contraparte de `focus`: una lista de targets, con la **misma sintaxis multiplataforma** (nombre bare, ruta relativa, ruta absoluta del host, glob), pero para EXCLUSIÓN. Cualquier archivo o directorio que matchee un patrón de `exclude` nunca se lee — ni siquiera si `focus` lo pide por su nombre exacto — y por lo tanto nunca se agrega a `mova-context-cache.json`.
-
-```json
-{
-  "focus": ["."],
-  "exclude": [
-    "node_modules",
-    ".git",
-    "C:\\secrets",
-    "D:\\privado",
-    "/mnt/datos-sensibles",
-    "*.env"
-  ]
-}
-```
-
-Formas soportadas, igual que `focus`:
-
-| Patrón | Qué excluye |
+| Campo | Qué hace |
 |---|---|
-| `"node_modules"`, `".git"` | esa carpeta/archivo por NOMBRE, en cualquier nivel del árbol — no hace falta conocer la ruta completa |
-| `"src/secretos"` | esa ruta puntual, relativa a `repo` |
-| `"C:\\secrets"`, `"/mnt/datos"` | esa ruta absoluta del host (y todo lo que esté debajo, si es un directorio) |
-| `"*.env"`, `"**/*.pem"` | cualquier archivo que matchee el glob, sin importar el directorio |
+| `author` | **Obligatorio.** Autor de la política — Matriz de Auditoría #3. Vacío → `system:default`. |
+| `repo` | Directorio real analizado (relativo a la raíz de Mova). |
+| `llm_profile.{provider,config}` | Qué modelo recibiría el contexto — Matriz de Auditoría #11. `config` referencia un archivo en `config/models/<provider>/`. |
+| `tasks.<t>.focus` | Qué entra: archivos, directorios, globs, o `archivo::kind=símbolo` (AST). |
+| `tasks.<t>.exclude` | Qué se excluye del `focus` — soporta la misma sintaxis AST (nuevo: analiza un archivo completo dejando solo una función fuera). |
+| `budget.max_tokens` / `max_tokens_per_run` / `max_monthly_usd` | Techos del circuit breaker. |
+| `budget.on_exceed` | `"warn"` o `"block"` al exceder el presupuesto. |
+| `budget.sanitize.{enabled,dedupe_logs,strip_blank,strip_comments}` | Controles del Sanitizer. |
+| `budget.pii_masking.enabled` | Enmascarado estructural de PII (ver `ARTIFACTS.md`). |
+| `debug` | `true` imprime, en cada puerta (chat, CLI, HTTP, MCP), qué se resolvió antes de correr una tarea: ruta del repo, cada agente/skill/prompt con su ruta resuelta (o `"inline"`), y las entradas de `focus`/`exclude` con su ruta absoluta. Por defecto `false`. Nunca se agrega solo por generar un `project.json` con `mova init` — es opt-in manual. |
+| `egress_audit` | Auditoría del contexto **ya sanitizado** justo antes de salir hacia el LLM, y/o un dry-run que corta la llamada — ver sección dedicada abajo. |
 
-`exclude` a nivel `tasks.<nombre>.exclude` sobreescribe (no combina con) el `exclude` de nivel proyecto — misma regla que `focus`. Si no se declara `exclude`, `focus` se comporta exactamente igual que antes de que esta clave existiera (además de la exclusión por defecto, siempre activa, de `.git`/`node_modules`/`vendor`/`dist`/`build`/`__pycache__`/`.venv`/`venv`/`.idea`/`.vscode`).
+Ver `docs/i18n/es/AST_FILTER.md` para la sintaxis exacta de `archivo::kind=nombre`.
 
-## Mensaje `[Focus] Selected ...`
-
-Cuando `focus` está configurado, `mova chat`, el tool `chat_completion` (MCP/HTTP) y Mova UI muestran una línea de estado con lo que se va a analizar — por ejemplo:
-
-```
-[Focus] Selected 3 items (45 file(s) total): server.js, backend-test.py 📎+1.
-```
-
-Distingue archivo de directorio, cuenta archivos reales (no targets de configuración), y lista hasta `focus_display_limit` nombres antes de colapsar el resto en el badge `📎+N`:
-
-```json
-{ "focus_display_limit": 4 }
-```
-
-Si no se declara, el valor por defecto es `2`. Cualquier número configurado se respeta tal cual — al superarlo siempre aparece el `+N`, sea cual sea el límite.
-
-## Ejemplo de workflow
+## `egress_audit` — auditoría y dry-run antes del proveedor LLM
 
 ```json
-{
-  "project": "mi-proyecto",
-  "repo": "examples/mi-proyecto-repo",
-  "workflow_path": "workflow.md"
+"egress_audit": {
+  "dry_run": true,
+  "output_file": ".mova/egress_sanitized.md"
 }
 ```
 
-Decir "lee workflow.md", "ejecuta workflow.md", "workflow.md mi-proyecto", etc. resuelve este proyecto, valida su Budget, y solo entonces carga el archivo — ver [COMMANDS.md §9](COMMANDS.md#workflowmd--ejecución-con-validación-de-budget). Sin `workflow_path`, Mova busca un `workflow.md` simple en la raíz de Mova, igual que antes de que existiera este campo.
-
-## Ejemplo de Budget
-
-```json
-{
-  "budget": { "max_tokens": 8000 },
-  "budget_path": "mova-budget-report.md"
-}
-```
-
-Sin `budget_path`, el reporte se escribe en `projects/<proyecto>/mova-budget-report.md`.
-
-## Ejemplo de historial de tokens
-
-```json
-{
-  "token_history_path": "mova-token-history.json"
-}
-```
-
-Sin este campo, el archivo se escribe en `projects/<proyecto>/mova-token-history.json`.
-
-## Ejemplo de tasks
-
-```json
-{
-  "tasks": {
-    "revisar": { "prompt": "review-project" },
-    "auditar": {
-      "prompt": "audit-consent-flow",
-      "agents": ["security-architect"],
-      "variables": { "module": "checkout" },
-      "focus": ["checkout.html"],
-      "budget": { "max_tokens": 4000 }
-    }
-  }
-}
-```
-
-## Ejemplo de Agents / Skills / Prompts
-
-```json
-{
-  "agents": { "domain": "base", "use": ["backend-dev", "qa-engineer"], "custom": [] },
-  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": ["mi-skill-propio"] }
-}
-```
-
-Los prompts se referencian por nombre desde el campo `"prompt"` de cada task (ver el ejemplo de **Tasks** arriba) — no existe un campo `prompts` separado a nivel raíz; un prompt se elige por task.
-
-## Más de un proyecto — agents/skills/prompts compartidos, nada duplicado
-
-No existe un único `project.json` con varios proyectos adentro — cada proyecto es su propia carpeta con su propio archivo:
-
-```text
-projects/
-├── proyecto-a/
-│   └── project.json
-└── proyecto-b/
-    └── project.json
-```
-
-**`projects/proyecto-a/project.json`**
-```json
-{
-  "project": "proyecto-a",
-  "repo": "examples/proyecto-a-repo",
-  "lang": "es",
-  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
-  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
-  "tasks": { "revisar": { "prompt": "review-project" } },
-  "budget_path": "mova-budget-report.md",
-  "token_history_path": "mova-token-history.json"
-}
-```
-
-**`projects/proyecto-b/project.json`**
-```json
-{
-  "project": "proyecto-b",
-  "repo": "examples/proyecto-b-repo",
-  "lang": "es",
-  "agents": { "domain": "base", "use": ["security-architect"], "custom": [] },
-  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": ["mi-skill-propio"] },
-  "tasks": { "auditar": { "prompt": "audit-consent-flow" } },
-  "budget_path": "mova-budget-report.md",
-  "token_history_path": "mova-token-history.json"
-}
-```
-
-Agents/skills/prompts son recursos globales (viven una sola vez, bajo `agents/`, `skills/`, `prompts/` en la raíz de Mova); cada proyecto solo los **referencia por nombre** en `use`/`prompt`. Si `proyecto-a` y `proyecto-b` usan `"lazy-minimalism"`, es literalmente el mismo archivo de skill para los dos — nada se copia por proyecto. Cada proyecto mantiene su propio `budget_path`/`token_history_path`/`workflow_path`, así que sus reportes de Budget e historial de tokens nunca se mezclan.
-
-## Budget (y el Token Firewall)
-
-`"budget"` (a nivel de proyecto o de task — el `budget` propio de una
-task reemplaza el del proyecto, misma regla que `focus`) siempre aceptó
-`max_tokens`, un techo duro de tamaño de contenido. Desde el Token
-Firewall, también acepta cada campo de abajo — un conjunto de etapas
-determinísticas, sin IA, que reducen lo que se envía a un modelo y
-gobiernan cuánto cuesta, corriendo automáticamente antes de ese gate.
-**Cada etapa está habilitada por defecto, EXCEPTO `pii_masking`** —
-poné el campo correspondiente en `false` (o, en el caso de
-`pii_masking`, en `true` para activarla) para cambiar solo esa etapa:
-
-```json
-{
-  "budget": {
-    "max_tokens": 20000,
-    "max_tokens_per_run": 8000,
-    "max_monthly_usd": 15.00,
-    "on_exceed": "warn",
-    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": false },
-    "pii_masking": { "enabled": false },
-    "cache_hint": true,
-    "circuit_breaker": true,
-    "token_estimation": true,
-    "detailed_reports": true,
-    "context_cache": true
-  }
-}
-```
-
-| Campo | Tipo | Por defecto | Qué hace |
+| Clave | Tipo | Default | Qué hace |
 |---|---|---|---|
-| `max_tokens` | number | ninguno | Techo duro sobre el contexto ensamblado — sin cambios desde antes del Token Firewall |
-| `max_tokens_per_run` | number | ninguno (0 = sin techo) | Circuit Breaker: aborta/avisa si una corrida supera esta cantidad de tokens |
-| `max_monthly_usd` | number | ninguno (0 = sin techo) | Circuit Breaker: aborta/avisa si el gasto registrado de este proyecto en el mes calendario actual llega a este monto |
-| `on_exceed` | `"warn"` \| `"abort"` | `"warn"` | Qué hace el Circuit Breaker cuando se supera un límite de arriba |
-| `sanitize` | object | habilitado, conservador | Configuración propia del Sanitizer — ver abajo |
-| `pii_masking` | object | **desactivado** (`{"enabled": false}` o ausente) | Etapa OPCIONAL de pseudonimización estructural de PII (forma de palabra + entropía de Shannon, sin listas de palabras) — poné `{"enabled": true}` para activarla explícitamente en este proyecto. Sus umbrales/pesos viven en `config/policy.json`, no acá. Ver [COMMANDS.md § Token Firewall § PII Masking](COMMANDS.md#token-firewall) y `skills/base/i18n/es/compliance/pii-context-reduction.md` — **no** es una garantía de anonimización legal ni de cumplimiento de la Ley 21.719/GDPR |
-| `cache_hint` | boolean | `true` | Habilita el Cache Layout Guard (reordena el system prompt para el prompt-caching del proveedor) — poné `false` para desactivarlo |
-| `circuit_breaker` | boolean | `true` | Habilita el mecanismo del Circuit Breaker en sí, independiente de si hay un límite configurado — poné `false` para desactivarlo aunque los límites sigan configurados |
-| `token_estimation` | boolean | `true` | Usa el tokenizador real (tiktoken) — poné `false` para una aproximación rápida de caracteres/4 (es una decisión de rendimiento, no de ahorro) |
-| `detailed_reports` | boolean | `true` | Incluye el desglose completo (tokens por archivo, comparación antes/después) en mova-budget-report.md — poné `false` para solo los totales |
-| `context_cache` | boolean | `true` | Habilita la caché local propia de Mova de los resultados del Sanitizer (mova-context-cache.json) — ahorra tiempo real en corridas repetidas sobre archivos sin cambios |
+| `dry_run` | bool | `false` | Si es `true`: se completa la gobernanza/sanitización (y el log, si `output_file` está configurado), pero **nunca se llama al proveedor LLM**. El cliente recibe una respuesta exitosa indicando que el dry-run terminó y que no hubo inferencia. |
+| `output_file` | string | `""` (deshabilitado) | Dónde se agrega el log del contexto sanitizado. Independiente de `dry_run` — se puede auditar sin dry-run, o hacer dry-run sin auditar. |
 
-### `sanitize` — configuración propia del Sanitizer
+**Con el bloque ausente:** `dry_run=false`, `output_file=""` — comportamiento idéntico al actual, sin cambios.
 
-| Campo | Tipo | Por defecto | Qué hace |
-|---|---|---|---|
-| `enabled` | boolean | `true` | Interruptor general de toda la etapa Sanitizer |
-| `dedupe_logs` | boolean | `true` | Colapsa 3+ líneas consecutivas casi idénticas (ignorando un timestamp inicial) en la primera ocurrencia + un contador — el caso de "50 líneas de INFO 200 OK" |
-| `strip_blank` | boolean | `true` | Colapsa corridas de 3+ líneas en blanco a 1 |
-| `strip_comments` | boolean | `false` | Elimina bloques de solo comentarios de 5+ líneas — desactivado por defecto, ya que una tarea sobre documentación los necesita intactos |
+### Resolución de `output_file` (siempre relativa al `project.json`, nunca al directorio de trabajo)
 
-Ver [COMMANDS.md § Token Firewall](COMMANDS.md#token-firewall) para la
-explicación completa de cada etapa, cómo se comporta el Cache Layout
-Guard según el proveedor (Claude, GPT, Gemini, Ollama...), y un ejemplo
-completo con ahorros reales medidos.
+- Ruta relativa → se resuelve contra `projects/<proyecto>/`, **no** contra el directorio desde donde se ejecutó `mova`.
+  Ejemplo: en `projects/02-pii-compliance-governance/project.json`, `"output_file": ".mova/egress_sanitized.md"` escribe en `projects/02-pii-compliance-governance/.mova/egress_sanitized.md`.
+- Ruta absoluta — Unix (`/var/log/...`), Windows (`C:\...`, `D:\...`, `E:\...`) o UNC (`\\servidor\recurso\...`) — se usa tal cual, reconocida de forma multiplataforma sin importar en qué SO corre el binario de Mova (misma utilidad que ya usan `write_file`/`create_directory`).
+- Si `output_file` termina en `/` o `\` (nombra un directorio, no un archivo), se usa el nombre por defecto **`egress_sanitized.md`** dentro de ese directorio. Un nombre sin barra final (aunque no tenga extensión, ej. `.mova`) se respeta tal cual — no se le fuerza extensión.
+- Los directorios necesarios se crean automáticamente (`os.MkdirAll`, permisos estándar). El archivo se abre siempre en modo **append**: nunca se sobrescribe una ejecución anterior, y cada ejecución queda delimitada con su propio `execution_id` y `timestamp`.
+- Si el archivo configurado no puede crearse o escribirse, `mova` **devuelve error y no llama al proveedor LLM** — el mismo comportamiento en CLI/Chat, MCP y HTTP, porque las tres puertas comparten una única implementación (`models.Session.Send`/`SendStream`).
 
-## Jobs
+### Qué se escribe
 
-`jobs` es un array de tareas programadas en segundo plano, ejecutadas
-por el Job Engine (`mova.local/jobs`) — el mismo motor que comparten
-`mova jobs run`, la tool MCP "run_job", `POST /jobs/run` y el daemon
-`mova jobs start`. Cada entrada combina un `schedule` (cron) con una o
-más acciones independientes:
-
-```json
-{
-  "jobs": [
-    {
-      "comment": "Auditoría nocturna de checkout y cookies",
-      "schedule": "0 2 * * *",
-      "tasks": ["auditar-checkout", "auditar-cookies"],
-      "save": "reports/auditoria_{date}.pdf",
-      "budget": { "focus": true },
-      "memory": "Auditoría de checkout y cookies realizada ({date})"
-    },
-    {
-      "comment": "Archivado mensual de memoria, sin tasks",
-      "schedule": "0 3 1 * *",
-      "memory_archive": { "days": 30 }
-    },
-    {
-      "comment": "Ejecutar todas las tareas del proyecto",
-      "schedule": "0 4 * * *",
-      "tasks": ["*"],
-      "save": "reports/auditoria_completa_{date}.pdf"
-    },
-    {
-      "comment": "Eliminar archivos temporales",
-      "schedule": "0 5 * * *",
-      "delete": ["reports/temp_*.csv", "logs/draft.md"]
-    }
-  ]
-}
-```
-
-| Campo | Tipo | Qué hace |
-|---|---|---|
-| `comment` | string | texto libre, nunca se interpreta — para humanos que leen project.json |
-| `schedule` | string | cron de 5 campos (`min hour dom month dow`) — ver README.md § Cron para ejemplos |
-| `tasks` | array de strings | nombres de tasks del `tasks` del proyecto, o `["*"]` para ejecutarlas todas |
-| `save` | string | ruta de salida; `{date}` se expande a `YYYY-MM-DD`. El formato se elige por la extensión (`.md`, `.pdf`, `.docx`...), igual que `/save` en el chat |
-| `memory` | string | texto agregado a `memory.md` vía `AppendMemory`; soporta `{date}` y `{time}` |
-| `memory_archive` | object | `{ "days": N }` — archiva entradas de memoria más viejas que N días (usa la retención propia del `archive` del proyecto si se omite) |
-| `delete` | array de strings | patrones glob (relativos a `repo`), ej. `"reports/temp_*.csv"` |
-| `budget` | object | `{ "focus": true }` — también escribe un `mova-budget-report.md`, igual que `mova budget --focus`. Es distinto del campo `budget` de nivel superior (un techo de tokens): este es una ACCIÓN, no un gate |
-
-Cada campo es independiente — un job puede declarar cualquier
-subconjunto de `tasks`/`save`/`memory`/`memory_archive`/`delete`/`budget`.
-Todas las acciones declaradas de un job se ejecutan en este orden fijo:
-tasks → save → memory → memory_archive → delete → budget, sin importar
-el orden en que aparezcan en el JSON.
-
-Para ejecutar jobs bajo demanda, ignorando `schedule`, usar `mova jobs
-run <project>` (o `mova jobs run <project> <index>` para un solo job)
-— ver COMMANDS.md § Jobs.
-
-## Multiagente (grupos de agentes)
-
-Un **grupo** es un directorio bajo `projects/` que contiene varios
-agentes independientes, cada uno un proyecto normal con su propio
-`project.json`:
-
-```text
-projects/
-    ventas_online/
-        config.json
-        vendedor/
-            project.json
-        atencionCliente/
-            project.json
-        soporte/
-            project.json
-```
-
-`projects/ventas_online/config.json` es el archivo padre/orquestador:
-
-```json
-{
-  "group": "ventas_online",
-  "description": "Agentes de ventas, soporte y atención al cliente",
-  "agents": ["vendedor", "atencionCliente", "soporte"]
-}
-```
-
-| Campo | Tipo | Para qué sirve |
-|---|---|---|
-| `group` | string | nombre visible (usa el nombre del directorio si se omite) |
-| `description` | string | texto libre |
-| `agents` | array de strings | nombres de subdirectorios, cada uno con su propio `project.json`. Si se omite, se auto-descubre cada subdirectorio que contenga un `project.json` |
-
-Cada agente se referencia como `<group>/<agent>` — un nombre de
-proyecto normal que cualquier comando existente ya entiende (`mova run
-ventas_online/vendedor`, `mova budget ventas_online/vendedor`, `mova
-jobs run ventas_online/vendedor`, ...). `mova agents run
-ventas_online` ejecuta todos los agentes secuencialmente, a través del
-mismo pipeline de ensamblado+Budget-gate que usa `mova run` para
-cualquier proyecto — ver COMMANDS.md § Multiagente.
-
-## Diagram (opcional)
-
-Preferencias del diagrama visual (`mova run <proyecto> --diagram`) —
-ver [COMMANDS.md § Diagramas visuales](COMMANDS.md#21-diagramas-visuales--mova-run-proyecto---diagram)
-para el comando completo. Ausente = se usan los valores por defecto
-(`verbose`, exportar a `svg`).
-
-```json
-{
-  "diagram": {
-    "detail_level": "simple",
-    "export_formats": ["svg", "png"]
-  }
-}
-```
-
-| Campo | Tipo | Por defecto | Qué hace |
-|---|---|---|---|
-| `detail_level` | `"simple"` \| `"verbose"` | `"verbose"` | Nivel de detalle del diagrama — `--diagram` en la CLI puede pisar este valor por corrida |
-| `export_formats` | array de strings | `["svg"]` | Formatos por defecto cuando `mova run --diagram` se llama sin `--export` |
-
-## Arquitectura distribuida (endpoints remotos)
-
-`llm_profile` no distingue entre un modelo corriendo en `localhost` y uno corriendo en otra máquina — el único campo que cambia es `base_url`, dentro del archivo que `llm_profile.config` apunta (`config/models/<proveedor>/<archivo>.json`), nunca en `project.json` mismo. Esto es lo que permite un despliegue centralizado (ver [DEPLOY.md](DEPLOY.md)): una sola instancia — por ejemplo un contenedor Docker en Oracle Cloud o AWS corriendo `mova mcp start` + Ollama — sirve de coprocesador de inferencia para varios clientes locales, sin que ninguno de ellos tenga que correr el modelo por su cuenta.
-
-```json
-{
-  "base_url": "http://100.x.y.z:11434",
-  "model": "llama3.2:3b",
-  "timeout_seconds": 300
-}
-```
-
-`100.x.y.z` es, a propósito, una dirección de **red privada** (Tailscale, WireGuard, o la red virtual de un proveedor Cloud) — nunca una IP pública sin protección: ver DEPLOY.md § Seguridad de red para el porqué. El repositorio incluye un ejemplo completo y listo para probar en `config/models/ollama/llama3.2.3b-remote.json` y `projects/ejemplo-ley21719-pii-context/ai-privacy-reviewer/project_remote.json` — misma convención `project_local.json` / `project_cloud.json` / `project_remote.json` que ya usa el ejemplo de la Ley 21.719 para alternar entre modelo local, modelo Cloud, y modelo remoto sin cambiar una sola línea de código.
-
-**Separación estricta de responsabilidades — por qué el servidor remoto nunca ve el repositorio:**
-
-| Ocurre siempre en el CLIENTE (esta máquina) | Ocurre siempre en el SERVIDOR remoto |
-|---|---|
-| Lectura de `project.json`, `agents/`, `skills/`, `prompts/`, `memory.md` | Nada de lo anterior — el servidor remoto no tiene ni necesita el repositorio |
-| Sanitización (`budget.sanitize`) y deduplicación | — |
-| PII Masking (`budget.pii_masking`) | — |
-| Ensamblado del contexto final (Token Firewall completo) | — |
-| Envío del payload final ya listo a `base_url` | Recepción del payload e inferencia — coprocesador *stateless*, no persiste nada del contenido del proyecto |
-
-Esta separación no es una opción configurable: es cómo está construido el pipeline (`budget.BuildGatedContext` corre siempre localmente, antes de que `models.Session.Send` haga la llamada HTTP saliente) — el mismo motor sirve tanto para un modelo en `localhost` como para uno en Oracle Cloud, sin ninguna rama de código distinta entre ambos casos.
+Únicamente el contexto **ya gobernado y sanitizado** (lo mismo que de verdad se enviaría al modelo) — nunca el contenido crudo pre-sanitización. Cada bloque incluye como mínimo `execution_id` y `timestamp` (UTC).

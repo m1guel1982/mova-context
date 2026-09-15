@@ -7,6 +7,7 @@ package core
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -28,6 +29,62 @@ func loadCore(adapter Adapter, kind, domain, lang, name string, loaded map[strin
 	}
 	loaded[name] = true
 	return c
+}
+
+// resolveKnowledgeOrLiteral extends "use"/"custom" (agents, skills) and
+// a task's "prompt" so each entry can be EITHER a file name (existing,
+// unchanged behavior — tried first, so nothing that already works
+// today changes) OR inline literal text typed straight into
+// project.json (e.g. "use": ["revisa el estilo de commits del repo"]).
+// A value only counts as "found as a file" when GetKnowledge returns
+// non-empty content; any other case (not found, adapter error, empty
+// file) falls back to treating value itself as the content, so a
+// person is never required to create a one-line .md file just to add
+// a short instruction. See docs/i18n/{es,en}/PROJECT.md § texto libre.
+func resolveKnowledgeOrLiteral(adapter Adapter, kind, domain, lang, value string) (content string, fromFile bool) {
+	if strings.TrimSpace(value) == "" {
+		return "", false
+	}
+	if c, err := adapter.GetKnowledge(kind, domain, lang, value); err == nil && c != "" {
+		return c, true
+	}
+	return value, false
+}
+
+// resolveDebugPath turns a repo-relative (or already-absolute) path
+// into the absolute path debug output should show, without asserting
+// the path actually exists — debug is a trace of what was RESOLVED,
+// not a validity check.
+func resolveDebugPath(root, p string) string {
+	if p == "" {
+		return root
+	}
+	if filepath.IsAbs(p) {
+		return filepath.Clean(p)
+	}
+	return filepath.Join(root, p)
+}
+
+// debugKnowledgeLoc renders where an agent/skill/prompt entry actually
+// came from for --debug output: its resolved file path when found on
+// disk, or "inline (free text)" when resolveKnowledgeOrLiteral fell
+// back to literal content (see engine.go's agents/skills/prompt
+// loops). Shows the PRIMARY candidate path GetKnowledge tries first
+// (domain/i18n/lang/name.md) - an approximation when one of its later
+// fallback candidates (see file_adapter.go's GetKnowledge doc comment,
+// steps 2-10) is what actually matched, since GetKnowledge itself
+// doesn't report which candidate won.
+func debugKnowledgeLoc(fromFile bool, kind, domain, lang, name string) string {
+	if !fromFile {
+		return "inline (free text)"
+	}
+	if domain == "" {
+		domain = "base"
+	}
+	if lang == "" {
+		lang = "es"
+	}
+	return fmt.Sprintf("%ss/%s/i18n/%s/%s.md", kind, domain, lang, name)
 }
 
 // ExtractMemoryBlock pulls ONLY the ```memory ... ``` block content from an LLM response.

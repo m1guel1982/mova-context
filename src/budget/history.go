@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 
 	"mova.local/core"
+	"mova.local/documents"
 )
 
 // ProviderAccumulator son los dos únicos números que se guardan por
@@ -38,7 +39,10 @@ type TokenHistory map[string]ProviderAccumulator
 // ningún caso especial por SO.
 func HistoryPath(root, project string, proj *core.Project) string {
 	if proj != nil && proj.TokenHistoryPath != "" {
-		if filepath.IsAbs(proj.TokenHistoryPath) {
+		if documents.IsAbsCrossPlatform(proj.TokenHistoryPath) {
+			if normalized, err := documents.NormalizeAbsPath(proj.TokenHistoryPath); err == nil {
+				return normalized
+			}
 			return proj.TokenHistoryPath
 		}
 		return filepath.Join(root, proj.TokenHistoryPath)

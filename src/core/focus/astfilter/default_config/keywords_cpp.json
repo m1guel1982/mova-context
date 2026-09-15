@@ -1,0 +1,37 @@
+{
+  "language": "cpp",
+  "extensions": [".cpp", ".cc", ".cxx", ".hpp", ".hxx"],
+  "kinds": {
+    "func": [
+      { "type": "function_definition" }
+    ],
+    "class": [
+      { "type": "class_specifier" },
+      { "type": "struct_specifier" }
+    ],
+    "struct": [
+      { "type": "struct_specifier" }
+    ],
+    "enum": [
+      { "type": "enum_specifier" }
+    ],
+    "namespace": [
+      { "type": "namespace_definition" }
+    ],
+    "type": [
+      { "type": "type_definition" },
+      { "type": "alias_declaration" }
+    ],
+    "var": [
+      { "type": "declaration" },
+      { "type": "field_declaration" }
+    ],
+    "macro": [
+      { "type": "preproc_def" },
+      { "type": "preproc_function_def" }
+    ],
+    "comment": [
+      { "type": "comment" }
+    ]
+  }
+}
