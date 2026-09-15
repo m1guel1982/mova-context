@@ -1,0 +1,483 @@
+{
+  "schema_version": "1.0",
+  "execution": {
+    "execution_id": "18d59b76aade82d0-1b096cefb5a060ff",
+    "repository": "https://github.com/fastapi/fastapi",
+    "branch": "master",
+    "commit": "50113da",
+    "task": "solve_dependencies get_dependant in fastapi/dependencies/utils.py",
+    "ignore_patterns": [
+      "docs/**",
+      "tests/**",
+      "*.lock",
+      "docs_src/**",
+      ".github/**",
+      "docs/en/**"
+    ],
+    "agent_client": "mova-cli",
+    "target_model": "n/a",
+    "policy_author": "system:default"
+  },
+  "context": {
+    "scanned": {
+      "files": 128,
+      "tokens": 207095
+    },
+    "selection": {
+      "candidate_files": 14,
+      "candidate_tokens": 117187,
+      "reduction_pct": 43.41
+    },
+    "final": {
+      "tokens": 117187,
+      "mode": "audit",
+      "actually_transformed": false
+    }
+  },
+  "decisions": {
+    "allowed": {
+      "files": 0,
+      "tokens": 0
+    },
+    "would_sanitize": {
+      "files": 14,
+      "tokens": 117187
+    },
+    "blocked": {
+      "files": 0,
+      "tokens": 0
+    },
+    "excluded": {
+      "files": 3125,
+      "tokens": 89908
+    },
+    "exclusion_reasons": {
+      "excluded_by_ignore_pattern": {
+        "files": 3008,
+        "tokens": 0
+      },
+      "not_relevant": {
+        "files": 3,
+        "tokens": 0
+      },
+      "not_relevant_to_task": {
+        "files": 114,
+        "tokens": 89908
+      }
+    }
+  },
+  "security": {
+    "mode": "audit",
+    "indicators": {
+      "files_with_pii": 14,
+      "files_with_secrets": 2,
+      "files_with_any_indicator": 14
+    },
+    "actions": {
+      "would_sanitize_files": 14,
+      "blocked_files": 0,
+      "detected_not_actioned_files": 0
+    },
+    "transformation": {
+      "tokens_redacted": 0,
+      "tokens_prevented_from_external": 0
+    }
+  },
+  "relevance": {
+    "method": "bm25+structural",
+    "task": "solve_dependencies get_dependant in fastapi/dependencies/utils.py",
+    "top_ranked": [
+      {
+        "rank": 1,
+        "path": "fastapi/dependencies/utils.py",
+        "score": 1018.95
+      },
+      {
+        "rank": 2,
+        "path": "fastapi/_compat/v2.py",
+        "score": 3
+      },
+      {
+        "rank": 3,
+        "path": "fastapi/applications.py",
+        "score": 3
+      },
+      {
+        "rank": 4,
+        "path": "fastapi/encoders.py",
+        "score": 3
+      },
+      {
+        "rank": 5,
+        "path": "fastapi/openapi/utils.py",
+        "score": 3
+      },
+      {
+        "rank": 6,
+        "path": "fastapi/security/http.py",
+        "score": 3
+      },
+      {
+        "rank": 7,
+        "path": "fastapi/security/oauth2.py",
+        "score": 3
+      },
+      {
+        "rank": 8,
+        "path": "fastapi/security/open_id_connect_url.py",
+        "score": 3
+      },
+      {
+        "rank": 9,
+        "path": "fastapi/utils.py",
+        "score": 3
+      },
+      {
+        "rank": 10,
+        "path": "scripts/docs.py",
+        "score": 3
+      }
+    ]
+  },
+  "findings": [
+    {
+      "path": "fastapi/_compat/v2.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.14,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 23
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 3334,
+        "after": 3334
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/applications.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.08,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 122
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 32249,
+        "after": 32249
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/dependencies/utils.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.03,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 11
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 7503,
+        "after": 7503
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/encoders.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.2,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 22
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 2151,
+        "after": 2151
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/openapi/utils.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.03,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 9
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 5443,
+        "after": 5443
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/routing.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.07,
+        "patterns": [
+          "Generic credential assignment",
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 168
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "policy_rule": "security.sanitize_on_generic_credential",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 45539,
+        "after": 45539
+      },
+      "redaction": {
+        "credential_shaped_values": 1
+      }
+    },
+    {
+      "path": "fastapi/security/api_key.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.2,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 13
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 1324,
+        "after": 1324
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/security/http.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.12,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 11
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 1882,
+        "after": 1882
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/security/oauth2.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.25,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 41
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 3293,
+        "after": 3293
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/security/open_id_connect_url.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.08,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 2
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 511,
+        "after": 511
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "fastapi/utils.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.13,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 6
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 949,
+        "after": 949
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "scripts/docs.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.37,
+        "patterns": [
+          "IP address",
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 122
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 6532,
+        "after": 6532
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "scripts/notify_translations.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.04,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 6
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 2695,
+        "after": 2695
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    },
+    {
+      "path": "scripts/translate.py",
+      "type": "pii_structural",
+      "detector": {
+        "id": "shannon_entropy_shape",
+        "score": 0.17,
+        "patterns": [
+          "structural PII pattern (Shannon entropy + shape rules)"
+        ],
+        "occurrences": 32
+      },
+      "decision": {
+        "action": "WOULD_SANITIZE",
+        "rule_id": "pii_masking.min_score",
+        "transformed": false
+      },
+      "tokens": {
+        "before": 3782,
+        "after": 3782
+      },
+      "redaction": {
+        "credential_shaped_values": 0
+      }
+    }
+  ]
+}

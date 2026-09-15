@@ -1,0 +1,94 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R /F2 8 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R /F2 8 0 R >> >> /Contents 6 0 R >>
+endobj
+5 0 obj
+<< /Length 1692 >>
+stream
+BT /F2 22 Tf 56 740 Td (MOVA CONTEXT TRACE) Tj ET
+BT /F1 11 Tf 56 710 Td (https://github.com/fastapi/fastapi \(branch: master\) - Task: solve_dependencies) Tj ET
+BT /F1 11 Tf 56 695 Td (get_dependant in fastapi/dependencies/utils.py) Tj ET
+BT /F1 11 Tf 56 676 Td (Execution ID: 18d59b76aade82d0-1b096cefb5a060ff - Commit: 50113da) Tj ET
+BT /F2 16 Tf 56 657 Td (Context reduction) Tj ET
+BT /F1 11 Tf 56 633 Td (Scanned: 128 files, 207,095 tok) Tj ET
+BT /F1 11 Tf 56 614 Td (Candidate: 14 files, 117,187 tok \(43.4% reduction\)) Tj ET
+BT /F2 16 Tf 56 595 Td (Selection summary) Tj ET
+BT /F1 11 Tf 56 571 Td (Candidate: 14 files / 117,187 tok) Tj ET
+BT /F1 11 Tf 56 552 Td (Excluded by task: 114 files / 89,908 tok) Tj ET
+BT /F2 16 Tf 56 533 Td (Top relevant files) Tj ET
+BT /F1 11 Tf 56 509 Td (#1 fastapi/dependencies/utils.py - 1018.95) Tj ET
+BT /F1 11 Tf 56 490 Td (#2 fastapi/_compat/v2.py - 3.00) Tj ET
+BT /F1 11 Tf 56 471 Td (#3 fastapi/applications.py - 3.00) Tj ET
+BT /F1 11 Tf 56 452 Td (#4 fastapi/encoders.py - 3.00) Tj ET
+BT /F1 11 Tf 56 433 Td (#5 fastapi/openapi/utils.py - 3.00) Tj ET
+BT /F1 11 Tf 56 414 Td (#6 fastapi/security/http.py - 3.00) Tj ET
+BT /F1 11 Tf 56 395 Td (#7 fastapi/security/oauth2.py - 3.00) Tj ET
+BT /F1 11 Tf 56 376 Td (#8 fastapi/security/open_id_connect_url.py - 3.00) Tj ET
+BT /F1 11 Tf 56 357 Td (#9 fastapi/utils.py - 3.00) Tj ET
+BT /F1 11 Tf 56 338 Td (#10 scripts/docs.py - 3.00) Tj ET
+BT /F2 16 Tf 56 319 Td (Cost estimate) Tj ET
+BT /F1 11 Tf 56 295 Td (claude-haiku: $0.09 USD) Tj ET
+BT /F1 11 Tf 56 276 Td (claude-sonnet: $0.35 USD) Tj ET
+BT /F1 11 Tf 56 257 Td (gpt-4.1: $0.23 USD) Tj ET
+BT /F1 11 Tf 56 238 Td (gemini-flash: $0.0088 USD) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Length 1521 >>
+stream
+BT /F1 11 Tf 56 740 Td (Local \(Ollama/LM Studio/vLLM\): $0) Tj ET
+BT /F2 16 Tf 56 721 Td (Policy decisions) Tj ET
+BT /F1 11 Tf 56 697 Td (Allowed: 0 files / 0 tok) Tj ET
+BT /F1 11 Tf 56 678 Td (Would sanitize: 14 files / 117,187 tok) Tj ET
+BT /F1 11 Tf 56 659 Td (Blocked: 0 files / 0 tok) Tj ET
+BT /F2 16 Tf 56 640 Td (Audit mode breakdown) Tj ET
+BT /F1 11 Tf 56 616 Td (Actually transformed: 0 tok) Tj ET
+BT /F1 11 Tf 56 597 Td (Safe now: 0 tok) Tj ET
+BT /F1 11 Tf 56 578 Td (After sanitization: 117,187 tok) Tj ET
+BT /F2 16 Tf 56 559 Td (Security metrics) Tj ET
+BT /F1 11 Tf 56 535 Td (PII indicators: 14 - Secret indicators: 2) Tj ET
+BT /F1 11 Tf 56 516 Td (Detected not actioned: 0 - Tokens redacted: 0) Tj ET
+BT /F2 16 Tf 56 497 Td (Repository composition) Tj ET
+BT /F1 11 Tf 56 473 Td (fastapi - 88.9%) Tj ET
+BT /F1 11 Tf 56 454 Td (scripts - 11.1%) Tj ET
+BT /F2 16 Tf 56 435 Td (Traceability & interpretation) Tj ET
+BT /F1 11 Tf 56 411 Td (execution_id: 18d59b76aade82d0-1b096cefb5a060ff) Tj ET
+BT /F1 11 Tf 56 392 Td (commit: 50113da - task: solve_dependencies get_dependant in) Tj ET
+BT /F1 11 Tf 56 377 Td (fastapi/dependencies/utils.py) Tj ET
+BT /F1 11 Tf 56 358 Td (ignore: docs/**, tests/**, *.lock, docs_src/**, .github/**, docs/en/**) Tj ET
+BT /F1 11 Tf 56 339 Td (Executed in Audit Mode: this run only analyzed the repository. No file was) Tj ET
+BT /F1 11 Tf 56 324 Td (modified, sanitized, or redacted on disk.) Tj ET
+BT /F1 11 Tf 56 305 Td (Full detailed findings \(14\) in pii-audit-log.json.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+8 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000000393 00000 n 
+0000002136 00000 n 
+0000003708 00000 n 
+0000003805 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+3907
+%%EOF
