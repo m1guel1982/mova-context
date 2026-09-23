@@ -72,6 +72,24 @@ func arg(i int, def string) string {
 	return def
 }
 
+// valueFlags lists every long flag that consumes the NEXT argument as
+// its value. positionalArgs uses it to skip those values, so a flag's
+// value is never mistaken for a positional argument (project/task).
+// Boolean flags (--focus, --diagram, --prune-docstrings, ...) are
+// deliberately absent: they consume nothing.
+var valueFlags = map[string]bool{
+	"--export":           true,
+	"--output":           true,
+	"--path":             true,
+	"--repo":             true,
+	"--branch":           true,
+	"--task":             true,
+	"--ignore":           true,
+	"--port":             true,
+	"--policies_include": true,
+	"--policies_exclude": true,
+}
+
 // positionalArgs returns the first two non-flag arguments starting at
 // os.Args[startIdx] — used by commands like `mova budget [project] [task]
 // --focus` that combine positional args with boolean flags, so a flag
@@ -81,9 +99,16 @@ func arg(i int, def string) string {
 func positionalArgs(startIdx int) (first, second string) {
 	var found []string
 	for i := startIdx; i < len(os.Args); i++ {
-		if !strings.HasPrefix(os.Args[i], "--") {
-			found = append(found, os.Args[i])
+		if strings.HasPrefix(os.Args[i], "--") {
+			// Skip this flag AND, for the flags that take one, its
+			// value — otherwise `mova context-trace proj --export md`
+			// reads "md" as the task name (see valueFlags).
+			if valueFlags[os.Args[i]] {
+				i++
+			}
+			continue
 		}
+		found = append(found, os.Args[i])
 	}
 	if len(found) > 0 {
 		first = found[0]

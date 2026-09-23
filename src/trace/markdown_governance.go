@@ -27,7 +27,7 @@ func RenderGovernanceMarkdown(d *Data) string {
 	imp := d.SecurityImpact
 
 	fmt.Fprintf(&b, "\n## Status\n\n**%s**\n\nExecution ID: `%s` · Repository state: `%s` · Task: `%s`\n\n", d.GovernanceStatus, d.ExecutionID, orNA(d.CommitHash), taskOrNone(d.TaskName))
-	fmt.Fprintf(&b, "Agent: `%s` · Target model: `%s` · Policy author: `%s`\n\n", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "%s: `%s` · %s: `%s` · %s: `%s`\n\n", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
 
 	b.WriteString("## Context decision\n\n")
 	fmt.Fprintf(&b, "| Stage | Files | Tokens |\n|---|---:|---:|\n")

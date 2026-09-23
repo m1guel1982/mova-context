@@ -168,7 +168,7 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 	// BuildGatedContext runs (see gated_context.go's applyPIIMasking);
 	// `mova budget` never sends anything to a model, but the report
 	// should show real numbers when the project has this enabled.
-	piiStats := applyPIIMasking(root, sections, cfg)
+	piiStats := applyPIIMasking(root, proj, sections, cfg)
 
 	prices, err := LoadPrices(root)
 	if err != nil {

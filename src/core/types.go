@@ -2,7 +2,10 @@
 // Single source of truth. No duplication.
 package core
 
-import "path/filepath"
+import (
+	"encoding/json"
+	"path/filepath"
+)
 
 // Project maps project.json exactly.
 type Project struct {
@@ -91,6 +94,66 @@ type Project struct {
 	// false, OutputFile ""), zero behavior change — same "declare
 	// nothing, get today's behavior" rule as Diagram/Archive above.
 	EgressAudit *EgressAuditConfig `json:"egress_audit,omitempty"`
+
+	// Policies: optional per-project policy selection that COMPLETELY
+	// overrides config/policy.json's own list (see PolicySelector and
+	// ResolvePolicyRequest). Nil/absent means this project
+	// declares no policy selection of its own — see
+	// ResolvePolicyRequest for exactly what that implies.
+	Policies *PolicySelector `json:"policies,omitempty"`
+}
+
+// PolicySelector maps project.json's (and config/policy.json's)
+// "policies" value. Two equivalent JSON shapes are accepted so the
+// simple case stays simple and nothing already in the wild breaks:
+//
+//	"policies": ["security.json", "review.json"]
+//	"policies": { "include": ["security.json"], "exclude": ["pii_strict.json"] }
+//
+// The bare-array form is read as Include with an empty Exclude.
+// See ResolvePolicyRequest for resolution/precedence and
+// docs/i18n/{es,en}/PROJECT_JSON.md § policies for the user-facing
+// contract.
+type PolicySelector struct {
+	// Include: policy files to load, in order. Each entry is either a
+	// bare file name resolved by RECURSIVE search under config/policy/
+	// ("pii_strict.json"), a relative path resolved against the Mova
+	// root ("config/custom/ventas.json"), or a cross-platform absolute
+	// path (Unix "/etc/...", Windows "C:\...", UNC "\\server\share\...").
+	Include []string `json:"include"`
+	// Exclude: file names (or paths) to drop even when Include — or a
+	// recursive match — would otherwise have picked them up. Matched by
+	// base file name, case-insensitively, so "pii_strict.json" excludes
+	// it no matter which directory it was found in.
+	Exclude []string `json:"exclude"`
+	// declared records that a "policies" key was physically present in
+	// the JSON, which is different from it being present but empty —
+	// see UnmarshalJSON and ResolvePolicyRequest.
+	declared bool
+}
+
+// Declared reports whether a "policies" key was actually present in the
+// source JSON (as opposed to absent entirely).
+func (p *PolicySelector) Declared() bool { return p != nil && p.declared }
+
+// UnmarshalJSON accepts both documented shapes (bare array / object).
+func (p *PolicySelector) UnmarshalJSON(data []byte) error {
+	p.declared = true
+	var asArray []string
+	if err := json.Unmarshal(data, &asArray); err == nil {
+		p.Include = asArray
+		p.Exclude = nil
+		return nil
+	}
+	var asObject struct {
+		Include []string `json:"include"`
+		Exclude []string `json:"exclude"`
+	}
+	if err := json.Unmarshal(data, &asObject); err != nil {
+		return err
+	}
+	p.Include, p.Exclude = asObject.Include, asObject.Exclude
+	return nil
 }
 
 // EgressAuditConfig maps project.json's optional "egress_audit" object:

@@ -31,7 +31,8 @@ func RenderContextReportMarkdown(d *Data) string {
 	} else {
 		fmt.Fprintf(&b, "**Project:** %s\n\n**Task:** %s\n\n**project.json:** `%s`\n\n", d.ProjectName, d.TaskName, d.ProjectJSONPath)
 	}
-	fmt.Fprintf(&b, "**Agent:** `%s`  ·  **Target model:** `%s`  ·  **Policy author:** `%s`\n\n", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "**%s:** `%s`  ·  **%s:** `%s`  ·  **%s:** `%s`\n\n", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "**%s:** `%s`  ·  **%s:** `%s`\n\n", i18n.T("reports.policy_source_label"), orNA(d.PolicySource), i18n.T("reports.policy_version_label"), orNA(d.PolicyVersion))
 
 	if len(d.Components) > 0 {
 		b.WriteString("## Context composition\n\n| Layer | Tokens |\n|---|---:|\n")

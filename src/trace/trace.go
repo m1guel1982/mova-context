@@ -39,10 +39,10 @@ type Options struct {
 	// still sees the FULL original content — pruning only ever
 	// shrinks what gets counted/exported, never what gets scored.
 	PruneDocstrings bool
-	RepoURL        string // --repo <url> (empty for a local project)
-	Branch         string // specific branch to clone; "" = the repository's default branch
-	ExportFormat   string // "pdf" | "md" - defaults to DefaultExportFormat ("md")
-	Output         string // --output; "" = each mode's own default (see runLocal/runRemote)
+	RepoURL         string // --repo <url> (empty for a local project)
+	Branch          string // specific branch to clone; "" = the repository's default branch
+	ExportFormat    string // "pdf" | "md" - defaults to DefaultExportFormat ("md")
+	Output          string // --output; "" = each mode's own default (see runLocal/runRemote)
 	// GenerateProjectJSON: when the analysis is remote and this is
 	// true, writes the suggested project.json without asking for
 	// interactive confirmation (CLI/Chat collect that confirmation
@@ -61,6 +61,29 @@ type Options struct {
 	AgentClient  string // "mova-cli" (CLI/Chat) or the real MCP client
 	TargetModel  string // "<provider>/<model>" from the active llm_profile
 	PolicyAuthor string // see core.ResolvePolicyAuthor
+
+	// PolicyInclude/PolicyExclude: --policies_include/--policies_exclude
+	// (already split on commas by the caller — see
+	// core.SplitPolicyList). Highest precedence of all policy
+	// layers; empty means "this door declared nothing", which lets
+	// project.json and then config/policy.json decide (see
+	// core.ResolvePolicyRequest).
+	PolicyInclude []string
+	PolicyExclude []string
+}
+
+// resolvePolicyRequest builds the run's policy selection from the full
+// precedence chain: CLI flags > project.json's "policies" >
+// config/policy.json's "policies". Kept here, in the one place both
+// runLocal and runRemote pass through, so no door can drift.
+func resolvePolicyRequest(adapter core.Adapter, opts Options) core.PolicyRequest {
+	var proj *core.Project
+	if opts.Project != "" && adapter != nil {
+		if p, err := adapter.GetProject(opts.Project); err == nil {
+			proj = p
+		}
+	}
+	return core.ResolvePolicyRequest(proj, core.OrchestratorPolicySelector(opts.Root), opts.PolicyInclude, opts.PolicyExclude)
 }
 
 // Result is what Run returns - each door decides how to show it
@@ -117,7 +140,7 @@ func Run(adapter core.Adapter, opts Options) (*Result, error) {
 
 func runLocal(adapter core.Adapter, opts Options) (*Result, error) {
 	progress(opts, 10, "Reading project.json...")
-	d, err := AnalyzeLocal(adapter, opts.Root, opts.Project, opts.Task, opts.Origin)
+	d, err := AnalyzeLocal(adapter, opts.Root, opts.Project, opts.Task, opts.Origin, resolvePolicyRequest(adapter, opts))
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +194,7 @@ func runRemote(opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	d, err := AnalyzeRemote(dir, opts.RepoURL, branch, opts.Origin, opts.Root, opts.Task, opts.IgnorePatterns, prices, opts.PruneDocstrings, opts.OnProgress)
+	d, err := AnalyzeRemote(dir, opts.RepoURL, branch, opts.Origin, opts.Root, opts.Task, opts.IgnorePatterns, prices, opts.PruneDocstrings, opts.OnProgress, resolvePolicyRequest(nil, opts))
 	if err != nil {
 		return nil, err
 	}

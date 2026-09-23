@@ -55,6 +55,41 @@ func resolveKnowledgeOrLiteral(adapter Adapter, kind, domain, lang, value string
 // into the absolute path debug output should show, without asserting
 // the path actually exists — debug is a trace of what was RESOLVED,
 // not a validity check.
+// writePolicyDebugLines appends one "[debug] policy include/exclude: ..."
+// line per resolved config/policy/*.json file — same plain, non-i18n
+// style as every other [debug] line in this file (see the package
+// comment's rationale), so `mova chat`'s debug output shows the exact
+// same policy paths `mova context-trace --debug` already does (see
+// trace/console.go's renderPolicyDebug, the OTHER renderer of this
+// same core.ResolvedPolicyDebug data). CLI flags aren't available
+// here (BuildContext has no --policies_include/--policies_exclude of
+// its own), so only project.json and config/policy.json are resolved
+// — exactly PolicyRequest's precedence with nil CLI overrides.
+func writePolicyDebugLines(dbg *strings.Builder, root, projectName string, proj *Project) {
+	req := ResolvePolicyRequest(proj, OrchestratorPolicySelector(root), nil, nil)
+	if !req.Declared {
+		return
+	}
+	for _, e := range ResolvedPolicyDebug(root, req) {
+		path := e.Path
+		if path == "" {
+			path = "(not found)"
+		}
+		if e.Included {
+			fmt.Fprintf(dbg, "[debug] policy include: %s -> %s\n", e.Name, path)
+		} else {
+			reason := "excluded by config"
+			if e.Reason == "excluded_not_found" {
+				reason = "excluded by config, not found"
+			} else if e.Reason == "not_found" {
+				reason = "not found"
+			}
+			fmt.Fprintf(dbg, "[debug] policy exclude: %s -> %s (%s)\n", e.Name, path, reason)
+		}
+	}
+	_ = projectName // kept in the signature for symmetry with other debug writers and possible future per-project logging
+}
+
 func resolveDebugPath(root, p string) string {
 	if p == "" {
 		return root

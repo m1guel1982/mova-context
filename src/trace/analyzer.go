@@ -11,8 +11,8 @@ import (
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/core/focus"
-	focusrender "mova.local/core/focus/render"
 	"mova.local/core/focus/astfilter"
+	focusrender "mova.local/core/focus/render"
 	"mova.local/core/focus/resolvers"
 	"mova.local/i18n"
 	"mova.local/sanitize"
@@ -22,11 +22,16 @@ import (
 var componentOrder = []string{"Agents", "Skills", "Prompt", "Focus", "Memory"}
 
 // AnalyzeLocal analyzes an already-configured local project (with a project.json).
-func AnalyzeLocal(adapter core.Adapter, root, projectName, taskName, origin string) (*Data, error) {
+func AnalyzeLocal(adapter core.Adapter, root, projectName, taskName, origin string, policyReq core.PolicyRequest) (*Data, error) {
 	proj, err := adapter.GetProject(projectName)
 	if err != nil {
 		return nil, err
 	}
+	// Resolve the policy cascade for THIS run (CLI > project.json >
+	// config/policy.json — see core.ResolvePolicyRequest) so the
+	// report names the policy files that actually applied, instead of a
+	// fixed string.
+	policySet := sanitize.LoadPolicySetFor(root, policyReq)
 	resolvedTask := core.ResolveTaskName(proj, taskName)
 	task, ok := proj.Tasks[resolvedTask]
 	if !ok {
@@ -78,10 +83,13 @@ func AnalyzeLocal(adapter core.Adapter, root, projectName, taskName, origin stri
 		// per-file governance breakdown only runs in AnalyzeRemote's
 		// discovery path - wiring both into one shared breakdown is a
 		// documented follow-up (see docs/i18n/en/COMMANDS.md).
-		GovernanceStatus: "CONTROLLED (project.json Context Governance)",
-		PolicySource:     "project.json + config/policy.json (Context Governance)",
-		ExecutionID:      NewExecutionID(),
-		CommitHash:       CommitHashFor(proj.Repo),
+		GovernanceStatus: i18n.T("reports.governance_status_controlled_project"),
+		PolicySource:     policySet.Source,
+		PolicyVersion:    policySet.Version, ExecutionID: NewExecutionID(),
+		CommitHash: CommitHashFor(proj.Repo),
+	}
+	if proj.Debug {
+		d.PolicyDebug = core.ResolvedPolicyDebug(root, policyReq)
 	}
 	return d, nil
 }
@@ -92,7 +100,7 @@ func AnalyzeLocal(adapter core.Adapter, root, projectName, taskName, origin stri
 // Mova Context install root (used only to load the governance policy
 // cascade — config/policy.json / config/policy/*.json — via
 // newGovernanceEngine; see governance.go).
-func AnalyzeRemote(repoDir, repoURL, branch, origin, root, task string, ignorePatterns []string, prices *budget.PricesConfig, pruneDocstrings bool, onProgress ProgressFunc) (*Data, error) {
+func AnalyzeRemote(repoDir, repoURL, branch, origin, root, task string, ignorePatterns []string, prices *budget.PricesConfig, pruneDocstrings bool, onProgress ProgressFunc, policyReq core.PolicyRequest) (*Data, error) {
 	info, err := os.Stat(repoDir)
 	if err != nil || !info.IsDir() {
 		return nil, fmt.Errorf("the directory to analyze does not exist or is not valid: %s", repoDir)
@@ -111,7 +119,7 @@ func AnalyzeRemote(repoDir, repoURL, branch, origin, root, task string, ignorePa
 		focusCounts.Excluded += n
 	}
 
-	g := newGovernanceEngine(root)
+	g := newGovernanceEngine(root, policyReq)
 
 	// --ignore runs HERE, at Discovery time, before any file content
 	// is read - an ignored file costs zero tokenization work and never
@@ -283,33 +291,33 @@ func AnalyzeRemote(repoDir, repoURL, branch, origin, root, task string, ignorePa
 	safeNowTokens := g.counts.SafeToSendNowTokens()
 
 	d := &Data{
-		Origin:           origin,
-		IsRemote:         true,
-		RepoURL:          repoURL,
-		Branch:           branch,
-		RepoDir:          repoDir,
-		Focus:            focusCounts,
-		Firewall:         firewall,
-		TotalTokens:      totalTokens,
-		MaxTokens:        0,
-		Costs:            costRowsFromModelCosts(budget.EstimateCost(finalTokens, prices)),
-		CostsSafeNow:     costRowsFromModelCosts(budget.EstimateCost(safeNowTokens, prices)),
-		Encoding:         encoding,
-		DirBreakdown:     buildDirBreakdown(dirTokens, dirFiles, totalTokens),
-		GovernanceStatus: governanceStatus(false, g.counts),
-		PolicySource:     g.policy.Source,
-		PolicyVersion:    g.policy.Version,
-		StateTotals:      g.counts,
-		Findings:         g.findings,
-		SecurityImpact:   g.impact,
-		ExclusionReasons: g.exclusionRows(),
-		ModelCompat:      modelCompatRows(prices, finalTokens, root),
-		ExecutionID:      NewExecutionID(),
-		CommitHash:       CommitHashFor(repoDir),
-		TaskName:         task,
-		IgnorePatterns:   ignorePatterns,
+		Origin:               origin,
+		IsRemote:             true,
+		RepoURL:              repoURL,
+		Branch:               branch,
+		RepoDir:              repoDir,
+		Focus:                focusCounts,
+		Firewall:             firewall,
+		TotalTokens:          totalTokens,
+		MaxTokens:            0,
+		Costs:                costRowsFromModelCosts(budget.EstimateCost(finalTokens, prices)),
+		CostsSafeNow:         costRowsFromModelCosts(budget.EstimateCost(safeNowTokens, prices)),
+		Encoding:             encoding,
+		DirBreakdown:         buildDirBreakdown(dirTokens, dirFiles, totalTokens),
+		GovernanceStatus:     governanceStatus(false, g.counts),
+		PolicySource:         g.policy.Source,
+		PolicyVersion:        g.policy.Version,
+		StateTotals:          g.counts,
+		Findings:             g.findings,
+		SecurityImpact:       g.impact,
+		ExclusionReasons:     g.exclusionRows(),
+		ModelCompat:          modelCompatRows(prices, finalTokens, root),
+		ExecutionID:          NewExecutionID(),
+		CommitHash:           CommitHashFor(repoDir),
+		TaskName:             task,
+		IgnorePatterns:       ignorePatterns,
 		PrunedDocstringFiles: prunedFiles,
-		RelevanceTop:     topRelevanceRows(relevanceScores, textByPath, repoDir, 10),
+		RelevanceTop:         topRelevanceRows(relevanceScores, textByPath, repoDir, 10),
 	}
 
 	return d, nil

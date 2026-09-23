@@ -1,8 +1,11 @@
 // report.go renders the Report (estimate.go) into mova-budget-report.md.
-// The report content is deliberately English-only, written in plain,
-// jargon-free sentences — whoever reads a cost report may not read the
-// rest of Mova Context's other output. Every section says plainly that
-// this is an estimate, never an exact bill.
+// Every sentence goes through i18n.T (see config/lang/{es,en}.json's
+// "budget" section) so the report follows config/lang/lang_active.json
+// like every other user-facing surface — see PROJECT_JSON.md/COMMANDS.md
+// for the multi-language contract. Plain jargon-free sentences either
+// way: whoever reads a cost report may not read the rest of Mova
+// Context's other output. Every section says plainly that this is an
+// estimate, never an exact bill.
 package budget
 
 import (
@@ -12,31 +15,32 @@ import (
 
 	"mova.local/core"
 	"mova.local/documents"
+	"mova.local/i18n"
 )
 
 // RenderMarkdown turns a Report into the final mova-budget-report.md text.
 func RenderMarkdown(r *Report) string {
 	var b strings.Builder
 
-	b.WriteString("# Mova Budget Report\n\n")
+	b.WriteString(i18n.T("budget.title") + "\n\n")
 
-	b.WriteString("## Project\n\n")
-	b.WriteString(fmt.Sprintf("Project name: %s\n\n", r.ProjectName))
-	b.WriteString(fmt.Sprintf("Task: %s\n\n", r.TaskName))
-	b.WriteString(fmt.Sprintf("**Final tokens sent to the model: %d** (after Sanitizer, Cache Layout Guard, and Circuit Breaker — see below for each stage's detail)\n\n", r.TotalTokens))
+	b.WriteString(i18n.T("budget.section_project") + "\n\n")
+	b.WriteString(i18n.T("budget.project_name", map[string]any{"name": r.ProjectName}) + "\n\n")
+	b.WriteString(i18n.T("budget.task", map[string]any{"task": r.TaskName}) + "\n\n")
+	b.WriteString(i18n.T("budget.final_tokens_sent", map[string]any{"count": r.TotalTokens}) + "\n\n")
 
-	b.WriteString("## Tokenization\n\n")
-	b.WriteString(fmt.Sprintf("Tool used: tiktoken-go (encoding: %s)\n\n", r.Encoding))
-	b.WriteString("Token counts are a local estimate computed with tiktoken-go — the same open-source library OpenAI itself publishes. Every calculation in this report runs on this machine: nothing in your project is sent anywhere to produce it.\n\n")
-	b.WriteString("For OpenAI models, this count is typically an exact match to what the OpenAI API bills you for. For Claude and Gemini, no official local tokenizer is publicly available, so this report reuses the same encoding as a close approximation — real counts from those providers are usually very close, but can differ, especially for non-English text or dense code. See \"Historical Token Accuracy\" below for this project's own measured difference.\n\n")
+	b.WriteString(i18n.T("budget.section_tokenization") + "\n\n")
+	b.WriteString(i18n.T("budget.tool_used", map[string]any{"encoding": r.Encoding}) + "\n\n")
+	b.WriteString(i18n.T("budget.tokenization_note1") + "\n\n")
+	b.WriteString(i18n.T("budget.tokenization_note2") + "\n\n")
 
 	b.WriteString(deduplicationSection(r))
 	b.WriteString(sanitizerSection(r))
 	b.WriteString(piiMaskingSection(r))
 	b.WriteString(firewallSummarySection(r))
 
-	b.WriteString("## Token & Cost Breakdown\n\n")
-	b.WriteString("This is where your token budget is actually going — one row per piece of the context declared in project.json (agents, skills, prompt, focus, memory), plus fixed engine overhead. Use it to see, in both tokens and dollars, exactly what is worth trimming first.\n\n")
+	b.WriteString(i18n.T("budget.section_token_cost_breakdown") + "\n\n")
+	b.WriteString(i18n.T("budget.token_cost_breakdown_note") + "\n\n")
 	b.WriteString(componentTable(r))
 	b.WriteString("\n")
 	b.WriteString(fileBreakdownSection(r))
@@ -47,8 +51,8 @@ func RenderMarkdown(r *Report) string {
 	b.WriteString(budgetLimitSection(r))
 	b.WriteString(historicalAccuracySection(r))
 
-	b.WriteString("## Important\n\n")
-	b.WriteString("These are estimates based on token counts computed locally and on the prices configured in config/prices.json. Real costs can vary depending on provider, model, caching, discounts, and commercial policies. This report is a tool to help you see where your token budget goes and what to optimize — it does not replace checking your actual invoice with each provider, and it is not a guarantee of exact pricing.\n")
+	b.WriteString(i18n.T("budget.section_important") + "\n\n")
+	b.WriteString(i18n.T("budget.important_note") + "\n")
 
 	return b.String()
 }
@@ -61,8 +65,8 @@ func deduplicationSection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Deduplication\n\n")
-	b.WriteString(fmt.Sprintf("Mova Context automatically removed %d duplicated paragraph(s) that appeared more than once across agents, skills, prompt, focus, and memory. This happens automatically on every run — no configuration needed, and no content is ever summarized or reworded, only exact repeats are removed.\n\n", r.DuplicatesRemoved))
+	b.WriteString(i18n.T("budget.section_deduplication") + "\n\n")
+	b.WriteString(i18n.T("budget.deduplication_note", map[string]any{"count": r.DuplicatesRemoved}) + "\n\n")
 	return b.String()
 }
 
@@ -73,15 +77,15 @@ func focusSection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Context Optimization\n\n")
-	b.WriteString(fmt.Sprintf("Without focus (entire repository):\nTokens: %d\n\n", r.Focus.TokensWithoutFocus))
-	b.WriteString(fmt.Sprintf("With focus (only the files selected in project.json):\nTokens: %d\n\n", r.Focus.TokensWithFocus))
+	b.WriteString(i18n.T("budget.section_context_optimization") + "\n\n")
+	b.WriteString(i18n.T("budget.without_focus", map[string]any{"count": r.Focus.TokensWithoutFocus}) + "\n\n")
+	b.WriteString(i18n.T("budget.with_focus", map[string]any{"count": r.Focus.TokensWithFocus}) + "\n\n")
 	if r.Focus.SavingsPercent >= 0 {
-		b.WriteString(fmt.Sprintf("Estimated savings: %.1f%% fewer tokens\n\n", r.Focus.SavingsPercent))
+		b.WriteString(i18n.T("budget.estimated_savings", map[string]any{"pct": fmt.Sprintf("%.1f", r.Focus.SavingsPercent)}) + "\n\n")
 	} else {
-		b.WriteString(fmt.Sprintf("No savings here: focus adds about %.1f%% formatting overhead instead. This happens when focus already covers the entire repository — there is nothing left to exclude. Savings appear once focus is narrowed to only the files that are actually relevant to the task, on a repository with more files than focus selects.\n\n", -r.Focus.SavingsPercent))
+		b.WriteString(i18n.T("budget.no_savings", map[string]any{"pct": fmt.Sprintf("%.1f", -r.Focus.SavingsPercent)}) + "\n\n")
 	}
-	b.WriteString("Focus is not automatic compression — nothing is summarized or rewritten. Focus simply gives the developer full control over exactly which files are sent to the model, instead of dumping the entire repository. Benefits: lower cost, less noise, better precision, more privacy, and more control over the project.\n\n")
+	b.WriteString(i18n.T("budget.focus_explainer") + "\n\n")
 	return b.String()
 }
 
@@ -94,24 +98,24 @@ func budgetLimitSection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Budget Limit\n\n")
-	b.WriteString(fmt.Sprintf("Configured limit: %d tokens\n\n", r.MaxTokens))
-	b.WriteString(fmt.Sprintf("Current context: %d tokens\n\n", r.TotalTokens))
+	b.WriteString(i18n.T("budget.section_budget_limit") + "\n\n")
+	b.WriteString(i18n.T("budget.configured_limit", map[string]any{"count": r.MaxTokens}) + "\n\n")
+	b.WriteString(i18n.T("budget.current_context", map[string]any{"count": r.TotalTokens}) + "\n\n")
 
 	percent := (float64(r.TotalTokens) / float64(r.MaxTokens)) * 100
 	diff := r.TotalTokens - r.MaxTokens
-	b.WriteString(fmt.Sprintf("Usage: %.1f%% of the configured limit\n\n", percent))
+	b.WriteString(i18n.T("budget.usage_pct", map[string]any{"pct": fmt.Sprintf("%.1f", percent)}) + "\n\n")
 	if diff > 0 {
-		b.WriteString(fmt.Sprintf("Over the limit by: %d tokens\n\n", diff))
+		b.WriteString(i18n.T("budget.over_limit_by", map[string]any{"count": diff}) + "\n\n")
 	} else {
-		b.WriteString(fmt.Sprintf("Headroom left: %d tokens\n\n", -diff))
+		b.WriteString(i18n.T("budget.headroom_left", map[string]any{"count": -diff}) + "\n\n")
 	}
 
 	if r.OverBudget {
-		b.WriteString("Status: OVER BUDGET. Sending this context to a model is blocked until it fits — this is enforced automatically on every `mova run`, `mova chat`, and MCP/HTTP call, never just a warning (see mova.local/budget.EnforceLimit).\n\n")
+		b.WriteString(i18n.T("budget.status_over_budget") + "\n\n")
 		b.WriteString(budgetRecommendations(r))
 	} else {
-		b.WriteString("Status: within budget.\n\n")
+		b.WriteString(i18n.T("budget.status_within_budget") + "\n\n")
 	}
 
 	b.WriteString(providerComparisonNote(r))
@@ -124,18 +128,18 @@ func budgetLimitSection(r *Report) string {
 // generic "reduce context" hint.
 func budgetRecommendations(r *Report) string {
 	var b strings.Builder
-	b.WriteString("Recommendations:\n\n")
+	b.WriteString(i18n.T("budget.recommendations_title") + "\n\n")
 
 	biggest := biggestComponent(r)
 	if biggest != nil && biggest.Tokens > 0 {
-		b.WriteString(fmt.Sprintf("- %q is the largest piece of this context (%d tokens) — trim it first in project.json.\n", biggest.Name, biggest.Tokens))
+		b.WriteString(i18n.T("budget.recommendation_biggest", map[string]any{"name": biggest.Name, "count": biggest.Tokens}) + "\n")
 	}
-	b.WriteString("- Use `--focus` (or narrow an existing \"focus\" list) so only the files actually needed for this task are included.\n")
-	b.WriteString("- Remove agents/skills from project.json's \"use\" lists that this task does not need.\n")
+	b.WriteString(i18n.T("budget.recommendation_use_focus") + "\n")
+	b.WriteString(i18n.T("budget.recommendation_remove_unused") + "\n")
 	if r.DuplicatesRemoved == 0 {
-		b.WriteString("- Check agents/skills/prompt for repeated paragraphs — Mova Context removes exact duplicates automatically, but only what it can find.\n")
+		b.WriteString(i18n.T("budget.recommendation_check_duplicates") + "\n")
 	}
-	b.WriteString(fmt.Sprintf("- Raise \"budget\": {\"max_tokens\": %d} in project.json (or the task) only if this context size is genuinely intended.\n\n", r.TotalTokens))
+	b.WriteString(i18n.T("budget.recommendation_raise_limit", map[string]any{"count": r.TotalTokens}) + "\n\n")
 	return b.String()
 }
 
@@ -154,12 +158,12 @@ func biggestComponent(r *Report) *ComponentBreakdown {
 // explicitly so a non-technical reader understands this isn't an error.
 func providerComparisonNote(r *Report) string {
 	var b strings.Builder
-	b.WriteString("### Why token counts differ between providers\n\n")
-	b.WriteString(fmt.Sprintf("This report uses one encoding (%s, via tiktoken-go) for every provider, because Claude and Gemini do not publish a local tokenizer. In practice:\n\n", r.Encoding))
-	b.WriteString("- OpenAI/GPT: this estimate is normally an exact or near-exact match, since tiktoken-go is OpenAI's own tokenizer.\n")
-	b.WriteString("- Google Gemini: typically close, small differences come from how Gemini splits certain punctuation, code, and non-English text.\n")
-	b.WriteString("- Anthropic Claude: usually the largest gap, since Claude uses its own (unpublished) tokenizer, which tends to segment text somewhat differently.\n\n")
-	b.WriteString("See \"Historical Token Accuracy\" below — once real API calls have been recorded for this project, the deviation for each provider is measured directly instead of assumed.\n\n")
+	b.WriteString(i18n.T("budget.provider_diff_title") + "\n\n")
+	b.WriteString(i18n.T("budget.provider_diff_intro", map[string]any{"encoding": r.Encoding}) + "\n\n")
+	b.WriteString(i18n.T("budget.provider_diff_openai") + "\n")
+	b.WriteString(i18n.T("budget.provider_diff_gemini") + "\n")
+	b.WriteString(i18n.T("budget.provider_diff_claude") + "\n\n")
+	b.WriteString(i18n.T("budget.provider_diff_see_historical") + "\n\n")
 	return b.String()
 }
 
@@ -169,29 +173,35 @@ func providerComparisonNote(r *Report) string {
 // first time, why it says "No historical data".
 func historicalAccuracySection(r *Report) string {
 	var b strings.Builder
-	b.WriteString("## Historical Token Accuracy\n\n")
-	b.WriteString("Mova Budget compares local token estimation (tiktoken-go) with real cloud API usage collected from this project.\n\n")
-	b.WriteString("| Provider | Average deviation |\n|---|---|\n")
+	b.WriteString(i18n.T("budget.section_historical_accuracy") + "\n\n")
+	b.WriteString(i18n.T("budget.historical_accuracy_intro") + "\n\n")
+	b.WriteString(i18n.T("budget.historical_table_header") + "\n")
 	for _, acc := range r.HistoricalAccuracy {
 		if acc.HasData {
 			b.WriteString(fmt.Sprintf("| %s | %+.1f%% |\n", acc.Provider, acc.DeviationPercent))
 		} else {
-			b.WriteString(fmt.Sprintf("| %s | No historical data |\n", acc.Provider))
+			b.WriteString(fmt.Sprintf("| %s | %s |\n", acc.Provider, i18n.T("budget.historical_no_data")))
 		}
 	}
-	b.WriteString("\nHistorical accuracy is automatically calibrated using previous cloud requests from this project. Actual costs may vary depending on provider billing policies and tokenizer updates.\n\n")
+	b.WriteString("\n" + i18n.T("budget.historical_footer") + "\n\n")
 	return b.String()
 }
 
 // componentTable builds the per-component breakdown table plus a TOTAL
 // row — columns are the provider/model list from prices.json, taken from
 // TotalCosts so the table always matches whatever config/prices.json
-// currently declares, with zero hardcoded provider names.
+// currently declares, with zero hardcoded provider names. The "TOTAL"
+// row label is kept as a plain identifier rather than routed through
+// i18n — same rule markdown.go documents for context-report.md: a
+// table's structural labels stay stable so a mixed-language repo of
+// generated reports is still diffable/greppable, while the column
+// header (budget.component_col_header) and every sentence of PROSE
+// around this table is fully translated.
 func componentTable(r *Report) string {
 	var b strings.Builder
-	b.WriteString("| Component | Tokens |")
+	b.WriteString(i18n.T("budget.component_col_header"))
 	for _, c := range r.TotalCosts {
-		b.WriteString(fmt.Sprintf(" %s %s (USD) |", c.Provider, c.Model))
+		fmt.Fprintf(&b, " %s %s (USD) |", c.Provider, c.Model)
 	}
 	b.WriteString("\n|---|---|")
 	for range r.TotalCosts {
@@ -200,22 +210,24 @@ func componentTable(r *Report) string {
 	b.WriteString("\n")
 
 	for _, comp := range r.Components {
-		b.WriteString(fmt.Sprintf("| %s | %d |", comp.Name, comp.Tokens))
+		fmt.Fprintf(&b, "| %s | %d |", comp.Name, comp.Tokens)
 		for _, c := range comp.Costs {
-			b.WriteString(fmt.Sprintf(" $%.4f |", c.USD))
+			fmt.Fprintf(&b, " $%.4f |", c.USD)
 		}
 		b.WriteString("\n")
 	}
 
-	b.WriteString(fmt.Sprintf("| **TOTAL** | **%d** |", r.TotalTokens))
+	fmt.Fprintf(&b, "| **TOTAL** | **%d** |", r.TotalTokens)
 	for _, c := range r.TotalCosts {
-		b.WriteString(fmt.Sprintf(" **$%.4f** |", c.USD))
+		fmt.Fprintf(&b, " **$%.4f** |", c.USD)
 	}
 	b.WriteString("\n")
 
 	if r.CLPRate > 0 && len(r.TotalCosts) > 0 {
-		b.WriteString(fmt.Sprintf("\nApproximate total in CLP (exchange rate %.0f): $%.0f CLP (using %s %s)\n",
-			r.CLPRate, r.TotalCosts[0].CLP, r.TotalCosts[0].Provider, r.TotalCosts[0].Model))
+		b.WriteString("\n" + i18n.T("budget.approx_total_clp", map[string]any{
+			"rate": fmt.Sprintf("%.0f", r.CLPRate), "clp": fmt.Sprintf("%.0f", r.TotalCosts[0].CLP),
+			"provider": r.TotalCosts[0].Provider, "model": r.TotalCosts[0].Model,
+		}) + "\n")
 	}
 	return b.String()
 }

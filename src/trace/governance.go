@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"mova.local/budget"
+	"mova.local/core"
 	"mova.local/i18n"
 	"mova.local/sanitize"
 )
@@ -30,8 +31,8 @@ type governanceEngine struct {
 	tokenBudget int
 }
 
-func newGovernanceEngine(root string) *governanceEngine {
-	ps := sanitize.LoadPolicySet(root)
+func newGovernanceEngine(root string, req core.PolicyRequest) *governanceEngine {
+	ps := sanitize.LoadPolicySetFor(root, req)
 	return &governanceEngine{
 		policy:      ps,
 		exclusion:   map[string]*ExclusionReasonRow{},
@@ -145,21 +146,24 @@ func (g *governanceEngine) exclusionRows() []ExclusionReasonRow {
 }
 
 // governanceStatus derives the headline STATUS line from the final
-// counts — "DISCOVERY ONLY (Default Global Policy)" is required
-// verbatim whenever there is no active project.json (see prompt
-// requirement); the other three only apply once a project.json-driven
-// run is added on top of this engine in a future iteration.
+// counts — the exact English text of each status now lives in
+// config/lang/{es,en}.json's "reports.governance_status_*" keys (see
+// i18n.T below) so it follows config/lang/lang_active.json like every
+// other user-facing surface; "DISCOVERY ONLY (Default Global Policy)"
+// remains the required EN string whenever there is no active
+// project.json (see prompt requirement) — that's config/lang/en.json's
+// value for reports.governance_status_discovery_only, unchanged.
 func governanceStatus(hasProjectJSON bool, c sanitize.StateCounts) string {
 	if !hasProjectJSON {
-		return "DISCOVERY ONLY (Default Global Policy)"
+		return i18n.T("reports.governance_status_discovery_only")
 	}
 	if c.BlockedFiles > 0 && c.AllowedFiles == 0 && c.SanitizedFiles == 0 {
-		return "BLOCKED"
+		return i18n.T("reports.governance_status_blocked")
 	}
 	if c.BlockedFiles > 0 || c.SanitizedFiles > 0 {
-		return "PASS WITH CONDITIONS"
+		return i18n.T("reports.governance_status_pass_with_conditions")
 	}
-	return "CONTROLLED"
+	return i18n.T("reports.governance_status_controlled")
 }
 
 // modelCompatRows builds the "MODEL COMPATIBILITY" table from

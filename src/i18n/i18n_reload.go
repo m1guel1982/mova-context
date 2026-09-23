@@ -1,4 +1,22 @@
-// i18n_reload.go — hot-reload for config/lang/lang_active.json.
+// i18n_reload.go — hot-reload for config/lang/*.json, in TWO
+// independent dimensions, both on the same 1s poll:
+//
+//  1. WHICH language is active — config/lang/lang_active.json's own
+//     "lang" value (reloadActiveLanguage, unchanged from before).
+//  2. WHAT a given language's messages actually SAY — each loaded
+//     catalog's own <lang>.json file content (reloadCatalogFileIfChanged,
+//     tracked per-language in translator.fileMTimes). This is what
+//     lets a person or an admin EDIT a message's text — e.g.
+//     config/lang/es.json's "reports.egress_airgap_message", the
+//     egress air-gap security directive documented in
+//     PROJECT_JSON.md § egress_audit — and have every door (CLI, MCP,
+//     HTTP, Chat) pick up the new wording within ~1s, no restart,
+//     independent of whether the active LANGUAGE also changed. Only
+//     the active language and the fallback ("en") are watched this
+//     way — an unloaded, inactive language's file is only ever read
+//     when something actually switches to it (reloadActiveLanguage's
+//     existing needsLoad path), so this poll never grows unbounded as
+//     more languages are added to config/lang/.
 //
 // Design note (honesty, same convention as relevance.go/patcher.go's
 // own headers): this uses a lightweight, pure-stdlib POLLING watcher
@@ -6,10 +24,11 @@
 // fsnotify. That is a deliberate trade-off, not an oversight - it
 // keeps this package dependency-free (no new entry in go.mod/go.sum,
 // no platform-specific watcher backend to vendor), at the cost of up
-// to ~1 second of latency between editing lang_active.json and every
-// door picking up the change - imperceptible for a person switching
-// languages, and the requirement itself only asks for "sin requerir
-// el reinicio del proceso", not sub-second latency.
+// to ~1 second of latency between editing a lang file and every door
+// picking up the change - imperceptible for a person switching
+// languages or tuning a message, and the requirement itself only asks
+// for "sin requerir el reinicio del proceso" / "tomar los cambios en
+// caliente", not sub-second latency.
 package i18n
 
 import (
@@ -45,6 +64,8 @@ func startHotReload() {
 		defer ticker.Stop()
 		for range ticker.C {
 			reloadActiveLanguage()
+			reloadCatalogFileIfChanged(fallbackLang)
+			reloadCatalogFileIfChanged(ActiveLanguage())
 		}
 	}()
 }
@@ -103,4 +124,37 @@ func reloadActiveLanguage() {
 	t.mu.Lock()
 	t.active = cfg.Lang
 	t.mu.Unlock()
+}
+
+// reloadCatalogFileIfChanged re-reads config/lang/<lang>.json's
+// CONTENT if its own mtime changed since it was last loaded —
+// independent of reloadActiveLanguage's lang_active.json check above.
+// lang == "" (ActiveLanguage() before anything ever loaded) is a
+// harmless no-op. Best-effort like every other step in this file: a
+// stat/read/parse failure just keeps the previous, already-loaded
+// catalog in place rather than ever taking translations offline over
+// one bad edit (e.g. someone saving es.json mid-edit with invalid
+// JSON — the next successful save 1s later picks it up normally).
+func reloadCatalogFileIfChanged(lang string) {
+	if lang == "" {
+		return
+	}
+	t.mu.RLock()
+	root := t.root
+	lastMTime, known := t.fileMTimes[lang]
+	t.mu.RUnlock()
+	if root == "" {
+		return
+	}
+
+	path := filepath.Join(root, "config", "lang", lang+".json")
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	mtime := info.ModTime().UnixNano()
+	if known && mtime == lastMTime {
+		return // unchanged since last load - nothing to do
+	}
+	_ = loadCatalog(root, lang) // best-effort; on error, previous catalog for lang stays active
 }

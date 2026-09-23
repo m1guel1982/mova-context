@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"mova.local/core"
 	"mova.local/i18n"
 )
 
@@ -38,7 +39,10 @@ func renderConsoleLocal(d *Data, outputs []string) string {
 	b.WriteString("INPUT\n")
 	fmt.Fprintf(&b, "  project.json         %s\n", d.ProjectJSONPath)
 	fmt.Fprintf(&b, "  task                 %s\n\n", d.TaskName)
-	fmt.Fprintf(&b, "  agent                %s\n  target model         %s\n  policy author        %s\n\n", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "  %-20s %s\n  %-20s %s\n  %-20s %s\n\n", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "  %-20s %s\n  %-20s %s\n", i18n.T("reports.policy_source_label"), orNA(d.PolicySource), i18n.T("reports.policy_version_label"), orNA(d.PolicyVersion))
+	b.WriteString(renderPolicyDebug(d.PolicyDebug))
+	b.WriteString("\n")
 
 	b.WriteString("CONTEXT\n")
 	for _, c := range d.Components {
@@ -77,7 +81,7 @@ func renderConsoleRemote(d *Data, outputs []string) string {
 	fmt.Fprintf(&b, "  Repository           %s\n", d.RepoURL)
 	fmt.Fprintf(&b, "  Branch               %s\n", orNA(d.Branch))
 	fmt.Fprintf(&b, "  Task                 %s\n", taskOrNone(d.TaskName))
-	fmt.Fprintf(&b, "  Agent                %s\n  Target model         %s\n  Policy author        %s\n", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "  %-20s %s\n  %-20s %s\n  %-20s %s\n", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
 	if len(d.IgnorePatterns) > 0 {
 		fmt.Fprintf(&b, "  %s\n", i18n.T("reports.active_ignore_patterns", map[string]any{"patterns": strings.Join(d.IgnorePatterns, ", ")}))
 	}
@@ -163,6 +167,41 @@ func truncateDir(s string, max int) string {
 		return s
 	}
 	return s[:max-1] + "…"
+}
+
+// renderPolicyDebug prints one line per resolved policy file — the
+// EXACT path "security.json" (a bare name) mapped to, and why an
+// excluded one was left out. "" when project.json's "debug" isn't
+// true (see trace/analyzer.go, which only populates d.PolicyDebug in
+// that case) — same "debug adds lines, never changes the decision"
+// rule every other [debug] block in this codebase follows.
+func renderPolicyDebug(entries []core.PolicyDebugEntry) string {
+	if len(entries) == 0 {
+		return ""
+	}
+	reasonText := func(code string) string {
+		switch code {
+		case "not_found":
+			return i18n.T("reports.policy_debug_not_found")
+		case "excluded_not_found":
+			return i18n.T("reports.policy_debug_excluded") + ", " + i18n.T("reports.policy_debug_not_found")
+		default:
+			return i18n.T("reports.policy_debug_excluded")
+		}
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		path := e.Path
+		if path == "" {
+			path = "(" + i18n.T("reports.policy_debug_not_found") + ")"
+		}
+		if e.Included {
+			fmt.Fprintf(&b, "  [debug] %s: %s -> %s\n", i18n.T("reports.policy_debug_include"), e.Name, path)
+		} else {
+			fmt.Fprintf(&b, "  [debug] %s: %s -> %s (%s)\n", i18n.T("reports.policy_debug_exclude"), e.Name, path, reasonText(e.Reason))
+		}
+	}
+	return b.String()
 }
 
 func renderFirewallConsole(f FirewallStatus) string {

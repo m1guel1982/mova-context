@@ -18,12 +18,20 @@ mova run 02-pii-compliance-governance --diagram --export png --path ./evidencia.
 
 **NAME** — audita el contexto antes de la inferencia: qué se seleccionó, qué se sanitizó, tokens, costo, identidad de auditoría.
 
-**SYNOPSIS** — `mova context-trace <proyecto> [--export md,pdf] [--diagram]` · `mova context-trace --repo <url> [--task <texto>] [--ignore <patrones>]`
+**SYNOPSIS** — `mova context-trace <proyecto> [--export md,pdf] [--diagram] [--policies_include <lista>] [--policies_exclude <lista>]` · `mova context-trace --repo <url> [--task <texto>] [--ignore <patrones>]`
 
 **EXAMPLES**
 ```bash
 mova context-trace 02-pii-compliance-governance --export md
 mova trace --repo https://github.com/usuario/repo --task "revisar login" --ignore "docs/**,*.lock"
+```
+
+**POLICIES** — `--policies_include` / `--policies_exclude` aceptan una lista separada por comas, mezclando nombres simples (búsqueda recursiva en `config/policy/`) y rutas completas multiplataforma. Tienen precedencia sobre `project.json` y `config/policy.json` — ver `PROJECT_JSON.md § policies`.
+
+```bash
+mova context-trace 02-pii-compliance-governance \
+  --policies_include "security.json,C:\custom\pii_strict_ventas.json" \
+  --policies_exclude "pii_permissive.json"
 ```
 
 ## budget

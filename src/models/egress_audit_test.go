@@ -57,10 +57,10 @@ func TestWriteEgressAuditLog_CreatesDirsAndAppends(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, ".mova", "egress_sanitized.log")
 
-	if err := writeEgressAuditLog(target, "primer contexto sanitizado"); err != nil {
+	if err := WriteEgressAuditLog(target, "primer contexto sanitizado"); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
-	if err := writeEgressAuditLog(target, "segundo contexto sanitizado"); err != nil {
+	if err := WriteEgressAuditLog(target, "segundo contexto sanitizado"); err != nil {
 		t.Fatalf("second write: %v", err)
 	}
 
@@ -95,7 +95,10 @@ func TestSession_DryRun_NeverCallsProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Send: %v", err)
 	}
-	if reply != DryRunReply {
+	if !sess.LastReplyWasDryRun {
+		t.Fatalf("LastReplyWasDryRun = false, want true")
+	}
+	if !strings.Contains(reply, "MOVA EGRESS AUDIT") {
 		t.Fatalf("reply = %q, want the dry-run confirmation message", reply)
 	}
 	if atomic.LoadInt32(calls) != 0 {

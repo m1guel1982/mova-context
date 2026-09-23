@@ -45,6 +45,14 @@ func runContextTrace(root, project, task string) {
 		AgentClient:     "mova-cli",
 		TargetModel:     core.TargetModelFor(root, project),
 		PolicyAuthor:    core.ResolvePolicyAuthor(root, project),
+		// --policies_include / --policies_exclude: highest-precedence
+		// policy layer, above project.json and config/policy.json (see
+		// core.ResolvePolicyRequest). flagStrAll already splits one
+		// occurrence on commas AND merges repeated occurrences, so both
+		// `--policies_include "a.json,b.json"` and
+		// `--policies_include a.json --policies_include b.json` work.
+		PolicyInclude: flagStrAll("--policies_include"),
+		PolicyExclude: flagStrAll("--policies_exclude"),
 	}
 
 	var adapter core.Adapter
@@ -228,6 +236,8 @@ func runChatTrace(root string, adapter core.Adapter, project, task, rest string,
 		AgentClient:     "mova-cli",
 		TargetModel:     core.TargetModelFor(root, project),
 		PolicyAuthor:    core.ResolvePolicyAuthor(root, project),
+		PolicyInclude:   core.SplitPolicyList(extractChatFlagRest(rest, "--policies_include")),
+		PolicyExclude:   core.SplitPolicyList(extractChatFlagRest(rest, "--policies_exclude")),
 	}
 
 	traceAdapter := adapter

@@ -13,9 +13,26 @@ import (
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/logging"
+	"mova.local/models"
 	"os"
 	"strings"
 )
+
+// airgapGatedTools lists every tool (besides chat_completion and
+// get_full_context, which gate themselves) that can return a
+// project's real content — see the "Air-gap" block in executeTool.
+// Deliberately excludes search_context (no "project" arg; searches
+// Mova's shared knowledge base, not project-private data) and every
+// WRITE tool (save, patch_file, delete_path, create_directory,
+// write_file, generate_*): egress_audit governs content leaving Mova
+// toward an LLM/host, not files Mova itself writes to disk on request.
+var airgapGatedTools = map[string]bool{
+	"get_memory":          true,
+	"get_memory_all":      true,
+	"get_workflow":        true,
+	"read_file":           true,
+	"read_document_layer": true,
+}
 
 // Request representa la estructura base del protocolo JSON-RPC 2.0.
 type Request struct {
@@ -224,6 +241,36 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 		result, err = documentTool(adapter, root, tool, args)
 	default:
 		return serializeError(-32602, "unknown tool: "+tool, id)
+	}
+
+	// Air-gap (egress_audit.dry_run) for every OTHER project-scoped,
+	// content-exposing tool — chat_completion and get_full_context gate
+	// THEMSELVES (see chat_tool.go, context_tool.go) because both need
+	// the token count and the write-failure-must-abort behavior before
+	// anything else runs. Everything else that can hand a project's
+	// real content back to whoever called this tool goes through this
+	// ONE shared check instead: get_memory/get_memory_all (memory.md),
+	// get_workflow (workflow.md, already Budget-gated above), and
+	// read_file/read_document_layer (arbitrary project files — .env,
+	// credentials, anything). Same rule everywhere: dry_run is the
+	// ONLY condition that activates it, no separate "enabled" switch.
+	//
+	// search_context is deliberately NOT in airgapGatedTools: it has no
+	// "project" argument and searches Mova's own shared knowledge base
+	// (agents/skills/prompts), never a project's private context — see
+	// airgapGatedTools' doc comment for the exact scope line.
+	if err == nil && project != "" && airgapGatedTools[tool] {
+		if proj, perr := adapter.GetProject(project); perr == nil {
+			dryRun, outputFile := core.ResolveEgressAudit(root, project, proj)
+			if dryRun {
+				gateResult, gerr := models.EgressGate(true, outputFile, result, "")
+				if gerr != nil {
+					err = gerr
+				} else {
+					result = gateResult.Message
+				}
+			}
+		}
 	}
 
 	// SI EL PROYECTO O ACCION FALLA: Lo devolvemos como texto amigable para Claude

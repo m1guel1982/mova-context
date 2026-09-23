@@ -61,6 +61,17 @@ func formatTerminalOutput(rawText string) string {
 // of repeating a provider name in project.json too.
 func applyProjectLLMProfile(sess *models.Session, root string, proj *core.Project) {
 	if proj == nil || proj.LLMProfile == nil || proj.LLMProfile.Config == "" {
+		// Host-delegated inference (see PROJECT_JSON.md § llm_profile):
+		// Mova never silently talks to whatever the global default
+		// provider happens to be for a project that declares no
+		// llm_profile of its own. In an interactive REPL there's no
+		// MCP host to delegate to — a human is typing directly — so
+		// the honest move is a visible notice, not a silent fallback,
+		// so nobody discovers only after the fact which model actually
+		// answered.
+		if proj != nil {
+			consolePrint(fmt.Sprintf("[Project] No llm_profile configured — using the global active model: %s/%s. Set \"llm_profile\" in project.json to pin one.\n", sess.Provider, sess.Model))
+		}
 		return
 	}
 	provider := proj.LLMProfile.Provider

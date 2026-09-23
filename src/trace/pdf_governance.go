@@ -7,6 +7,8 @@ package trace
 import (
 	"fmt"
 	"strings"
+
+	"mova.local/i18n"
 )
 
 // governanceHTML returns "" for a run with no governance state to
@@ -31,7 +33,7 @@ func governanceHTML(d *Data) string {
 	fmt.Fprintf(&b, "<p><b>%s</b></p>", d.GovernanceStatus)
 	fmt.Fprintf(&b, "<p>Repository: %s (branch: %s) - Task: %s</p>", orNA(d.RepoURL), orNA(d.Branch), orTaskNone(d.TaskName))
 	fmt.Fprintf(&b, "<p>Execution ID: %s - Repository state: %s</p>", d.ExecutionID, orNA(d.CommitHash))
-	fmt.Fprintf(&b, "<p>Agent: %s - Target model: %s - Policy author: %s</p>", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "<p>%s: %s - %s: %s - %s: %s</p>", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
 
 	// 2. Reduction Metrics
 	b.WriteString("<h2>2. Reduction metrics</h2>")

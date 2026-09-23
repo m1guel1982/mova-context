@@ -23,6 +23,7 @@ import (
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/documents"
+	"mova.local/i18n"
 	"mova.local/models"
 )
 
@@ -115,6 +116,55 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		if gated.Sections != nil && gated.Sections.DebugLog != "" {
 			statusLog.WriteString(gated.Sections.DebugLog)
 		}
+
+		// Air-gap (egress_audit.dry_run) — the ONLY condition that
+		// activates it; there is no separate "enabled" switch (see
+		// models/egress_audit.go's package comment). Checked here,
+		// before ANY of the tool-calling/NL-edit machinery below, so
+		// dry_run blocks the ENTIRE turn — not just the plain chat
+		// reply path — and nothing this project's context touches can
+		// leave through a side door (file edits, deletes, natural-
+		// language intents all need a model call too, and none of
+		// them run once this returns).
+		if sess.EgressAuditDryRun {
+			gateResult, gerr := models.EgressGate(true, sess.EgressAuditOutputFile, sess.System, sess.Model)
+			if gerr != nil {
+				return "", gerr
+			}
+			return statusLog.String() + gateResult.Message, nil
+		}
+
+		// Host-delegated inference (no llm_profile): Mova never calls a
+		// local/cloud provider on its own — the governed, sanitized
+		// context is returned in the tool result so the MCP HOST
+		// (Cursor, Claude Code, Grok, whichever client invoked this
+		// tool) can run inference itself. Same tool-calling/NL-edit
+		// machinery below is skipped for the same reason as the
+		// dry_run branch above: it all requires a model Mova isn't
+		// configured to call.
+		if proj.LLMProfile == nil || proj.LLMProfile.Config == "" {
+			// This branch is ALSO an egress event — sess.System (the
+			// fully governed/masked context) is about to leave Mova
+			// in the tool result, for the MCP host to send onward —
+			// so it must be logged exactly like Send/SendStream's own
+			// applyEgressAudit() logs every provider call, and exactly
+			// like get_full_context's EgressGate always does
+			// regardless of dry_run. Before this fix, ONLY the
+			// dry_run:true branch above and an actual provider call
+			// ever wrote evidence; a project with dry_run:false and no
+			// llm_profile (exactly the common "delegate to Cursor/
+			// Grok/Claude Code" setup) left this specific egress path
+			// completely unaudited even with egress_audit.output_file
+			// configured — the same "evidence must exist before
+			// anything leaves" rule WriteEgressAuditLog's own doc
+			// comment states, just not yet applied to this one door.
+			if sess.EgressAuditOutputFile != "" {
+				if werr := models.WriteEgressAuditLog(sess.EgressAuditOutputFile, sess.System); werr != nil {
+					return "", fmt.Errorf("egress_audit: could not write %s: %w", sess.EgressAuditOutputFile, werr)
+				}
+			}
+			return statusLog.String() + i18n.T("reports.egress_delegated_header") + "\n\n" + sess.System + "\n\n---\n" + message, nil
+		}
 	}
 
 	if history, ok := args["history"].([]any); ok {
@@ -178,7 +228,15 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		if err != nil {
 			return "", err
 		}
-		statusLog.WriteString("[" + label + "] Response received.\n")
+		if sess.LastReplyWasDryRun {
+			// The provider was never called — say so instead of the
+			// generic "Response received.", which would otherwise
+			// falsely claim a real network round-trip happened (see
+			// project.json's "egress_audit": {"dry_run": true}).
+			statusLog.WriteString("[egress_audit] " + i18n.T("reports.egress_dry_run_done") + "\n")
+		} else {
+			statusLog.WriteString("[" + label + "] Response received.\n")
+		}
 	}
 	writeTokenUsage(&statusLog, root, sess, proj)
 	statusLog.WriteString("\n")

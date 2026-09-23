@@ -61,6 +61,7 @@ import (
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/documents"
+	"mova.local/i18n"
 	"mova.local/mcp"
 	"mova.local/models"
 	"mova.local/orchestrator"
@@ -258,7 +259,15 @@ func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project,
 		return
 	}
 	if !streamed {
-		consolePrint("[" + label + "] Response received.\n")
+		if sess.LastReplyWasDryRun {
+			// The provider was never called — say so instead of the
+			// generic "Response received.", which would otherwise
+			// falsely claim a real network round-trip happened (see
+			// project.json's "egress_audit": {"dry_run": true}).
+			consolePrint("[egress_audit] " + i18n.T("reports.egress_dry_run_done") + "\n")
+		} else {
+			consolePrint("[" + label + "] Response received.\n")
+		}
 		consolePrint(fmt.Sprintf("[%s]\n%s\n", sess.Model, renderMarkdown(reply)))
 	}
 	printTokenUsage(root, sess, proj)
