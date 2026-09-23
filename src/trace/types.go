@@ -9,6 +9,7 @@ package trace
 
 import (
 	"mova.local/budget"
+	"mova.local/core"
 	"mova.local/sanitize"
 )
 
@@ -159,7 +160,7 @@ type Data struct {
 	// --prune-docstrings was given (see analyzer.go, astfilter.PruneDocs)
 	// — 0 when the flag wasn't used, never a silent content change.
 	PrunedDocstringFiles int
-	HasProjectJSON bool
+	HasProjectJSON       bool
 
 	// ── Remote repository mode ───────────────────────────────────────
 	RepoURL string
@@ -237,6 +238,14 @@ type Data struct {
 	// literal string LoadPolicySet resolved.
 	PolicySource  string
 	PolicyVersion string
+
+	// PolicyDebug: exact resolved path of every included/excluded
+	// policy file — populated ONLY when project.json's "debug" is
+	// true (see core.ResolvedPolicyDebug). Printed by console.go
+	// right after the policy source line, so it reaches every door
+	// (CLI, chat, MCP, HTTP) for free — they all render this same
+	// Data through the same console renderer.
+	PolicyDebug []core.PolicyDebugEntry
 
 	// ── Audit Matrix — who requested the context, for which model,
 	// and under whose authorship (see README § Audit Matrix, questions

@@ -4,7 +4,7 @@
 
 `mova` se coloca entre "el contexto está listo" y "se envía al LLM". Para desarrolladores y agentes
 (Claude Code, Cursor, Windsurf), responde **11 preguntas de auditoría** sobre selección, gobernanza,
-seguridad, trazabilidad y costo del contexto — con evidencia, antes de realizar la inferencia y consumir tokens del proveedor.
+seguridad, trazabilidad y costo del contexto — con evidencia, antes de gastar un solo token real.
 
 **Alcance:** `mova` no es una plataforma de AI Security completa. Su alcance es el contexto que una
 aplicación o agente pretende entregar a un LLM, y la evidencia de las decisiones tomadas sobre ese
@@ -16,11 +16,11 @@ contexto antes de la inferencia.
 mova run 02-pii-compliance-governance --diagram --export png --path ./evidencia.png
 ```
 
-Ver `examples/` — 3 ejemplos, cada uno 1 comando .
+Ver `examples/` — 3 ejemplos, cada uno 1 comando / 15 segundos para entender.
 
 ## Matriz de Auditoría Pre-Inferencia
 
-| # | Pregunta de Gobernanza / Auditoría | Cómo responde `mova` | Evidencia / Artefacto |
+| # | Pregunta de Seguridad / CISO | Cómo responde `mova` | Evidencia / Artefacto |
 |---|---|---|---|
 | 1 | ¿Qué información llegó al modelo? | Inventario exacto de archivos y símbolos AST seleccionados | `context-report.md`/`.pdf` |
 | 2 | ¿Por qué llegó? | Relevancia por tarea + reglas `focus`/`exclude` (incl. AST) | `context-trace` |
@@ -32,7 +32,7 @@ Ver `examples/` — 3 ejemplos, cada uno 1 comando .
 | 8 | ¿Cuánto costó? | Estimación por proveedor antes del envío | `mova budget` |
 | 9 | ¿Qué commit se analizó? | Estado exacto del repo en el momento de auditar | `context-report.md` (Execution ID + commit) |
 | 10 | ¿Qué agente lo pidió? | `AgentClient` — `mova-cli`, o el cliente MCP real capturado en `initialize` | Reportes / diagrama |
-| 11 | ¿Qué modelo estaba destinado a recibirlo? | `TargetModel` — `<provider>/<config>` de `llm_profile` | Reportes / diagrama |
+| 11 | ¿Qué modelo lo recibió? | `TargetModel` — `<provider>/<config>` de `llm_profile` | Reportes / diagrama |
 
 ## Arquitectura
 
@@ -41,7 +41,7 @@ Ver `examples/` — 3 ejemplos, cada uno 1 comando .
                    │
                    ▼  Solicitud de contexto
 ┌───────────────────────────────────────────────────┐
-│     MOVA — GOBERNANZA DE CONTEXTO PRE-INFERENCIA      │
+│     MOVA — MOTOR DE GOBERNANZA PRE-INFERENCIA      │
 │  Focus/Exclude (AST) · Sanitizer · PII Masking     │
 │  Circuit Breaker de presupuesto · Diagrama PNG/PDF │
 └───────────────────────────────────────────────────┘
@@ -50,15 +50,29 @@ Ver `examples/` — 3 ejemplos, cada uno 1 comando .
         [ LLM destino (Anthropic, Ollama, etc.) ]
 ```
 
-Una misma política de gobernanza, cuatro formas de integración: CLI, mova chat, MCP (stdio/HTTP) y HTTP REST.
+Un motor, cuatro puertas — CLI, `mova chat`, MCP (stdio/HTTP), HTTP REST — todas llaman a la misma función.
 
-## Ejemplos 
+## Ejemplos (1 clic, 15 segundos)
 
 | Ejemplo | Qué demuestra |
 |---|---|
 | `examples/01-mcp-agent-governance` | Un agente MCP pide contexto; Mova decide y deja evidencia |
 | `examples/02-pii-compliance-governance` | PII/secretos, enmascarado, política aplicada (escenario Ley 21.719) |
 | `examples/03-tokenomics-context-trace` | `focus`/`exclude` (AST)/`task`, presupuesto, Context Trace |
+| `examples/04-output-mova-trace-fastApi` | Validación de `mova context-trace` sobre el repositorio remoto de FastAPI. Demuestra el filtrado preciso por `focus`/`exclude` mediante parsing de AST, control de presupuesto de tokens y trazabilidad de contexto en proyectos de código real. |
+| `examples/05-test-mcp-cursor` | Validación del aislamiento Air-Gap y gobernanza de egresos sobre el proyecto `02-pii-compliance-governance`. Demuestra la interceptación de `chat_completion` bajo `dry_run: true`, sanitización de PII y evidencia de auditoría consumida desde un cliente MCP.|
+
+## Límites honestos del "Air-Gap" (`dry_run`) — en 15 segundos
+
+Con `egress_audit.dry_run: true`, Mova garantiza SU parte: nunca envía el contexto real a ningún
+proveedor, y siempre deja evidencia en disco. Lo que Mova **no puede garantizar** es que el **modelo
+anfitrión** (Cursor, Claude Code, Grok, etc. — quien invoca la herramienta MCP) obedezca la directiva
+de seguridad que viene con el bloqueo: un anfitrión insistente puede intentar leer otros archivos
+locales (`context-report.md`, `project.json`, memoria, etc.) para "reconstruir" el contexto por su
+cuenta — esto ya ocurrió en pruebas reales. Mova refuerza el mensaje bloqueado con una directiva
+explícita anti-elusión (ver `GOVERNANCE_CONTROLS.md § dry_run`), pero el cumplimiento final de esa
+directiva depende del anfitrión, no de Mova — Mova no controla, ni puede controlar, qué hace un
+proceso externo con el texto que recibe. No se ofrece esto como una garantía absoluta porque no lo es.
 
 ## Instalación
 
@@ -69,7 +83,7 @@ git clone <este-repo> && cd mova/src && make install
 ## Conectar un agente MCP
 
 ```json
-{ "mcpServers": { "mova": { "command": "mova", "args": ["mcp"] } } }
+{ "mcpServers": { "mova": { "command": "mova", "args": ["mcp", "start", "--stdio"] } } }
 ```
 
 ## Documentación
@@ -77,8 +91,10 @@ git clone <este-repo> && cd mova/src && make install
 - [`docs/i18n/es/COMMANDS.md`](../es/COMMANDS.md) — comandos (estilo MAN page)
 - [`docs/i18n/es/PROJECT_JSON.md`](../es/PROJECT_JSON.md) — referencia de `project.json`
 - [`docs/i18n/es/AST_FILTER.md`](../es/AST_FILTER.md) — sintaxis `archivo::kind=nombre`
-- [`docs/i18n/es/context-trace.md`](../es/context-trace.md) — cómo se toma la decisión de contexto
+- [`docs/i18n/es/CONTEXT-TRACE.md`](../es/CONTEXT-TRACE.md) — cómo se toma la decisión de contexto
 - [`docs/i18n/es/ARTIFACTS.md`](../es/ARTIFACTS.md) — qué es cada archivo que Mova genera
+- [`docs/i18n/es/GOVERNANCE_CONTROLS.md`](../es/GOVERNANCE_CONTROLS.md) — `debug`, `policies`, `on_exceed`, `dry_run`: qué corta el proceso y qué solo explica
+- [`docs/i18n/es/MCP_HTTP_TOOLS.md`](../es/MCP_HTTP_TOOLS.md) — todas las herramientas MCP y endpoints HTTP, copiar-pegar
 - [`docs/i18n/es/source.md`](../es/source.md) — referencia técnica de arquitectura
 - [`docs/i18n/es/FAQ.md`](../es/FAQ.md)
 

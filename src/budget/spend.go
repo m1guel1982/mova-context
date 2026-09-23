@@ -110,15 +110,16 @@ type CircuitBreakerResult struct {
 	MonthUSDLimit float64 // "max_monthly_usd"; 0 = not configured
 	RunExceeded   bool
 	MonthExceeded bool
-	Aborted       bool // true only when OnExceed == "abort" and one of the above tripped
+	Aborted       bool // true when OnExceed == "abort" (or its alias "block") and one of the above tripped
 	Message       string
 }
 
 // CheckCircuitBreaker evaluates both ceilings for this run. Returns a
-// non-nil error ONLY when the configured "on_exceed" is "abort" and a
-// ceiling was actually exceeded — every other case (nothing configured,
-// within budget, or "on_exceed": "warn") returns nil error with the
-// details in CircuitBreakerResult for the caller to display.
+// non-nil error ONLY when the configured "on_exceed" is "abort"
+// (alias: "block") and a ceiling was actually exceeded — every other
+// case (nothing configured, within budget, or "on_exceed": "warn")
+// returns nil error with the details in CircuitBreakerResult for the
+// caller to display.
 func CheckCircuitBreaker(root, project string, cfg *core.BudgetConfig, runTokens int) (CircuitBreakerResult, error) {
 	res := CircuitBreakerResult{RunTokens: runTokens}
 	if !core.CircuitBreakerEnabled(cfg) {
@@ -155,7 +156,7 @@ func CheckCircuitBreaker(root, project string, cfg *core.BudgetConfig, runTokens
 	if onExceed == "" {
 		onExceed = "warn"
 	}
-	if onExceed == "abort" {
+	if onExceed == "abort" || onExceed == "block" {
 		res.Aborted = true
 		return res, fmt.Errorf("%s", res.Message)
 	}

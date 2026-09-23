@@ -90,3 +90,41 @@ func TestHotReload_SwitchesLanguageWithoutRestart(t *testing.T) {
 		t.Fatalf("expected English after hot-reload, got %q (active=%s)", got, ActiveLanguage())
 	}
 }
+
+// TestHotReload_PicksUpEditedMessageContentWithoutRestart is the OTHER
+// hot-reload dimension (see i18n_reload.go's package comment): EDITING
+// an already-loaded language's own message TEXT — not switching which
+// language is active — must also propagate within the poll interval,
+// with no restart and no re-Init call. This is what makes a message
+// like "reports.egress_airgap_message" (the egress air-gap security
+// directive) genuinely hot-customizable, per PROJECT_JSON.md §
+// egress_audit.
+func TestHotReload_PicksUpEditedMessageContentWithoutRestart(t *testing.T) {
+	root := setupTestRoot(t)
+	if err := Init(root); err != nil {
+		t.Fatal(err)
+	}
+	if got := T("cli.hello", map[string]any{"name": "Ana"}); got != "¡Hola, Ana!" {
+		t.Fatalf("expected the original Spanish text before the edit, got %q", got)
+	}
+
+	// A filesystem's mtime resolution can be coarse enough that a
+	// same-tick rewrite doesn't produce a strictly newer mtime — sleep
+	// past it first, same defensive pattern the language-switch test
+	// above doesn't need (lang_active.json's content, not mtime
+	// granularity, drives that one) but this content-hash-free,
+	// mtime-only poll does.
+	time.Sleep(20 * time.Millisecond)
+	writeFile(t, filepath.Join(root, "config", "lang", "es.json"), `{"cli":{"hello":"¡Hola de nuevo, {{name}}!"}}`)
+
+	deadline := time.Now().Add(3 * time.Second)
+	var got string
+	for time.Now().Before(deadline) {
+		got = T("cli.hello", map[string]any{"name": "Ana"})
+		if got == "¡Hola de nuevo, Ana!" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("expected the edited Spanish text after hot-reload, got %q", got)
+}

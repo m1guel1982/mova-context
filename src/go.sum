@@ -31,6 +31,8 @@ github.com/clipperhouse/uax29/v2 v2.5.0/go.mod h1:Wn1g7MK6OoeDT0vL+Q0SQLDz/KpfsV
 github.com/dlclark/regexp2 v1.11.5 h1:Q/sSnsKerHeCkc/jSTNq1oCm7KiVgUMZRDUoRu0JQZQ=
 github.com/dlclark/regexp2 v1.11.5/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f/go.mod h1:vw97MGsxSvLiUE2X8qFplwetxpGLQrlU1Q9AUEIzCaM=
+github.com/golang/image v0.18.0 h1:zDmbOa5s6K0LL+QJVS2VYjKVdp5/BBApdx8W3qRD8e0=
+github.com/golang/image v0.18.0/go.mod h1:4yyo5vMFQjVjUcVk4jEQcU9MGy/rulF5WvUILseCM2E=
 github.com/golang/image v0.25.0 h1:AubmlAw9DSTGIjO+hnBnS2aqm1rzZWy2Pwg0A/NA1vs=
 github.com/golang/image v0.25.0/go.mod h1:tCAmOEGthTtkalusGp1g3xa2gke8J6c2N565dTyl9Rs=
 github.com/golang/net v0.27.0 h1:BYsD/Ip1lbNUa6NTwFN1HtMGj912Tx3bc/u9RyE5t74=

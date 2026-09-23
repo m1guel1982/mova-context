@@ -60,7 +60,7 @@ func buildPipelineChart(d *Data) chartLayout {
 		"execution": d.ExecutionID, "commit": orNA(d.CommitHash), "task": orTaskNone(d.TaskName),
 	}), 10, false, chartMuted)
 	y += 16
-	text(30, y, fmt.Sprintf("Agent: %s   ·   Target model: %s   ·   Policy author: %s", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor)), 10, false, chartMuted)
+	text(30, y, fmt.Sprintf("%s: %s   ·   %s: %s   ·   %s: %s", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor)), 10, false, chartMuted)
 	y += 26
 
 	box := func(label, sub, color string) {

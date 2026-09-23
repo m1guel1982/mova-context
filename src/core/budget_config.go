@@ -30,8 +30,10 @@ type BudgetConfig struct {
 	MaxMonthlyUSD float64 `json:"max_monthly_usd"`
 
 	// OnExceed: what the circuit breaker does when either ceiling above
-	// is hit. "warn" (default) reports it but still runs; "abort" stops
-	// BEFORE anything is sent to a model.
+	// is hit. "warn" (default) reports it but still runs; "abort"
+	// (alias: "block") stops BEFORE anything is sent to a model — same
+	// hard stop across CLI/Chat, MCP, and HTTP (see
+	// budget.BuildGatedContext, the one chokepoint all four doors call).
 	OnExceed string `json:"on_exceed"`
 
 	// Sanitize: the noise-removal stage (see mova.local/sanitize).

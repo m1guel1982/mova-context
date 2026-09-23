@@ -197,18 +197,20 @@ func dispatch(root string) {
 	case "context-trace", "trace":
 		var project, task string
 		if flagStr("--repo", "") == "" {
-			// Filtrar los flags conocidos y sus valores para no confundirlos con project o task.
+			// Filtrar los flags conocidos y sus valores para no
+			// confundirlos con project o task. La lista de flags que
+			// consumen un valor vive en un solo lugar (valueFlags, en
+			// main.go) para que agregar un flag nuevo no exija tocar
+			// este parser también — que es exactamente cómo
+			// --policies_include se leía antes como nombre de tarea.
 			var pos []string
 			args := os.Args[2:]
 			for i := 0; i < len(args); i++ {
 				arg := args[i]
-				// Si encontramos un flag que consume el siguiente valor, saltamos ambos
-				if arg == "--export" || arg == "--output" || arg == "--path" {
-					i++ // saltar el valor del flag (ej: "pdf")
-					continue
-				}
-				// Si es cualquier otro flag que empiece con "-"
 				if strings.HasPrefix(arg, "-") {
+					if valueFlags[arg] {
+						i++ // saltar el valor del flag (ej: "pdf")
+					}
 					continue
 				}
 				pos = append(pos, arg)

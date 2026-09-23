@@ -2,14 +2,24 @@
 // [project] [task] [--focus]`.
 //
 // Prints the exact same assembled context `mova chat`/MCP get_full_context
-// build (core.BuildContextSections — one assembly, every transport), but
-// BEFORE printing anything, the configured "budget": {"max_tokens": N}
-// limit (if any) is enforced — see mova.local/budget.EnforceLimit. This
-// is the same hard gate `mova chat` and the MCP/HTTP chat_completion tool
-// apply (see chat_cmd.go and mova.local/mcp/chat_tool.go): if the context
-// exceeds the limit, NOTHING is printed (and, by extension, nothing would
-// ever reach a model that consumed this output) — only the error and its
-// suggestion.
+// build (core.BuildContextSections via budget.BuildGatedContext — one
+// assembly, every transport, PII Masking included), but BEFORE printing
+// anything, TWO gates run in order:
+//
+//  1. the configured "budget": {"max_tokens": N} limit (if any) — see
+//     mova.local/budget.EnforceLimit. This is the same hard gate `mova
+//     chat` and the MCP/HTTP chat_completion tool apply (see
+//     chat_cmd.go and mova.local/mcp/chat_tool.go): if the context
+//     exceeds the limit, NOTHING is printed — only the error and its
+//     suggestion.
+//  2. the "egress_audit": {"dry_run": true} air-gap gate — see
+//     mova.local/models.EgressGate, the SAME implementation
+//     get_full_context/chat_completion use. `mova run` pipes finished
+//     context straight to whatever the terminal is piped into, which
+//     is exactly the kind of egress this feature exists to gate — so
+//     dry_run blocks it here too, and the on-disk evidence file
+//     (egress_audit.output_file) is written here too, unconditionally,
+//     exactly like every other door.
 //
 // --count switches to a read-only estimate instead — how many tokens
 // this run WOULD send, with no context assembled and no model ever
@@ -33,7 +43,8 @@ import (
 
 // runProject implements `mova run`. Mirrors the status lines `mova chat`
 // prints ([Project]/[Context]/[Focus]) so both commands read the same way,
-// then applies the Budget gate before ever printing the context.
+// then applies the Budget gate, then the egress air-gap gate, before
+// ever printing the context.
 func runProject(root string, adapter core.Adapter, project, task string) {
 	if project == "" {
 		die("no project given and none could be auto-detected (see runtime.AutoDetect)")
@@ -43,6 +54,7 @@ func runProject(root string, adapter core.Adapter, project, task string) {
 	proj, err := adapter.GetProject(project)
 	must(err)
 
+	modelHint := ""
 	if proj.LLMProfile != nil && proj.LLMProfile.Config != "" {
 		provider := proj.LLMProfile.Provider
 		if provider == "" {
@@ -53,6 +65,7 @@ func runProject(root string, adapter core.Adapter, project, task string) {
 		if provider != "" {
 			consolePrint(fmt.Sprintf("[Project] Using configured provider: %s (%s)\n", provider, proj.LLMProfile.Config))
 		}
+		modelHint = proj.LLMProfile.Config
 	}
 
 	consolePrint("[Context] Building context...\n")
@@ -66,6 +79,29 @@ func runProject(root string, adapter core.Adapter, project, task string) {
 	}
 	if gated.Err != nil {
 		consolePrint("\n" + gated.Err.Error() + "\n")
+		return
+	}
+
+	// Egress air-gap gate — this is ALSO a door that hands finished
+	// (governed, PII-masked) context straight to whatever the terminal
+	// is piped into, exactly like MCP's get_full_context/chat_completion
+	// do for an MCP host. It must honor "egress_audit": {"dry_run":
+	// true} the same way — models/egress_audit.go's own package
+	// comment already documented `mova run` as one of the doors
+	// sharing this ONE implementation; this call is what actually
+	// makes that true, instead of `mova run` silently printing the
+	// real context regardless of dry_run. See models.EgressGate for
+	// the on-disk evidence write (egress_audit.output_file), which
+	// also always happens here, independent of dry_run, exactly like
+	// every other door.
+	dryRun, outputFile := core.ResolveEgressAudit(root, project, proj)
+	gateResult, gerr := models.EgressGate(dryRun, outputFile, gated.Text, modelHint)
+	if gerr != nil {
+		consolePrint("\n" + gerr.Error() + "\n")
+		return
+	}
+	if gateResult.Blocked {
+		consolePrint("\n" + gateResult.Message + "\n")
 		return
 	}
 

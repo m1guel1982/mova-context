@@ -93,14 +93,14 @@ func buildChart(d *Data) chartLayout {
 	subtitle := headerSubtitle(d)
 	text(30, y, subtitle, 13, false, chartMuted)
 	y += 20
-	identity := fmt.Sprintf("Agent: %s   ·   Target model: %s   ·   Policy author: %s", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor))
+	identity := fmt.Sprintf("%s: %s   ·   %s: %s   ·   %s: %s", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
 	text(30, y, identity, 11, false, chartMuted)
 	y += 26
 
 	// ── Composition bar ─────────────────────────────────────────────
 	rows := d.Components
 	if len(rows) == 0 {
-		rows = []ComponentRow{{Name: "Repository (scanned)", Tokens: d.TotalTokens}}
+		rows = []ComponentRow{{Name: i18n.T("reports.repository_scanned_row"), Tokens: d.TotalTokens}}
 	}
 	total := d.TotalTokens
 	if total == 0 {
@@ -117,7 +117,7 @@ func buildChart(d *Data) chartLayout {
 	rectStroke(barX, y, barW, barH, chartBorder, 8)
 	y += barH + 22
 
-	text(30, y, "CONTEXT COMPOSITION", 12, true, chartMuted)
+	text(30, y, i18n.T("reports.context_composition_title"), 12, true, chartMuted)
 	y += 20
 	for _, r := range rows {
 		pct := float64(r.Tokens) / float64(total) * 100
@@ -169,7 +169,7 @@ func appendDirChart(shapes *strings.Builder, texts *[]textOp, d *Data, y int) in
 	}
 
 	// 1. Título de la sección
-	text(30, y+10, "TOP DIRECTORIES BY TOKEN USAGE", 12, true, chartMuted)
+	text(30, y+10, i18n.T("reports.top_directories_title"), 12, true, chartMuted)
 
 	// Aumentamos el margen vertical de 20 a 28px para dar suficiente aire
 	// entre el título y la primera barra azul, eliminando el traslape visual.
@@ -208,13 +208,13 @@ func appendBudgetGauge(shapes *strings.Builder, texts *[]textOp, d *Data, y int)
 		*texts = append(*texts, textOp{X: x, Y: ty, Text: s, Size: size, Bold: bold, Color: color})
 	}
 
-	text(30, y+10, "BUDGET", 12, true, chartMuted)
+	text(30, y+10, i18n.T("reports.budget_title"), 12, true, chartMuted)
 	y += 20
 
 	barX, barW, barH := 30, chartW-60, 22
 	if d.MaxTokens <= 0 {
 		fmt.Fprintf(shapes, `<rect x="%d" y="%d" width="%d" height="%d" rx="6" fill="none" stroke="%s" stroke-width="1"/>`, barX, y, barW, barH, chartBorder)
-		text(38, y+15, "N/A - no token limit configured", 12, false, chartMuted)
+		text(38, y+15, i18n.T("reports.no_token_limit_configured"), 12, false, chartMuted)
 		return y + barH + 10
 	}
 

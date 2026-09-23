@@ -45,6 +45,13 @@ type Session struct {
 	// behavior unchanged.
 	EgressAuditDryRun     bool
 	EgressAuditOutputFile string
+	// LastReplyWasDryRun is true right after Send/SendStream returned
+	// because egress_audit's dry_run blocked the provider call — the
+	// one reliable way callers (cli/chat_cmd.go, mcp/chat_tool.go) tell
+	// a real reply apart from the air-gap message, instead of string-
+	// matching text that varies by language and token count (see
+	// egress_audit.go's EgressGateResult.Message).
+	LastReplyWasDryRun bool
 }
 
 // NewSession arranca una sesión usando el proveedor/modelo activo
@@ -126,6 +133,7 @@ func (s *Session) SetSystem(text string) {
 // ConfigCache) — si alguien edita el .json a mano mientras el chat está
 // abierto, el próximo mensaje ya usa los valores nuevos.
 func (s *Session) Send(userText string) (string, error) {
+	s.LastReplyWasDryRun = false
 	if s.Model == "" {
 		return "", fmt.Errorf("no hay modelo activo — usá `set -model <nombre>` primero")
 	}
@@ -164,6 +172,7 @@ func (s *Session) Send(userText string) (string, error) {
 	// (selection → governance → sanitization → egress_audit → provider).
 	if outcome := s.applyEgressAudit(); outcome.stop {
 		s.History = s.History[:len(s.History)-1]
+		s.LastReplyWasDryRun = outcome.dryRun
 		return outcome.reply, outcome.err
 	}
 
@@ -183,6 +192,7 @@ func (s *Session) Send(userText string) (string, error) {
 // Si el proveedor activo no soporta streaming, cae a Send() de forma transparente sin romper nada:
 // onToken se llama una sola vez con la respuesta completa al final.
 func (s *Session) SendStream(userText string, onToken func(string)) (string, error) {
+	s.LastReplyWasDryRun = false
 	if s.Model == "" {
 		return "", fmt.Errorf("no hay modelo activo — usá `set -model <nombre>` primero")
 	}
@@ -236,6 +246,7 @@ func (s *Session) SendStream(userText string, onToken func(string)) (string, err
 	// support streaming" fallback a few lines up already does.
 	if outcome := s.applyEgressAudit(); outcome.stop {
 		s.History = s.History[:len(s.History)-1]
+		s.LastReplyWasDryRun = outcome.dryRun
 		if outcome.err == nil && onToken != nil {
 			onToken(outcome.reply)
 		}

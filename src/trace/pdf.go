@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"mova.local/documents"
+	"mova.local/i18n"
 )
 
 // WriteContextReportPDF builds a simple HTML layout (h1/h2/p/li - the
@@ -43,7 +44,7 @@ func contextReportHTML(d *Data) string {
 	} else {
 		fmt.Fprintf(&b, "<p><b>Project:</b> %s</p><p><b>Task:</b> %s</p><p><b>project.json:</b> %s</p>", d.ProjectName, d.TaskName, d.ProjectJSONPath)
 	}
-	fmt.Fprintf(&b, "<p><b>Agent:</b> %s &middot; <b>Target model:</b> %s &middot; <b>Policy author:</b> %s</p>", orNA(d.AgentClient), orNA(d.TargetModel), orNA(d.PolicyAuthor))
+	fmt.Fprintf(&b, "<p><b>%s:</b> %s &middot; <b>%s:</b> %s &middot; <b>%s:</b> %s</p>", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
 
 	b.WriteString("<h2>Context composition</h2>")
 	if len(d.Components) > 0 {

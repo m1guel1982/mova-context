@@ -159,6 +159,7 @@ func BuildContextSections(adapter Adapter, root, projectName, taskName string) (
 	var dbg strings.Builder
 	if proj.Debug {
 		fmt.Fprintf(&dbg, "[debug] repo: %s\n", resolveDebugPath(root, proj.Repo))
+		writePolicyDebugLines(&dbg, root, projectName, proj)
 	}
 
 	var header strings.Builder

@@ -3,9 +3,11 @@ package budget
 import (
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"testing"
 
 	"mova.local/core"
+	"mova.local/i18n"
 )
 
 // buildBudgetFixture mirrors core's fixture builder (kept local to avoid
@@ -151,6 +153,93 @@ func TestRenderMarkdown_IsEnglishAndContainsDisclaimer(t *testing.T) {
 			t.Errorf("expected report to contain %q", want)
 		}
 	}
+}
+
+// TestRenderMarkdown_FollowsActiveLanguage is the multi-language
+// contract for mova-budget-report.md: switching config/lang's active
+// language must switch the ENTIRE report, not just isolated strings —
+// see config/lang/{es,en}.json's "budget" section and
+// PROJECT_JSON.md/ARTIFACTS.md for the artifacts this applies to.
+func TestRenderMarkdown_FollowsActiveLanguage(t *testing.T) {
+	root, projectName := buildBudgetFixture(t, false)
+	adapter := core.NewFileAdapter(root)
+	report, err := BuildReport(adapter, root, projectName, "", false)
+	if err != nil {
+		t.Fatalf("BuildReport: %v", err)
+	}
+
+	// TestMain forced "en" for every other test in this package — flip
+	// to "es" via an isolated throwaway catalog copy, render, then
+	// restore, so this test doesn't leak language state into whichever
+	// test runs after it.
+	switchActiveLanguageForTest(t, "es")
+	md := RenderMarkdown(report)
+	switchActiveLanguageForTest(t, "en")
+
+	for _, want := range []string{
+		"# Reporte de Presupuesto de Mova", "## Tokenización", "## Desglose de Tokens y Costo",
+		"tiktoken-go", "## Importante", "TOTAL",
+	} {
+		if !contains(md, want) {
+			t.Errorf("expected Spanish report to contain %q, got:\n%s", want, md)
+		}
+	}
+	if contains(md, "# Mova Budget Report") {
+		t.Errorf("expected the English title to be GONE once lang=es, got:\n%s", md)
+	}
+}
+
+// switchActiveLanguageForTest points the i18n package at a FRESH,
+// throwaway copy of the real config/lang/ catalog with lang_active.json
+// set to lang — same safety rule as TestMain (i18n_test_main_test.go):
+// never touch the actual checkout's config/lang/lang_active.json,
+// since its hot-reload poller runs as a background goroutine that
+// would otherwise race with, and potentially outlive, this one test.
+func switchActiveLanguageForTest(t *testing.T, lang string) {
+	t.Helper()
+	repoRoot := realRepoRootForTest(t)
+	if repoRoot == "" {
+		t.Skip("real config/lang not found from this checkout — skipping")
+	}
+	enData, err := os.ReadFile(filepath.Join(repoRoot, "config", "lang", "en.json"))
+	if err != nil {
+		t.Skip("could not read config/lang/en.json — skipping")
+	}
+	esData, err := os.ReadFile(filepath.Join(repoRoot, "config", "lang", "es.json"))
+	if err != nil {
+		t.Skip("could not read config/lang/es.json — skipping")
+	}
+
+	tmp := t.TempDir()
+	langDir := filepath.Join(tmp, "config", "lang")
+	if err := os.MkdirAll(langDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite := func(name string, data []byte) {
+		if err := os.WriteFile(filepath.Join(langDir, name), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustWrite("en.json", enData)
+	mustWrite("es.json", esData)
+	mustWrite("lang_active.json", []byte(`{"lang":"`+lang+`"}`))
+
+	if err := i18n.Init(tmp); err != nil {
+		t.Fatalf("i18n.Init: %v", err)
+	}
+}
+
+func realRepoRootForTest(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := goruntime.Caller(0)
+	if !ok {
+		return ""
+	}
+	root := filepath.Join(filepath.Dir(thisFile), "..", "..")
+	if _, err := os.Stat(filepath.Join(root, "config", "lang", "es.json")); err != nil {
+		return ""
+	}
+	return root
 }
 
 func TestWriteReport_WritesToConfiguredPath(t *testing.T) {

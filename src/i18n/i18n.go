@@ -38,9 +38,18 @@ type translator struct {
 	active      string             // e.g. "es"
 	catalogs    map[string]catalog // lang code -> flattened catalog
 	activeMTime int64              // lang_active.json's mtime, for hot-reload polling
+	// fileMTimes tracks each loaded <lang>.json's OWN mtime (lang code
+	// -> mtime), separate from activeMTime (which only tracks
+	// lang_active.json, the file that names WHICH language is active).
+	// This is what lets EDITING a message's TEXT — e.g.
+	// config/lang/es.json's "reports.egress_airgap_message", see
+	// PROJECT_JSON.md § egress_audit's air-gap directive — take effect
+	// hot, not just switching which language is active. See
+	// i18n_reload.go's reloadActiveLanguageFile.
+	fileMTimes map[string]int64
 }
 
-var t = &translator{catalogs: map[string]catalog{}}
+var t = &translator{catalogs: map[string]catalog{}, fileMTimes: map[string]int64{}}
 
 // fallbackLang is what every door falls back to when the active
 // language is missing a key, or its file can't be read at all - see
@@ -107,10 +116,13 @@ func interpolate(s string, args map[string]any) string {
 }
 
 // loadCatalog reads config/lang/<lang>.json under root, flattens it,
-// and stores it - called for the fallback language once at Init, and
-// for the active language on every (re)load.
+// and stores it - called for the fallback language once at Init, for
+// the active language on every (re)load, and by reloadActiveLanguageFile
+// whenever the active language's own file changes on disk (content hot-
+// reload, not just language-switch hot-reload).
 func loadCatalog(root, lang string) error {
 	path := filepath.Join(root, "config", "lang", lang+".json")
+	info, statErr := os.Stat(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -124,6 +136,9 @@ func loadCatalog(root, lang string) error {
 
 	t.mu.Lock()
 	t.catalogs[lang] = flat
+	if statErr == nil {
+		t.fileMTimes[lang] = info.ModTime().UnixNano()
+	}
 	t.mu.Unlock()
 	return nil
 }

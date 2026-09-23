@@ -67,7 +67,7 @@ func BuildGatedContext(adapter core.Adapter, root, project, task string) GatedCo
 	// enables it never sends the original candidate-PII tokens to a
 	// model, local or cloud. See mova.local/sanitize/pii.go's header
 	// for the technical/legal disclaimer this stage carries.
-	piiStats := applyPIIMasking(root, sections, cfg)
+	piiStats := applyPIIMasking(root, proj, sections, cfg)
 
 	text := sections.Full()
 	tokens := countTokensRespectingToggle(text, modelHintOf(proj), cfg)
@@ -130,11 +130,17 @@ func modelHintOf(proj *core.Project) string {
 // contract every other Context Governance stage follows, except this one
 // requires an explicit `true` instead of defaulting to on (see
 // core.PIIMaskingEnabled's doc comment for why).
-func applyPIIMasking(root string, sections *core.ContextSections, cfg *core.BudgetConfig) sanitize.PIIStats {
+func applyPIIMasking(root string, proj *core.Project, sections *core.ContextSections, cfg *core.BudgetConfig) sanitize.PIIStats {
 	if !core.PIIMaskingEnabled(cfg) || sections == nil {
 		return sanitize.PIIStats{}
 	}
-	policy := sanitize.LoadPIIPolicy(root)
+	// LoadPIIPolicyForProject (not the older, root-only LoadPIIPolicy)
+	// so a project.json that declares its own "policies" (e.g. opting
+	// into a stricter pii_strict.json) is actually honored here, not
+	// just in context-trace's report — see that function's doc comment
+	// for the full rationale. proj may be nil (no caller in this file
+	// passes nil today, but the function stays safe if one ever does).
+	policy := sanitize.LoadPIIPolicyForProject(root, proj)
 	var total sanitize.PIIStats
 	if sections.Focus != "" {
 		masked, stats := sanitize.MaskPII(sections.Focus, policy)

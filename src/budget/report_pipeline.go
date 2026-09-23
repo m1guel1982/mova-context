@@ -1,14 +1,18 @@
 // report_pipeline.go — the three new mova-budget-report.md sections
-// for the Context Governance (Sanitizer/Cache Layout/Circuit Breaker),
-// kept in their own file so report.go (already close to the 300-line
-// limit) doesn't have to grow for this. Called from RenderMarkdown
-// (report.go) — same report, same file, same generation call, just
-// three more sections appended when there's something to say.
+// for Context Governance (Sanitizer/Cache Layout/Circuit Breaker), kept
+// in their own file so report.go (already close to the 300-line limit)
+// doesn't have to grow for this. Called from RenderMarkdown (report.go)
+// — same report, same file, same generation call, just three more
+// sections appended when there's something to say. Every sentence goes
+// through i18n.T (see config/lang/{es,en}.json's "budget" section) —
+// same rule as report.go.
 package budget
 
 import (
 	"fmt"
 	"strings"
+
+	"mova.local/i18n"
 )
 
 // sanitizerSection reports what the Sanitizer stage actually removed —
@@ -20,20 +24,20 @@ func sanitizerSection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Sanitizer\n\n")
-	b.WriteString("Mova Context removed repetitive noise from Focus/Memory before counting or sending anything — 100% deterministic, no AI involved, microseconds of work:\n\n")
+	b.WriteString(i18n.T("budget.section_sanitizer") + "\n\n")
+	b.WriteString(i18n.T("budget.sanitizer_intro") + "\n\n")
 	if s.LinesRemoved > 0 {
-		b.WriteString(fmt.Sprintf("- %d repeated line(s)/header(s) collapsed (e.g. repeated log lines, duplicated file headers).\n", s.LinesRemoved))
+		b.WriteString(i18n.T("budget.sanitizer_lines_removed", map[string]any{"count": s.LinesRemoved}) + "\n")
 	}
 	if s.BlankRemoved > 0 {
-		b.WriteString(fmt.Sprintf("- %d run(s) of excess blank lines collapsed.\n", s.BlankRemoved))
+		b.WriteString(i18n.T("budget.sanitizer_blank_removed", map[string]any{"count": s.BlankRemoved}) + "\n")
 	}
 	if s.CommentsRemoved > 0 {
-		b.WriteString(fmt.Sprintf("- %d line(s) of large comment blocks omitted (only when \"strip_comments\" is enabled).\n", s.CommentsRemoved))
+		b.WriteString(i18n.T("budget.sanitizer_comments_removed", map[string]any{"count": s.CommentsRemoved}) + "\n")
 	}
 	if s.CharsRemoved > 0 {
 		approxTokens := s.CharsRemoved / 4
-		b.WriteString(fmt.Sprintf("\nApproximate savings: ~%d tokens (~%d characters) — already reflected in every count above.\n\n", approxTokens, s.CharsRemoved))
+		b.WriteString("\n" + i18n.T("budget.sanitizer_approx_savings", map[string]any{"tokens": approxTokens, "chars": s.CharsRemoved}) + "\n\n")
 	}
 	return b.String()
 }
@@ -49,9 +53,9 @@ func piiMaskingSection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## PII Masking\n\n")
-	b.WriteString(fmt.Sprintf("%d of %d scanned token(s) in Focus/Memory matched the structural PII-shape threshold (config/policy.json) and were replaced with a deterministic `[PII_xxxxxxxx]` pseudonym before counting or sending anything.\n\n", p.TokensMasked, p.TokensScanned))
-	b.WriteString("This is a heuristic, structural mitigation (word shape + Shannon entropy, no word lists) — **not** a legal anonymization or Ley 21.719/GDPR compliance guarantee. It does not detect 100% of PII (false negatives), and can also mask some non-PII tokens that share a similar structural shape, such as dates (false positives). It does not replace legal review, an internal privacy policy, or a compliance program. See docs/i18n/{es,en}/COMMANDS.md § PII Masking.\n\n")
+	b.WriteString(i18n.T("budget.section_pii_masking") + "\n\n")
+	b.WriteString(i18n.T("budget.pii_masking_result", map[string]any{"masked": p.TokensMasked, "scanned": p.TokensScanned}) + "\n\n")
+	b.WriteString(i18n.T("budget.pii_masking_disclaimer") + "\n\n")
 	return b.String()
 }
 
@@ -63,17 +67,17 @@ func cacheLayoutSection(r *Report) string {
 	}
 	l := r.CacheLayout
 	var b strings.Builder
-	b.WriteString("## Cache Layout Guard\n\n")
-	b.WriteString("\"cache_hint\" is enabled: the system prompt sent to the model is laid out as a stable prefix (agents + skills + prompt) followed by everything that changes every run (timestamp, focus, memory) — this is what lets a Cloud provider's own prompt caching actually trigger.\n\n")
-	b.WriteString(fmt.Sprintf("Static prefix: %d tokens\n\n", l.StaticTokens))
-	b.WriteString(fmt.Sprintf("Prefix fingerprint: `%s` — compare this value run to run; an unchanged fingerprint means the prefix is byte-identical and a real provider cache is likely to hit.\n\n", l.Hash))
+	b.WriteString(i18n.T("budget.section_cache_layout") + "\n\n")
+	b.WriteString(i18n.T("budget.cache_layout_intro") + "\n\n")
+	b.WriteString(i18n.T("budget.cache_static_prefix", map[string]any{"count": l.StaticTokens}) + "\n\n")
+	b.WriteString(i18n.T("budget.cache_prefix_fingerprint", map[string]any{"hash": l.Hash}) + "\n\n")
 	if l.StaticTokens > 0 {
-		b.WriteString(fmt.Sprintf("Estimated tokens reused on a cache hit: ~%d (~90%% of the static prefix — Anthropic's own published discount for cached input; other providers vary, see COMMANDS.md § Context Governance for the per-provider table).\n\n", int(float64(l.StaticTokens)*0.9)))
+		b.WriteString(i18n.T("budget.cache_estimated_reuse", map[string]any{"count": int(float64(l.StaticTokens) * 0.9)}) + "\n\n")
 	}
 	if l.StaticTokens < 1024 {
-		b.WriteString("Note: this prefix is under ~1,024 tokens, the approximate minimum several providers require before caching kicks in (the exact minimum varies by provider/model and changes over time) — caching may not activate yet for this project, but there is no downside to leaving \"cache_hint\" on.\n\n")
+		b.WriteString(i18n.T("budget.cache_below_minimum") + "\n\n")
 	}
-	b.WriteString("This increases the PROBABILITY of a cache hit — it does not guarantee one. Actual caching depends on the provider, the model, and whether you make another call using the same prefix again while the provider's cache window is still open.\n\n")
+	b.WriteString(i18n.T("budget.cache_probability_note") + "\n\n")
 	return b.String()
 }
 
@@ -86,29 +90,31 @@ func circuitBreakerSection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Circuit Breaker\n\n")
+	b.WriteString(i18n.T("budget.section_circuit_breaker") + "\n\n")
 	if cb.RunLimit > 0 {
-		status := "OK"
+		status := i18n.T("budget.circuit_status_ok")
 		if cb.RunExceeded {
-			status = "OVER LIMIT"
+			status = i18n.T("budget.circuit_status_over")
 		}
-		b.WriteString(fmt.Sprintf("Per-run limit: %d / %d tokens (%s)\n\n", cb.RunTokens, cb.RunLimit, status))
+		b.WriteString(i18n.T("budget.circuit_per_run_limit", map[string]any{"used": cb.RunTokens, "limit": cb.RunLimit, "status": status}) + "\n\n")
 	}
 	if cb.MonthUSDLimit > 0 {
-		status := "OK"
+		status := i18n.T("budget.circuit_status_ok")
 		if cb.MonthExceeded {
-			status = "OVER LIMIT"
+			status = i18n.T("budget.circuit_status_over")
 		}
-		b.WriteString(fmt.Sprintf("Monthly spend: $%.2f / $%.2f (%s) — tracked in mova-spend.json, resets automatically at the start of each calendar month.\n\n", cb.MonthUSDSpent, cb.MonthUSDLimit, status))
+		b.WriteString(i18n.T("budget.circuit_monthly_spend", map[string]any{
+			"spent": fmt.Sprintf("%.2f", cb.MonthUSDSpent), "limit": fmt.Sprintf("%.2f", cb.MonthUSDLimit), "status": status,
+		}) + "\n\n")
 	}
 	if cb.Message != "" {
 		if cb.Aborted {
-			b.WriteString(fmt.Sprintf("Status: %s **This stops execution before anything is sent to a model** (\"on_exceed\": \"abort\").\n\n", cb.Message))
+			b.WriteString(i18n.T("budget.circuit_status_aborted", map[string]any{"message": cb.Message}) + "\n\n")
 		} else {
-			b.WriteString(fmt.Sprintf("Status: %s This is a warning only (\"on_exceed\": \"warn\", the default) — execution continues.\n\n", cb.Message))
+			b.WriteString(i18n.T("budget.circuit_status_warn", map[string]any{"message": cb.Message}) + "\n\n")
 		}
 	} else {
-		b.WriteString("Status: within budget.\n\n")
+		b.WriteString(i18n.T("budget.circuit_status_within") + "\n\n")
 	}
 	return b.String()
 }
@@ -122,18 +128,23 @@ func firewallSummarySection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Context Governance — Summary\n\n")
-	b.WriteString("Before vs. after the full pipeline (Sanitizer + Cache Layout Guard awareness + Circuit Breaker check):\n\n")
-	b.WriteString("| | Before | After | Savings |\n|---|---|---|---|\n")
-	b.WriteString(fmt.Sprintf("| Tokens | %d | %d | %.1f%% |\n", r.RawTokens, r.TotalTokens, r.MemorySavingsPercent))
+	b.WriteString(i18n.T("budget.section_governance_summary") + "\n\n")
+	b.WriteString(i18n.T("budget.governance_summary_intro") + "\n\n")
+	b.WriteString(i18n.T("budget.governance_summary_header") + "\n")
+	b.WriteString(i18n.T("budget.governance_summary_tokens_row", map[string]any{
+		"before": r.RawTokens, "after": r.TotalTokens, "pct": fmt.Sprintf("%.1f", r.MemorySavingsPercent),
+	}) + "\n")
 	for i, before := range r.RawCosts {
 		if i >= len(r.TotalCosts) {
 			break
 		}
 		after := r.TotalCosts[i]
-		b.WriteString(fmt.Sprintf("| Cost (%s) | $%.4f | $%.4f | %.1f%% |\n", before.Model, before.USD, after.USD, r.CostSavingsPercent))
+		b.WriteString(i18n.T("budget.governance_summary_cost_row", map[string]any{
+			"model": before.Model, "before": fmt.Sprintf("%.4f", before.USD), "after": fmt.Sprintf("%.4f", after.USD),
+			"pct": fmt.Sprintf("%.1f", r.CostSavingsPercent),
+		}) + "\n")
 	}
-	b.WriteString("\nThese are estimates from the local tokenizer and config/prices.json — consistent and useful for comparing before/after, not a guarantee of what a provider will actually bill (see the Historical Accuracy section below for how close local estimates have run to real usage on this project).\n\n")
+	b.WriteString("\n" + i18n.T("budget.governance_summary_footer") + "\n\n")
 	return b.String()
 }
 
@@ -145,10 +156,10 @@ func fileBreakdownSection(r *Report) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("## Tokens per File (Focus)\n\n")
-	b.WriteString("| File | Tokens |\n|---|---|\n")
+	b.WriteString(i18n.T("budget.section_file_breakdown") + "\n\n")
+	b.WriteString(i18n.T("budget.file_breakdown_header") + "\n")
 	for _, f := range r.FileBreakdown {
-		b.WriteString(fmt.Sprintf("| %s | %d |\n", f.Name, f.Tokens))
+		fmt.Fprintf(&b, "| %s | %d |\n", f.Name, f.Tokens)
 	}
 	b.WriteString("\n")
 	return b.String()

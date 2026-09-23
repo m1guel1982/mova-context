@@ -1,12 +1,15 @@
 {
-  "_comment_en": "Orchestrator for the modular, cascading policy engine used by `mova context-trace` (see mova.local/sanitize's LoadPolicySet). Lists the policy files to load, in order, from config/policy/. Adding, removing, or reordering an entry here never requires a Go recompile. The legacy single-file format (a bare {\"pii_masking\": {...}} object) is still read correctly by every OTHER caller in this codebase (Context Governance's PII Masking stage keeps using LoadPIIPolicy directly) - this orchestrator format only applies to context-trace's richer governance model.",
-  "_comment_es": "Orquestador del motor de politicas modular en cascada usado por `mova context-trace` (ver LoadPolicySet en mova.local/sanitize). Enumera los archivos de politica a cargar, en orden, desde config/policy/. Agregar, quitar o reordenar una entrada aqui nunca requiere recompilar Go. El formato legado de archivo unico (un objeto plano {\"pii_masking\": {...}}) sigue siendo leido correctamente por cualquier OTRO consumidor de este codigo (la etapa de PII Masking de la Gobernanza de Contexto sigue usando LoadPIIPolicy directamente) - este formato de orquestador solo aplica al modelo de gobernanza mas completo de context-trace.",
+  "_comment_en": "Orchestrator for the modular, cascading policy engine (see mova.local/sanitize's ResolvePolicyRequest + LoadPolicySetFor). \"policies\" accepts a bare array or an {include,exclude} object; bare names are resolved by RECURSIVE search under config/policy/, and relative or cross-platform absolute paths are also accepted. This file is the LOWEST-precedence layer: a project.json that declares its own \"policies\" overrides it completely, and --policies_include/--policies_exclude override both. See docs/i18n/{es,en}/PROJECT_JSON.md.",
+  "_comment_es": "Orquestador del motor de politicas modular en cascada (ver ResolvePolicyRequest + LoadPolicySetFor en mova.local/sanitize). \"policies\" acepta un arreglo simple o un objeto {include,exclude}; los nombres simples se resuelven por busqueda RECURSIVA bajo config/policy/, y tambien se aceptan rutas relativas o absolutas multiplataforma. Este archivo es la capa de MENOR precedencia: un project.json que declare su propio \"policies\" lo sobrescribe por completo, y --policies_include/--policies_exclude sobrescriben a ambos. Ver docs/i18n/{es,en}/PROJECT_JSON.md.",
   "author": "system:default",
-  "version": "1.4",
-  "policies": [
-    "security.json",
-    "review.json",
-    "compliance.json",
-    "pii_strict.json"
-  ]
+  "version": "1.5",
+  "policies": {
+    "include": [
+      "security.json",
+      "review.json",
+      "compliance.json",
+      "pii_strict.json"
+    ],
+    "exclude": []
+  }
 }

@@ -48,11 +48,16 @@ func traceTool(adapter core.Adapter, root string, args map[string]any) (string, 
 	opts := trace.Options{
 		Root: root, Cwd: cwd, Origin: origin,
 		Project: project, Task: str(args, "task"),
-		RepoURL: repoURL, Branch: str(args, "branch"),
+		// Same policy precedence as the CLI flags of the same name (see
+		// core.ResolvePolicyRequest): comma-separated, bare names or
+		// full cross-platform paths.
+		PolicyInclude: core.SplitPolicyList(str(args, "policies_include")),
+		PolicyExclude: core.SplitPolicyList(str(args, "policies_exclude")),
+		RepoURL:       repoURL, Branch: str(args, "branch"),
 		ExportFormat: exportFormat, Output: str(args, "output"),
-		AgentClient:   agentClient,
-		TargetModel:   targetModel,
-		PolicyAuthor:  core.ResolvePolicyAuthor(root, project),
+		AgentClient:  agentClient,
+		TargetModel:  targetModel,
+		PolicyAuthor: core.ResolvePolicyAuthor(root, project),
 		// The MCP door is not interactive: an explicit
 		// "generate_project_json":"true" is the only way the
 		// suggested project.json gets written - a "yes" is never
