@@ -24,6 +24,7 @@
     ],
     "custom": []
   },
+
   "tasks": {
     "analizar": {
       "prompt": "analizar-contexto-clientes-ia",
@@ -52,7 +53,7 @@
     ]
   },
   "budget": {
-    "max_tokens": 1600000,
+    "max_tokens": 30000,
     "sanitize": {
       "enabled": true,
       "dedupe_logs": true,
