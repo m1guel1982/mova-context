@@ -234,3 +234,54 @@ func TestNormalizeKindName_Aliases(t *testing.T) {
 		t.Fatalf(`NormalizeKindName("no-existe") should not be recognized`)
 	}
 }
+
+func TestAnalyze_JSCallsImportsRefsAndNesting(t *testing.T) {
+	if err := Init(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	src := "const Admin = require('../admin/Admin');\nconst { f: g, h } = require('./x');\nimport D, * as NS from './m';\nconst LIMIT = 3;\n" +
+		"class K { run() { const local = 1; return Admin.get(local) + this.b() + g() + LIMIT; } b() { return [1].map(v => h(v)); } }\n" +
+		"function top() { function inner() { return Admin.x(); } return inner(); }\n"
+	f, ok := Analyze([]byte(src), "k.js")
+	if !ok {
+		t.Fatal("Analyze falló")
+	}
+	decls := map[string]string{}
+	for _, d := range f.Decls {
+		decls[d.Name] = d.Kind
+	}
+	if decls["K"] != "class" || decls["run"] != "func" || decls["b"] != "func" || decls["top"] != "func" || decls["LIMIT"] != "const" {
+		t.Errorf("decls = %v", decls)
+	}
+	if _, nested := decls["inner"]; nested || decls["local"] != "" {
+		t.Errorf("funciones/variables locales no deben ser nodos: %v", decls)
+	}
+	has := func(caller, q, n string) bool {
+		for _, c := range f.Calls {
+			if c.Caller == caller && c.Qualifier == q && c.Name == n {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("run", "Admin", "get") || !has("run", "this", "b") || !has("run", "", "g") || !has("b", "", "h") || !has("top", "Admin", "x") {
+		t.Errorf("calls = %+v", f.Calls)
+	}
+	imp := map[string]Import{}
+	for _, i := range f.Imports {
+		imp[i.Local] = i
+	}
+	if imp["Admin"].Module != "../admin/Admin" || imp["g"].Member != "f" || imp["h"].Member != "h" || imp["D"].Member != "default" || imp["NS"].Member != "*" {
+		t.Errorf("imports = %+v", f.Imports)
+	}
+	var ref bool
+	for _, r := range f.Refs {
+		ref = ref || (r.Caller == "run" && r.Name == "LIMIT")
+	}
+	if !ref {
+		t.Errorf("refs = %+v", f.Refs)
+	}
+	if _, ok := Analyze([]byte("x"), "notes.txt"); ok {
+		t.Error("lenguaje sin soporte debe devolver ok=false")
+	}
+}

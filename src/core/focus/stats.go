@@ -43,6 +43,9 @@ type ScanStats struct {
 	// chat_completion (ver core.FormatFocusSelection) sin que la capa
 	// de presentación tenga que volver a resolver nada.
 	Items []FocusItem
+
+	// Excludes: cada entrada de `exclude` con sus rutas resueltas (debug).
+	Excludes []ResolvedTarget
 }
 
 // FocusItem es un target de `focus`/`memory` ya resuelto, anotado para
@@ -54,17 +57,29 @@ type FocusItem struct {
 	Name  string
 	Kind  string // "file" | "dir"
 	Files int
+	// Paths: rutas absolutas reales de los archivos que aportó un target
+	// puntual (Kind "file"). Más de una significa que el nombre coincidió
+	// con varios archivos — todos entran y el filtrado queda en manos de
+	// quien escribe project.json. Vacío para Kind "dir".
+	Paths []string
+}
+
+// ResolvedTarget es una entrada de `exclude` con las rutas reales a las
+// que apunta — solo para el log de debug.
+type ResolvedTarget struct {
+	Name  string
+	Paths []string
 }
 
 // RecordFocusItem agrega un target ya resuelto — la llama render.go una
 // sola vez por target de la lista de `focus`/`memory`, nunca por cada
 // archivo dentro de un directorio. No-op seguro cuando Stats es nil,
 // mismo contrato que RecordScanned/RecordExcluded.
-func (s *ScanStats) RecordFocusItem(name, kind string, files int) {
+func (s *ScanStats) RecordFocusItem(name, kind string, files int, paths []string) {
 	if s == nil {
 		return
 	}
-	s.Items = append(s.Items, FocusItem{Name: name, Kind: kind, Files: files})
+	s.Items = append(s.Items, FocusItem{Name: name, Kind: kind, Files: files, Paths: paths})
 }
 
 // FilesScanned es la cuenta final, deduplicada por ruta real.

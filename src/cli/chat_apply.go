@@ -68,10 +68,8 @@ func handleAutoApplyConfirmation(adapter core.Adapter, root string, proj *core.P
 	}
 
 	if project != "" {
-		if block, mErr := core.ExtractMemoryBlock(assistant); mErr == nil && block != "" {
-			if err := adapter.AppendMemory(project, block); err == nil {
-				emit(i18n.T("chat.memory_updated", map[string]any{"project": project}) + "\n")
-			}
+		if res, mErr := core.RecordMemory(adapter, root, project, "", assistant, core.RecordOptions{}); mErr == nil && res.Saved > 0 {
+			emit(i18n.T("chat.memory_updated", map[string]any{"project": project}) + "\n")
 		}
 	}
 

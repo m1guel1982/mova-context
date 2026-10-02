@@ -1,5 +1,5 @@
-# Crear módulo
-Proyecto: `{{PROJECT}}` · Módulo: `{{MODULE}}` · Stack: `{{STACK}}` · API: `{{API_PREFIX}}/{{MODULE}}`
+# Crear módulo `{{MODULE}}` — `{{PROJECT}}`
+Stack: {{STACK}} · Consulta: {{QUERY}}
 Ockham: ver `ockham-core.md`.
 
-Entrega: estructura de archivos · migration {{DATABASE}} si aplica · endpoints con validación y auth ({{AUTH_METHOD}}) · Service+Repository separados · tests con {{TEST_FRAMEWORK}}. Seguir agents/custom y skills/custom del proyecto.
+Entrega solo lo necesario para la consulta: estructura de archivos · migración si hay datos nuevos · endpoints con validación y auth · Service y Repository separados · tests mínimos de los casos límite. Reutiliza lo que el proyecto ya tiene (helpers, dependencias, convenciones) antes de crear algo nuevo.

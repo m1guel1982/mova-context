@@ -1,5 +1,4 @@
-# Regla núcleo: YAGNI
-
-No asumas necesidades futuras. No crees abstracciones, endpoints ni estructuras si la tarea actual no lo solicita explícitamente. Si el prompt no lo pide, no existe.
-
-Nunca generar sin pedido explícito: Docker · docker-compose · CI/CD · logging avanzado · autenticación compleja · archivos .env · linters · formatters · carpetas vacías reservadas para el futuro · dependencias no declaradas en el stack.
+# Núcleo YAGNI
+Solo lo pedido: si la tarea no lo exige, no existe. Sin abstracciones, capas, endpoints, archivos ni dependencias «por si acaso»: ni interfaz de una sola implementación, ni factory de un solo producto, ni config para un valor que nunca cambia.
+No generar sin pedido explícito: Docker · CI/CD · logging avanzado · auth compleja · .env · linters/formatters · carpetas reservadas al futuro · dependencias fuera del stack.
+Ante duda de alcance, la opción más pequeña que cumple.

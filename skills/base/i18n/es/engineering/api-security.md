@@ -2,17 +2,9 @@
 Auditar seguridad de API {{API_PREFIX}}. Auth: {{AUTH_METHOD}}
 KISS+DRY: ver `kiss-dry-core.md`.
 
-# Verificaciones
-* Autenticación en todo endpoint no explícitamente público
-* Autorización a nivel de recurso, no solo de ruta (anti-IDOR)
-* Rate limiting por usuario e IP en endpoints públicos
-* CORS con origins explícitos, nunca `*` en producción
-* Headers: `Strict-Transport-Security`, `X-Content-Type-Options`, `X-Frame-Options`
-* Inputs validados: tipo, longitud, formato
-* Errores sin stack trace ni rutas internas
-
-# Anti-patrones
-Autorización solo por rol sin ownership (IDOR) · mensaje distinto para usuario inexistente vs password incorrecta · versión de dependencia en headers
-
-# Output
-Hallazgos por endpoint con severidad y fix.
+# Skill: API y auth seguras
+- Validar y acotar toda entrada (tipo, largo, rango); consultas parametrizadas, nunca concatenadas.
+- Autorización en el servidor, por recurso y con mínimo privilegio; nunca confiar en el cliente.
+- JWT/tokens: verificar firma, `exp`, `iss`/`aud` y algoritmo fijo; vida corta; secretos fuera del código y del repo.
+- Rate limit en login y endpoints costosos; errores sin detalles internos.
+- No registrar secretos, tokens ni PII en logs.

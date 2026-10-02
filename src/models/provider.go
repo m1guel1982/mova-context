@@ -16,6 +16,11 @@ import (
 type Usage struct {
 	PromptTokens     int
 	CompletionTokens int
+	// FinishReason: por qué terminó la generación, normalizado a "stop",
+	// "length" (se agotó max_tokens) u otro texto del proveedor. "" = el
+	// proveedor no lo informó. Lo usa Session para avisar de respuestas
+	// truncadas o vacías (ver empty_reply.go).
+	FinishReason string
 }
 
 type Provider interface {

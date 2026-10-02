@@ -5,7 +5,7 @@
   "timeout_seconds": 120,
   "model": "gemini-3.5-flash",
   "temperature": 0.2,
-  "num_predict": 3500,
+  "max_tokens": 8192,
   "context_window": 1048576,
   "stream": true
 }

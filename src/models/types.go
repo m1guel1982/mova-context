@@ -20,6 +20,7 @@
 package models
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -53,7 +54,18 @@ type ModelConfig struct {
 	Version       string  `json:"version,omitempty"`
 	Mirostat      int     `json:"mirostat,omitempty"`
 	KeepAlive     string  `json:"keep_alive,omitempty"`
-	NumPredict    int     `json:"num_predict,omitempty"` // también funciona como el máximo de tokens de RESPUESTA en providers openai-compatible/anthropic (ver provider.go)
+	NumPredict    int     `json:"num_predict,omitempty"` // máximo de tokens de RESPUESTA (estilo Ollama). Alias: max_tokens — ver ResponseMax
+	// MaxTokens: máximo de tokens de RESPUESTA (estilo OpenAI/OpenRouter/
+	// Anthropic). ANTES este campo del .json se ignoraba en silencio y
+	// todos los proveedores caían al default (512 en openai-compatible):
+	// un modelo con razonamiento (DeepSeek, o1, Gemini thinking) gastaba
+	// ese cupo pensando y devolvía texto vacío pero facturado. Gana sobre
+	// num_predict cuando ambos existen. Ver ResponseMax.
+	MaxTokens int `json:"max_tokens,omitempty"`
+	// Reasoning: objeto opcional que se reenvía tal cual como "reasoning"
+	// a APIs openai-compatible que lo soportan (OpenRouter), p.ej.
+	// {"effort":"low"} o {"enabled":false}. Ausente = no se envía.
+	Reasoning json.RawMessage `json:"reasoning,omitempty"`
 	Temperature   float64 `json:"temperature"`
 	ContextWindow int     `json:"context_window,omitempty"`
 	RepeatPenalty float64 `json:"repeat_penalty,omitempty"`

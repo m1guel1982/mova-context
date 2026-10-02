@@ -41,6 +41,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 	var statusLog strings.Builder
 	project := str(args, "project")
 	var proj *core.Project
+	savedTask := "" // tarea efectiva de esta llamada (para guardar su resultado)
 
 	if project != "" {
 		statusLog.WriteString("[Project] Loading project configuration...\n")
@@ -77,7 +78,13 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 
 	if project != "" {
 		statusLog.WriteString("[Context] Building context...\n")
-		taskName := str(args, "task")
+		// Tarea nombrada → solo su prompt/focus/grafo; sin tarea y con
+		// varias declaradas → todas (core.ChatTaskName), igual que
+		// `mova chat`. Cada llamada MCP/HTTP es una sesión nueva, así que
+		// memory.md (core.RecordMemory) es lo que une
+		// una tarea con la siguiente.
+		taskName := core.ChatTaskName(proj, str(args, "task"))
+		savedTask = taskName
 		// budget.BuildGatedContext runs the full Context Governance
 		// (Sanitizer → Circuit Breaker → the existing max_tokens gate)
 		// — the exact same pipeline `mova chat`/the TUI/`mova run`
@@ -112,6 +119,9 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		sess.EgressAuditDryRun, sess.EgressAuditOutputFile = core.ResolveEgressAudit(root, project, proj)
 		if core.ToolsEnabled(proj.Tools) {
 			statusLog.WriteString("[Tools] Enabled for this call — the model may create/write files and directories (see project.json's \"tools\").\n")
+		}
+		if gated.Sections != nil && gated.Sections.GraphStatus != "" {
+			statusLog.WriteString(gated.Sections.GraphStatus + "\n")
 		}
 		if gated.Sections != nil && gated.Sections.DebugLog != "" {
 			statusLog.WriteString(gated.Sections.DebugLog)
@@ -163,7 +173,11 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 					return "", fmt.Errorf("egress_audit: could not write %s: %w", sess.EgressAuditOutputFile, werr)
 				}
 			}
-			return statusLog.String() + i18n.T("reports.egress_delegated_header") + "\n\n" + sess.System + "\n\n---\n" + message, nil
+			hint := ""
+			if core.MemoryEnabled(proj) { // Mova no ve la respuesta del anfitrión: que registre él su síntesis
+				hint = "\n\n---\n[Memory] memory está activo en este proyecto: al terminar, llama a la herramienta save_memory con project=\"" + project + "\", task=\"" + taskName + "\" y tu bloque ```memory como entry, para que las demás tareas lo lean."
+			}
+			return statusLog.String() + i18n.T("reports.egress_delegated_header") + "\n\n" + sess.System + "\n\n---\n" + message + hint, nil
 		}
 	}
 
@@ -223,7 +237,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 			return "", err
 		}
 	} else {
-		statusLog.WriteString("[" + label + "] Sending request...\n")
+		statusLog.WriteString(i18n.T("chat.sending_request", map[string]any{"label": label}) + "\n")
 		reply, err = sendWithToolsMCP(&statusLog, sess, adapter, proj, root, message)
 		if err != nil {
 			return "", err
@@ -235,151 +249,30 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 			// project.json's "egress_audit": {"dry_run": true}).
 			statusLog.WriteString("[egress_audit] " + i18n.T("reports.egress_dry_run_done") + "\n")
 		} else {
-			statusLog.WriteString("[" + label + "] Response received.\n")
+			statusLog.WriteString(i18n.T("chat.response_received", map[string]any{"label": label}) + "\n")
 		}
+	}
+	if sess.LastTruncated {
+		statusLog.WriteString(i18n.T("chat.reply_truncated") + "\n")
 	}
 	writeTokenUsage(&statusLog, root, sess, proj)
 	statusLog.WriteString("\n")
 
 	if project != "" && proj != nil {
 		recordRealUsageMCP(root, project, proj, sess)
+		if !sess.LastReplyWasDryRun {
+			// Misma regla que el chat: solo si project.json tiene "memory"
+			// activo. Cada llamada MCP/HTTP es una sesión nueva; memory.md
+			// es lo que une una tarea con la siguiente.
+			res, merr := core.RecordMemory(adapter, root, project, savedTask, reply, core.RecordOptions{})
+			switch {
+			case merr != nil:
+				statusLog.WriteString("[Memory] no se pudo guardar: " + merr.Error() + "\n")
+			case res.Message() != "":
+				statusLog.WriteString(res.Message() + "\n")
+			}
+		}
 	}
 
 	return statusLog.String() + documents.AutoTagCodeFences(reply), nil
-}
-
-// writeTokenUsage mirrors cli/chat_cmd.go's printTokenUsage for the
-// MCP/HTTP door: shows how many tokens the request used and the active
-// model's maximum context window (see mova.local/models.UsageFor). HTTP
-// gets this for free — http/server.go is a thin wrapper over this same
-// tool (see server.go's doc comment).
-func writeTokenUsage(statusLog *strings.Builder, root string, sess *models.Session, proj *core.Project) {
-	mc, err := models.DefaultCache.GetModel(root, sess.Provider, sess.Model)
-	if err != nil {
-		return
-	}
-	fallback := tokensOfText(sess.System, proj)
-	statusLog.WriteString(models.UsageFor(sess, mc, fallback).FormatLine())
-}
-
-// tokensOfText mirrors cli/chat_cmd.go's tokensOf — kept as its own small
-// copy here (not exported from cli, which can't be imported from mcp)
-// rather than adding a new shared package for a three-line estimate call.
-func tokensOfText(text string, proj *core.Project) int {
-	modelHint := ""
-	if proj != nil && proj.LLMProfile != nil {
-		modelHint = proj.LLMProfile.Config
-	}
-	n, _, _ := budget.CountTokens(text, modelHint)
-	return n
-}
-
-// sendWithToolsMCP mirrors cli/chat_cmd.go's sendWithTools for the MCP/HTTP
-// door: same opt-in tool-calling loop (project.json's "tools"), same
-// marker protocol (mcp.ParseAgentToolCall/RunAgentTool), just logging into
-// statusLog (returned as part of the tool's text result) instead of the
-// console. Kept as its own small copy — same reasoning tokensOfText's
-// comment already gives — rather than a shared package for one loop.
-func sendWithToolsMCP(statusLog *strings.Builder, sess *models.Session, adapter core.Adapter, proj *core.Project, root, userText string) (string, error) {
-	reply, err := sess.Send(userText)
-	if err != nil {
-		return "", err
-	}
-	if proj == nil || adapter == nil || !core.ToolsEnabled(proj.Tools) {
-		return reply, nil
-	}
-	for i := 0; i < MaxAgentToolTurns; i++ {
-		name, args, ok := ParseAgentToolCall(reply)
-		if !ok {
-			break
-		}
-		statusLog.WriteString(fmt.Sprintf("[Tool] %s %v\n", name, args))
-		var result string
-		var terr error
-		if name == "apply_file_changes" {
-			// MCP/HTTP have no terminal for the interactive menu
-			// cli/apply_file_changes.go shows — see
-			// DescribePendingChanges' doc comment. Never auto-writes.
-			if changes, ok := ParseApplyFileChanges(args); ok {
-				result = DescribePendingChanges(changes)
-			} else {
-				terr = fmt.Errorf(`"changes" must be a non-empty array of {"action","path","content"}`)
-			}
-		} else {
-			result, terr = RunAgentTool(adapter, root, name, args, proj.Tools)
-		}
-		if terr != nil {
-			result = "ERROR: " + terr.Error()
-		}
-		statusLog.WriteString("[Tool] " + result + "\n")
-		reply, err = sess.Send(fmt.Sprintf(
-			"TOOL_RESULT(%s): %s\n\nContinue the reply for the user using this real result. If you need another tool, emit another block; if you are done, answer in plain text.",
-			name, result))
-		if err != nil {
-			return "", err
-		}
-	}
-	// Same cleanup cli/chat_helpers.go's sendWithTools applies — see
-	// StripResidualToolArtifacts' doc comment for why this is needed and
-	// why it's safe. HTTP gets this for free (http/server.go is a thin
-	// wrapper over this same function via mcp.Process).
-	return StripResidualToolArtifacts(reply), nil
-}
-
-// writeContextSummary mirrors cli/chat_cmd.go's printContextSummary,
-// writing into the tool's returned text instead of the console. proj is
-// used only to resolve "focus_display_limit" (core.FocusDisplayLimit) —
-// pass nil for the built-in default of 2.
-func writeContextSummary(b *strings.Builder, sections *core.ContextSections, proj *core.Project) {
-	if sections.DuplicatesRemoved > 0 {
-		approxTokens := sections.DuplicatesRemovedChars / 4
-		b.WriteString(fmt.Sprintf("[Dedup] Removed %d duplicated paragraph(s) (~%d tokens saved).\n", sections.DuplicatesRemoved, approxTokens))
-	}
-	if line := core.FormatFocusSelection(sections.FocusItems, core.FocusDisplayLimit(proj)); line != "" {
-		b.WriteString(line)
-	}
-}
-
-// recordRealUsageMCP mirrors cli/chat_cmd.go's recordRealUsage — see that
-// file's doc comment for what is (and, importantly, is never) stored.
-func recordRealUsageMCP(root, project string, proj *core.Project, sess *models.Session) {
-	if sess.LastUsage.PromptTokens <= 0 {
-		return
-	}
-	localEstimate := tokensOfText(sess.System, proj)
-	if localEstimate <= 0 {
-		return
-	}
-	path := budget.HistoryPath(root, project, proj)
-	_ = budget.RecordUsage(path, sess.Provider, localEstimate, sess.LastUsage.PromptTokens)
-
-	if project == "" || proj == nil {
-		return
-	}
-	totalTokens := sess.LastUsage.PromptTokens + sess.LastUsage.CompletionTokens
-	usd := 0.0
-	if prices, err := budget.LoadPrices(root); err == nil {
-		if cost, ok := budget.EstimateCostFor(totalTokens, sess.Provider, sess.Model, prices); ok {
-			usd = cost
-		}
-	}
-	_ = budget.RecordSpend(budget.SpendPath(root, project), totalTokens, usd)
-}
-
-func providerLabelMCP(provider string) string {
-	switch provider {
-	case "anthropic":
-		return "Claude"
-	case "google":
-		return "Gemini"
-	case "openai":
-		return "OpenAI"
-	case "ollama":
-		return "Ollama"
-	default:
-		if provider == "" {
-			return "Model"
-		}
-		return strings.ToUpper(provider[:1]) + provider[1:]
-	}
 }

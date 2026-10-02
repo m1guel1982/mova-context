@@ -64,6 +64,7 @@ func fullContextTool(adapter core.Adapter, root, project, task string) (string, 
 	if err != nil {
 		return "", err
 	}
+	task = core.NormalizeTaskArg(proj, task) // "all"/"todas" → todas las tareas
 
 	// budget.BuildGatedContext runs the full Context Governance
 	// pipeline — the exact same pipeline `mova run`/chat_completion

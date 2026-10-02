@@ -18,6 +18,7 @@ import (
 
 	"mova.local/core"
 	"mova.local/documents"
+	"mova.local/mpaths"
 )
 
 // ProviderAccumulator son los dos únicos números que se guardan por
@@ -47,7 +48,7 @@ func HistoryPath(root, project string, proj *core.Project) string {
 		}
 		return filepath.Join(root, proj.TokenHistoryPath)
 	}
-	return filepath.Join(root, "projects", project, "mova-token-history.json")
+	return filepath.Join(mpaths.ProjectsDir(root), project, "mova-token-history.json")
 }
 
 // LoadHistory lee mova-token-history.json. Un archivo inexistente no es

@@ -10,7 +10,7 @@ import (
 type excludeMatcher struct {
 	bareNames map[string]bool
 	absPaths  []string
-	repoPaths []string
+	relPaths  []string // ruta relativa/parcial ("programacion/Gantt.js"): coincide en cualquier carpeta del repo
 	globs     []string
 }
 
@@ -20,16 +20,20 @@ func normalizePath(p string) string {
 	return strings.ToLower(p)
 }
 
-func newExcludeMatcher(repoPath string, patterns []string) *excludeMatcher {
+func newExcludeMatcher(_ string, patterns []string) *excludeMatcher {
 	if len(patterns) == 0 {
 		return nil
 	}
 	m := &excludeMatcher{bareNames: map[string]bool{}}
-	cleanRepo := normalizePath(repoPath)
 
 	for _, raw := range patterns {
 		p := strings.TrimSpace(raw)
 		if p == "" || p == "." {
+			continue
+		}
+		// "archivo::kind=nombres" excluye símbolos, no el archivo: lo aplica
+		// ApplyAstSymbolExcludes sobre el contenido ya resuelto.
+		if strings.Contains(p, "::") {
 			continue
 		}
 
@@ -45,12 +49,11 @@ func newExcludeMatcher(repoPath string, patterns []string) *excludeMatcher {
 		case !strings.ContainsAny(p, `/\`):
 			m.bareNames[strings.ToLower(p)] = true
 		default:
-			full := normalizePath(filepath.Join(cleanRepo, pClean))
-			m.repoPaths = append(m.repoPaths, full)
+			m.relPaths = append(m.relPaths, strings.Trim(normalizePath(pClean), "/"))
 		}
 	}
 
-	if len(m.bareNames) == 0 && len(m.absPaths) == 0 && len(m.repoPaths) == 0 && len(m.globs) == 0 {
+	if len(m.bareNames) == 0 && len(m.absPaths) == 0 && len(m.relPaths) == 0 && len(m.globs) == 0 {
 		return nil
 	}
 	return m
@@ -82,9 +85,10 @@ func (m *excludeMatcher) excludesPath(absPath string) bool {
 		}
 	}
 
-	// 3. Coincidencia por ruta del repositorio ("mova_print/frontend/node_modules")
-	for _, p := range m.repoPaths {
-		if norm == p || strings.HasPrefix(norm, p+"/") {
+	// 3. Coincidencia por ruta relativa o parcial ("frontend/node_modules",
+	// "programacion/Gantt.js") en cualquier carpeta del repo, en límite de segmento.
+	for _, p := range m.relPaths {
+		if strings.HasSuffix(norm, "/"+p) || strings.Contains(norm, "/"+p+"/") {
 			return true
 		}
 	}

@@ -1,0 +1,8 @@
+{
+  "_comment_es": "Rutas de Mova. Cada valor se resuelve con la MISMA regla multiplataforma que project.json usa para \"repo\" (Windows C:\\ / D:/, red \\\\servidor\\recurso, o absoluta Unix /var/... se usan tal cual; una ruta 'pelada' sin marcador, como los valores de fabrica de abajo, se resuelve relativa a la raiz de Mova). Los valores de fabrica de este archivo reproducen EXACTAMENTE el comportamiento que Mova ya tenia antes de que este archivo existiera. Si un campo queda en \"\", se borra, o este archivo se elimina, Mova vuelve a ese mismo comportamiento por defecto automaticamente - ver docs/i18n/es/PATHS.md.",
+  "_comment_en": "Mova's paths. Every value resolves with the SAME cross-platform rule project.json's \"repo\" field already uses (Windows C:\\ / D:/, network \\\\server\\share, or a Unix absolute /var/... are used as-is; a bare path with no marker, like the factory values below, resolves relative to Mova's root). This file's factory values reproduce EXACTLY the behavior Mova already had before this file existed. If a field is left \"\", deleted, or this whole file is removed, Mova falls back to that same default automatically - see docs/i18n/en/PATHS.md.",
+  "agents": "agents",
+  "skills": "skills",
+  "prompts": "prompts",
+  "projects": "projects"
+}

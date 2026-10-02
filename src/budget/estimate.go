@@ -143,7 +143,7 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 		taskName = proj.DefaultTask
 	}
 	task, ok := proj.Tasks[taskName]
-	if !ok {
+	if !ok && !core.IsAllTasks(taskName) { // TaskAll: presupuesto a nivel de proyecto
 		return nil, fmt.Errorf("task %q not found in project %q", taskName, projectName)
 	}
 
@@ -162,7 +162,7 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 	detailed := core.DetailedReportsEnabled(cfg)
 	rawFocus, rawMemory := sections.Focus, sections.Memory
 
-	sanitizeStats := SanitizeCached(root, projectName, sections, sanitizeConfigFrom(cfg), core.ContextCacheEnabled(cfg))
+	sanitizeStats := SanitizeCached(root, projectName, sections, sanitizeConfigFrom(cfg), useContextCache(root, projectName, cfg))
 
 	// PII Masking preview — same optional, off-by-default stage
 	// BuildGatedContext runs (see gated_context.go's applyPIIMasking);

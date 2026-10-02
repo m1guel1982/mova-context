@@ -12,7 +12,7 @@
   "version": "7b",
   "mirostat": 0,
   "keep_alive": "24h",
-  "num_predict": 512,
+  "max_tokens": 512,
   "temperature": 0.2,
   "context_window": 32768,
   "repeat_penalty": 1.1,

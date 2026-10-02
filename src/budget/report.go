@@ -16,6 +16,7 @@ import (
 	"mova.local/core"
 	"mova.local/documents"
 	"mova.local/i18n"
+	"mova.local/mpaths"
 )
 
 // RenderMarkdown turns a Report into the final mova-budget-report.md text.
@@ -253,7 +254,7 @@ func BudgetReportPath(root, project string, proj *core.Project) string {
 		}
 		return filepath.Join(root, proj.BudgetPath)
 	}
-	return filepath.Join(root, "projects", project, "mova-budget-report.md")
+	return filepath.Join(mpaths.ProjectsDir(root), project, "mova-budget-report.md")
 }
 
 // WriteReport renders the report and writes it to BudgetReportPath,

@@ -25,13 +25,9 @@ package models
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"time"
 
 	"mova.local/budget"
 	"mova.local/i18n"
-	"mova.local/trace"
 )
 
 // buildAirgapMessage renders the full air-gap block returned to
@@ -155,48 +151,10 @@ func (s *Session) applyEgressAudit() egressAuditOutcome {
 	return egressAuditOutcome{}
 }
 
-// WriteEgressAuditLog appends ONE clearly delimited execution block —
-// execution_id, UTC timestamp, and the sanitized context verbatim — to
-// outputFile, creating any missing directories first. Always APPENDS
-// (os.O_APPEND|os.O_CREATE), so a previous run's log is never
-// truncated or overwritten; each block is fenced with its own
-// execution_id so concatenated runs stay unambiguous to a human or a
-// script reading the file. sanitizedContext is written exactly as
-// received — this function never sees, and cannot accidentally write,
-// a pre-sanitization/raw version, since every caller only ever passes
-// already-governed, already-PII-masked context (Session.System, or
-// context_tool.go's gated.Text from budget.BuildGatedContext — see
-// that file's package comment for the PROBLEM 1 fix history on why it
-// is specifically NOT core.BuildContextSections' raw output). Exported
-// so BOTH chat_completion (via Session.applyEgressAudit AND its
-// host-delegated branch's own direct call) and get_full_context
-// (mcp/context_tool.go, via EgressGate) write to the exact same format
-// — one file, one implementation, no drift between tools.
+// WriteEgressAuditLog deja ctx en outputFile SIN duplicar: ver
+// egress_blocks.go / egress_store.go (igual → omitido, cambiado →
+// reemplazado, nuevo → anexado). Misma firma que siempre: los tres
+// puertos (chat, MCP, HTTP) siguen llamándola igual.
 func WriteEgressAuditLog(outputFile, sanitizedContext string) error {
-	dir := filepath.Dir(outputFile)
-	if dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("creating %s: %w", dir, err)
-		}
-	}
-
-	f, err := os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("opening %s: %w", outputFile, err)
-	}
-	defer f.Close()
-
-	executionID := trace.NewExecutionID()
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-
-	block := fmt.Sprintf(
-		"\n## Egress audit — execution %s\n\n- execution_id: `%s`\n- timestamp: %s (UTC)\n\n"+
-			"### Sanitized context sent to the LLM\n\n```text\n%s\n```\n",
-		executionID, executionID, timestamp, sanitizedContext,
-	)
-
-	if _, err := f.WriteString(block); err != nil {
-		return fmt.Errorf("writing %s: %w", outputFile, err)
-	}
-	return nil
+	return writeEgressBlocks(outputFile, sanitizedContext)
 }

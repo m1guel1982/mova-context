@@ -50,34 +50,29 @@ func newTestSession(t *testing.T, srvURL string) *Session {
 	return sess
 }
 
-// TestWriteEgressAuditLog_CreatesDirsAndAppends covers: creates missing
-// directories, never overwrites a previous run, and each execution is
-// clearly delimited with its own execution_id.
-func TestWriteEgressAuditLog_CreatesDirsAndAppends(t *testing.T) {
+func TestWriteEgressAuditLog_CreatesDirsAndReplacesChangedContext(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, ".mova", "egress_sanitized.log")
 
 	if err := WriteEgressAuditLog(target, "primer contexto sanitizado"); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
-	if err := WriteEgressAuditLog(target, "segundo contexto sanitizado"); err != nil {
+	if err := WriteEgressAuditLog(target, "primer contexto sanitizado"); err != nil { // idéntico: no duplica
+		t.Fatalf("repeat write: %v", err)
+	}
+	if err := WriteEgressAuditLog(target, "segundo contexto sanitizado"); err != nil { // cambió: reemplaza
 		t.Fatalf("second write: %v", err)
 	}
-
 	data, err := os.ReadFile(target)
 	if err != nil {
 		t.Fatalf("reading %s: %v", target, err)
 	}
 	content := string(data)
-
-	if !strings.Contains(content, "primer contexto sanitizado") || !strings.Contains(content, "segundo contexto sanitizado") {
-		t.Fatalf("expected BOTH executions present (append, not overwrite); got:\n%s", content)
+	if strings.Contains(content, "primer contexto sanitizado") || strings.Count(content, "segundo contexto sanitizado") != 1 {
+		t.Fatalf("a changed context must REPLACE the old one, never duplicate it; got:\n%s", content)
 	}
-	if strings.Count(content, "## Egress audit — execution") != 2 {
-		t.Fatalf("expected 2 clearly delimited execution blocks, got:\n%s", content)
-	}
-	if !strings.Contains(content, "execution_id:") || !strings.Contains(content, "timestamp:") {
-		t.Fatalf("expected execution_id and timestamp in every block, got:\n%s", content)
+	if !strings.Contains(content, "sha=") || !strings.Contains(content, "updated=") {
+		t.Fatalf("every block must carry sha and updated; got:\n%s", content)
 	}
 }
 

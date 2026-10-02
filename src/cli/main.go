@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"mova.local/core/focus/astfilter"
+	_ "mova.local/graph" // registra core.GraphHook (ver core/graph_hook.go)
 	"mova.local/i18n"
 	"mova.local/logging"
 	"mova.local/runtime"

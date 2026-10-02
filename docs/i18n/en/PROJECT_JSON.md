@@ -14,7 +14,7 @@ Always lives at `projects/<name>/project.json` (fixed path, the engine looks now
   "adapter": "file",
   "default_task": "review",
   "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
-  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+  "skills": { "domain": "base", "use": ["api-security"], "custom": [] },
   "tasks": {
     "review": { "prompt": "review-project", "variables": {}, "focus": ["file.js"] }
   },
@@ -41,6 +41,98 @@ Always lives at `projects/<name>/project.json` (fixed path, the engine looks now
 
 See `docs/i18n/en/AST_FILTER.md` for the exact `file::kind=name` syntax.
 
+## Dynamic variables (agents, skills and prompts)
+
+Any key in a `"variables"` block replaces `${KEY}` or `{{KEY}}` in the `.md` files — whatever its name or the technology. Case doesn't matter (`query` = `QUERY`); a placeholder with no variable is left as-is.
+
+```json
+{
+  "variables": { "STACK": "Node.js / JavaScript" },
+  "agents": { "domain": "base", "use": ["frontend-dev"], "custom": [],
+              "variables": { "QUERY": "Optimize the Gantt loading" } },
+  "skills": { "domain": "base", "use": ["ui-accessibility"], "custom": [],
+              "variables": { "UPGRADE_TRIGGER": "> 5,000 items in Gantt.js" } },
+  "tasks": { "optimize": {
+      "prompt": "fix-or-improve",
+      "variables": { "QUERY": "Optimize the scheduling load", "SKIPPED_ABSTRACTIONS": "no new API layers" },
+      "focus": ["Gantt.js", "MenuAtencion.js::func=show()"] } }
+}
+```
+
+Precedence (last wins): automatic `PROJECT`/`REPO`/`TASK`/`LANG` < root `variables` < `agents.variables` / `skills.variables` (that block only) < `tasks.<t>.variables` (all blocks).
+
+`focus` and `exclude` accept a bare name (`Gantt.js`), a partial path (`programacion/Gantt.js`) or a full path, with or without `::func=...`. If the name exists in several folders, **all** matches are included and `debug` warns about it: use a longer path to pick one.
+
+## Dependency graph (`graph`)
+
+Inside a task, `graph` generates — **with no LLM and no tokens spent** — a diagram of the calls, variable references and imports between the files and symbols in `focus` and `exclude`. It uses the same Tree-Sitter and the same `kind`s as the [AST filter](AST_FILTER.md) (`func`/`method`, `class`, `var`, `const`, `struct`, `interface`…).
+
+```json
+"tasks": { "analyze": {
+  "focus":   ["api-rms\\lib\\programacion\\Programacion.js::func=getAtenciones,saveAtencion", "Admin.js::func=getModelo"],
+  "exclude": ["Programacion.js::func=divideAtencion"],
+  "graph":   "graph.png"
+} }
+```
+
+| `graph` value | Result |
+|---|---|
+| missing, `""`, `false`, `null` | nothing is generated |
+| `true` | `graph.png` in `project.json`'s folder |
+| `"graph.png"` / `"graph.svg"` / `"graph.pdf"` | that format, relative to `project.json`'s folder (`projects/<project>/`) |
+| `"graph"` (no extension) or a folder (`"out/"`) | `graph.png` / `out/graph.png` |
+| absolute path: `C:\graphs\g.png`, `\\server\share\g.pdf`, `/opt/g.svg` | that path; intermediate folders are created |
+| any other extension (`.jpg`…) | nothing is generated and a warning is shown (only `.png`, `.svg`, `.pdf`) |
+
+**Cross-platform:** the path is resolved like everywhere else in Mova (`\` and `/` are equivalent; Windows `C:\…`, UNC and Unix paths are recognized on any OS). A Windows path on a Linux/macOS machine is rejected with a clear message instead of being written somewhere else.
+
+**What it draws.** Each file is a subgraph; each symbol a node — function/method (blue), class/type (violet), variable/constant (amber). With `::kind=names` only those symbols are included; a file without `::` contributes its functions and classes. `exclude` symbols are red dashed; symbols that `focus` ones use but you did not request are grey dashed ("outside focus"). Arrows: call (blue), variable reference (amber), file→file import (dashed violet, routed in lanes above the files) and call *inferred by unique name* (dashed blue: no `require` resolves it, but only one `focus`/`exclude` symbol has that name). Files with many symbols switch to 2–3 inner columns and the gap between files grows with the number of relations. Palette and typography are those of `context-diagram.png`.
+
+**Every task.** One graph is generated for **each** task that declares `graph` (not just the active one), each with its own `focus`/`exclude` (or the project-inherited one). Use a different file per task (`"analyze.png"`, `"add-columns.png"`…): if two tasks point to the same file, the second is skipped with a `[Graph]` warning.
+
+**When and how it is generated.** Every time the context is built (`mova run`, `mova chat`, MCP, HTTP, budget) and some task has `graph`.
+- **`mova chat`, `mova mcp start` (stdio and HTTP):** in the **background**. Startup, every turn and `exit` never wait; when each graph finishes, the chat prints `[Graph] <task>: graph generated → path` and the MCP/HTTP server writes it to its log.
+- **`mova run`, `trace`, `budget`:** inline; the command ends with the files already written (tasks are generated in parallel).
+- **Cache:** the fingerprint of `project.json` (focus, exclude, `graph`, `lang`) and the size+mtime of every analyzed file are kept in `graph-cache.json`, next to `project.json`. If nothing changed, not even a fresh `mova chat` start re-renders (a turn with no changes only `stat`s the files). It is safe to delete.
+- **Hot:** if you edit `project.json` or an analyzed file, the next turn regenerates what is affected. The file is written atomically (temp + rename): closing the chat or having the graph open in a viewer never leaves a half-written file.
+- **Language:** diagram texts and `[Graph]` messages come from `config/lang/{es,en}.json` (`graph` section) in the project's `lang`.
+
+**Performance.** Each shape is rasterized only inside its own box and in parallel: a typical graph (~35 symbols) takes ~0.1–0.4 s and one with 130 symbols / 300 relations about 2 s on a single core; very dense graphs lower their resolution automatically. `.svg` is instant.
+
+**Scope and limits.** `require`/`import` are resolved to `focus`/`exclude` files for JavaScript/TypeScript (relative paths or unique suffix) and Python (`from x import y`); for other languages same-file calls and unique-name inference apply. Dynamic calls (`obj[name]()`), functions passed as callbacks without being invoked, and files outside `focus`/`exclude` are not followed. If one file repeats a method name in two classes, the first is drawn. If `focus` asks for symbols that don't exist, the `[Graph]` warning lists them.
+
+## Automatic memory (`memory`, `memory_max_chars`)
+
+`memory` turns on **automatic** memory registration. Every model reply with real work (≥200 characters) leaves its `memory` **synthesis block** in `memory.md`, and **every** task reads it in the `MEMORY` section of its context. So `analizar` feeds `agregar-columnas` even when you run them separately (`mova chat <project> analizar`, then `mova chat <project> agregar-columnas`), switch tasks in the chat (`/task`) or use MCP/HTTP.
+
+| Value | Effect |
+|---|---|
+| absent / `false` | **No** automatic memory is registered. An existing `memory.md` is still read, and manual `/memory` still works. |
+| `true` | `memory.md` next to `project.json` (`projects/<project>/memory.md`). |
+| `"<path>"` | That location. A file (`…/memory.md`) or a folder (`…/memory/` → `memory/memory.md`). |
+
+Cross-platform paths, same rules as `memory_path` and `egress_audit.output_file`: `C:\…`, `D:\…`, `E:\…` (Windows), `/mnt/…`, `/home/…` (Linux), `/Volumes/…` (macOS), `\\server\share\…` (network, on Windows), `~/…` (home) or relative (to the project folder). A path from another OS (e.g. `C:\` on a Linux server) gives an explicit error, not a phantom file. Precedence: `memory` (path) > `memory_path` > default.
+
+```json
+"memory": true
+"memory": "D:\\mova\\memory\\agunsa\\"
+"memory": "/mnt/shared/mova/agunsa/memory.md"
+```
+
+**What is saved.** Only the `memory` block the model delivers at the end (Task, Done, Findings `file::function`, Key data, Resolved, Decisions, Pending), not the whole reply: precise and cheap in tokens. If the model does not deliver one, an automatic digest of the technical lines. Each entry carries date, task and a fingerprint; an identical synthesis is never written twice. One block per task is saved separately.
+
+**What is read.** A small `memory.md` goes in whole. With a cap (`memory_max_chars`, default 20000 characters ≈ 5k tokens) the **latest entry of every task is always kept** and, with the remaining room, the newest ones; the rest are abbreviated.
+
+**Safe writes.** File lock and atomic write: chat, MCP and HTTP can write at once without losing entries.
+
+**Delegated mode** (no `llm_profile`): Mova never sees the host's reply; `chat_completion` asks it to call `save_memory` with its block, which honors this same field.
+
+**Cache.** `mova-context-cache.json` only speeds up sanitizing `focus`/`memory` (key: text hash); a `memory.md` change is always seen. With `pii_masking` on the cache is disabled (it stored text before masking).
+
+## Which task chat / MCP / HTTP load
+
+With a named task **only** its prompt, focus and graph are loaded (and only its `graph` is generated). With no task and several declared, **all** are loaded. `mova run` keeps its behavior (`default_task`).
+
 ## `egress_audit` — pre-provider audit and dry-run
 
 ```json
@@ -53,7 +145,7 @@ See `docs/i18n/en/AST_FILTER.md` for the exact `file::kind=name` syntax.
 | Key | Type | Default | What it does |
 |---|---|---|---|
 | `dry_run` | bool | `false` | When `true`: governance/sanitization (and the log, if `output_file` is set) still complete, but **the LLM provider is never called**. The client gets a successful reply saying the dry run finished and no inference happened. |
-| `output_file` | string | `""` (disabled) | Where the sanitized-context log gets appended. Independent of `dry_run` — you can audit without dry-running, or dry-run without logging. |
+| `output_file` | string | `""` (disabled) | Where the sanitized-context block store is written (no duplicates). Independent of `dry_run` — you can audit without dry-running, or dry-run without logging. |
 
 **With the block absent:** `dry_run=false`, `output_file=""` — identical to today's behavior, unchanged.
 
@@ -63,12 +155,19 @@ See `docs/i18n/en/AST_FILTER.md` for the exact `file::kind=name` syntax.
   Example: in `projects/02-pii-compliance-governance/project.json`, `"output_file": ".mova/egress_sanitized.log"` writes to `projects/02-pii-compliance-governance/.mova/egress_sanitized.log`.
 - Absolute path — Unix (`/var/log/...`), Windows (`C:\...`, `D:\...`, `E:\...`), or UNC (`\\server\share\...`) — used exactly as given, recognized cross-platform regardless of which OS the Mova binary itself runs on (same helper `write_file`/`create_directory` already use).
 - If `output_file` ends in `/` or `\` (it names a directory, not a file), the default name **`egress_sanitized.md`** is used inside that directory. A name with no trailing separator (even without an extension, e.g. `.mova`) is honored exactly as given — no extension is forced onto it.
-- Missing directories are created automatically (`os.MkdirAll`, standard permissions). The file is always opened in **append** mode: a previous run is never overwritten, and every execution is fenced with its own `execution_id` and `timestamp`.
+- Missing directories are created automatically (`os.MkdirAll`, standard permissions). The file is a **duplicate-free block store** (see "What gets written"): it no longer grows with every message.
 - If the configured file can't be created or written, `mova` **returns an error and never calls the LLM provider** — identical behavior across CLI/Chat, MCP, and HTTP, because all three doors share one implementation (`models.Session.Send`/`SendStream`).
 
 ### What gets written
 
-Only the context **already governed and sanitized** (exactly what would actually be sent to the model) — never the raw, pre-sanitization content. Every block includes at least `execution_id` and `timestamp` (UTC).
+Only the context **already governed and sanitized** (exactly what would actually be sent to the model) — never the raw, pre-sanitization content. 
+
+**No duplicates.** The file keeps one block per context piece (header, each agent/skill/prompt, each `FOCUS`, memory), each with `key`, `sha` and `updated` (UTC):
+- same key and same content → nothing is touched (the file is not even rewritten);
+- same key, different content → the block is **replaced** in full;
+- new key → **appended** at the end.
+
+Writes are atomic and serialized per file. A file in the old format (one block per message) migrates itself, keeping only the latest context.
 
 ### Real air-gap — `dry_run` blocks EVERY tool that exposes context
 
@@ -152,3 +251,22 @@ The short form `"policies": ["security.json", "review.json"]` is also accepted (
 A custom-named file (e.g. `pii_strict_sales.json`) merges into the right dimension because the dimension is detected from the file's **content** (which keys it declares), not from its name. Exclude `pii_strict.json` as well and the default-directory file is left out, replaced by the custom one.
 
 The report always states what applied: `Policy source: CLI -> {security.json}`.
+
+## `paths` — per-project path hierarchy (agents/skills/prompts/cache_dir/temp_dir/output_dir)
+
+```json
+"paths": {
+  "agents": "projects/my-project/local-agents",
+  "skills": "projects/my-project/local-skills",
+  "prompts": "projects/my-project/local-prompts",
+  "output_dir": "projects/my-project/reports"
+}
+```
+
+Same 6 fields as config/general/config.json (never `projects` — see why in `PATHS.md`). Priority:
+the current project's own project.json → config/general/config.json → Mova's historical default.
+All 3 tiers use the same cross-platform rule as `repo` (see `docs/i18n/en/PATHS.md § Per-project
+hierarchy` for the full reference, including a working, end-to-end example in
+`projects/02-pii-compliance-governance/project.json`). Neither this file nor
+config/general/config.json is ever cached — any edit applies on the very next request, no restart
+needed.

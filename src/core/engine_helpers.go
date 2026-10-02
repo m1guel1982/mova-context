@@ -7,13 +7,21 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	corefocus "mova.local/core/focus"
+	"mova.local/documents"
+	"mova.local/i18n"
 )
 
-func loadCore(adapter Adapter, kind, domain, lang, name string, loaded map[string]bool) string {
+// loadCore loads one core file (agent/skill/prompt's own base
+// instructions) — override is this project's own project.json
+// "paths.<kind>s" (see ProjectPaths), "" if it declares none.
+func loadCore(adapter Adapter, kind, domain, lang, name, override string, loaded map[string]bool) string {
 	if loaded[name] {
 		return ""
 	}
@@ -23,7 +31,7 @@ func loadCore(adapter Adapter, kind, domain, lang, name string, loaded map[strin
 	if lang == "" {
 		lang = "es"
 	}
-	c, err := adapter.GetKnowledge(kind, domain, lang, name)
+	c, err := adapter.GetKnowledgeWithPathOverride(kind, domain, lang, name, override)
 	if err != nil || c == "" {
 		return ""
 	}
@@ -41,14 +49,25 @@ func loadCore(adapter Adapter, kind, domain, lang, name string, loaded map[strin
 // file) falls back to treating value itself as the content, so a
 // person is never required to create a one-line .md file just to add
 // a short instruction. See docs/i18n/{es,en}/PROJECT.md § texto libre.
-func resolveKnowledgeOrLiteral(adapter Adapter, kind, domain, lang, value string) (content string, fromFile bool) {
+func resolveKnowledgeOrLiteral(adapter Adapter, kind, domain, lang, value, override string) (content string, fromFile bool, loc string) {
 	if strings.TrimSpace(value) == "" {
-		return "", false
+		return "", false, ""
 	}
-	if c, err := adapter.GetKnowledge(kind, domain, lang, value); err == nil && c != "" {
-		return c, true
+	// File-based adapters can tell us which file actually won the
+	// cascade (project.json "paths" > config/general/config.json >
+	// default) — used by the project.json "debug": true output.
+	if l, ok := adapter.(interface {
+		LocateKnowledge(kind, domain, lang, name, override string) (string, string, error)
+	}); ok {
+		if c, p, err := l.LocateKnowledge(kind, domain, lang, value, override); err == nil && c != "" {
+			return c, true, p
+		}
+		return value, false, ""
 	}
-	return value, false
+	if c, err := adapter.GetKnowledgeWithPathOverride(kind, domain, lang, value, override); err == nil && c != "" {
+		return c, true, debugKnowledgeLoc(true, kind, domain, lang, value)
+	}
+	return value, false, ""
 }
 
 // resolveDebugPath turns a repo-relative (or already-absolute) path
@@ -94,7 +113,7 @@ func resolveDebugPath(root, p string) string {
 	if p == "" {
 		return root
 	}
-	if filepath.IsAbs(p) {
+	if documents.IsAbsCrossPlatform(p) {
 		return filepath.Clean(p)
 	}
 	return filepath.Join(root, p)
@@ -109,6 +128,14 @@ func resolveDebugPath(root, p string) string {
 // fallback candidates (see file_adapter.go's GetKnowledge doc comment,
 // steps 2-10) is what actually matched, since GetKnowledge itself
 // doesn't report which candidate won.
+// debugLoc formats the real file a piece of knowledge was loaded from.
+func debugLoc(fromFile bool, loc string) string {
+	if !fromFile {
+		return "inline (free text)"
+	}
+	return loc
+}
+
 func debugKnowledgeLoc(fromFile bool, kind, domain, lang, name string) string {
 	if !fromFile {
 		return "inline (free text)"
@@ -137,22 +164,101 @@ func ExtractMemoryBlock(response string) (string, error) {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-func mergeVars(global, task map[string]string) map[string]string {
-	out := make(map[string]string, len(global)+len(task))
-	for k, v := range global {
-		out[k] = v
-	}
-	for k, v := range task {
-		out[k] = v
+// mergeVars combines variable layers; later layers win. Keys are
+// normalized to UPPERCASE so "query", "Query" and "QUERY" are the same
+// variable and precedence is deterministic (no map-order surprises).
+func mergeVars(layers ...map[string]string) map[string]string {
+	out := map[string]string{}
+	for _, layer := range layers {
+		for k, v := range layer {
+			out[strings.ToUpper(strings.TrimSpace(k))] = v
+		}
 	}
 	return out
 }
 
+// placeholderRe matches ${NAME} and {{NAME}} (optional inner spaces).
+var placeholderRe = regexp.MustCompile(`\$\{\s*([\w.-]+)\s*\}|\{\{\s*([\w.-]+)\s*\}\}`)
+
+// inject replaces every ${NAME} / {{NAME}} whose NAME (any case) is a key
+// of vars — whatever the variable is called, whatever the stack. One
+// pass: values are never re-expanded, unknown placeholders stay as-is.
 func inject(text string, vars map[string]string) string {
-	for k, v := range vars {
-		text = strings.ReplaceAll(text, "{{"+strings.ToUpper(k)+"}}", v)
+	return placeholderRe.ReplaceAllStringFunc(text, func(m string) string {
+		sub := placeholderRe.FindStringSubmatch(m)
+		name := sub[1]
+		if name == "" {
+			name = sub[2]
+		}
+		if v, ok := vars[strings.ToUpper(name)]; ok {
+			return v
+		}
+		return m
+	})
+}
+
+// debugTargetPath renders where a focus/exclude entry points, for debug
+// output, without ever stacking two absolute prefixes: an absolute entry
+// is only cleaned; a relative one is joined to repoPath unless it already
+// starts with it. A "::kind=names" suffix is dropped (it names symbols,
+// not a path).
+func debugTargetPath(repoPath, entry string) string {
+	file, _, _ := strings.Cut(entry, "::")
+	file = strings.TrimSpace(file)
+	native := filepath.FromSlash(strings.ReplaceAll(file, `\`, "/"))
+	if underPath(repoPath, native) { // ya trae el prefijo del repo
+		return filepath.Clean(native)
 	}
-	return text
+	if documents.IsAbsCrossPlatform(file) {
+		_, err := os.Stat(file)
+		if err == nil || !strings.HasPrefix(file, "/") { // un "/" inicial solo, sin existir, es relativo al repo
+			return filepath.Clean(file)
+		}
+	}
+	return filepath.Join(repoPath, strings.TrimLeft(native, `/\`))
+}
+
+// writeFocusDebug lists each focus target with the real file(s) it
+// resolved to. A name that matched several files (e.g. Gantt.js in two
+// portals) prints a warning: all matches are included and narrowing them
+// is up to whoever writes project.json.
+func writeFocusDebug(w *strings.Builder, repoPath string, items []corefocus.FocusItem) {
+	for _, it := range items {
+		if len(it.Paths) == 0 {
+			fmt.Fprintf(w, "[debug] focus: %s -> %s\n", it.Name, debugTargetPath(repoPath, it.Name))
+			continue
+		}
+		for _, p := range it.Paths {
+			fmt.Fprintf(w, "[debug] focus: %s -> %s\n", it.Name, p)
+		}
+		if len(it.Paths) > 1 {
+			fmt.Fprintf(w, "[debug] %s\n", i18n.T("chat.duplicate_focus", map[string]any{"name": it.Name, "count": len(it.Paths)}))
+		}
+	}
+}
+
+// writeExcludeDebug is writeFocusDebug's twin for `exclude` entries.
+func writeExcludeDebug(w *strings.Builder, targets []corefocus.ResolvedTarget, repoPath string) {
+	for _, t := range targets {
+		if len(t.Paths) == 0 {
+			fmt.Fprintf(w, "[debug] exclude: %s -> %s\n", t.Name, debugTargetPath(repoPath, t.Name))
+			continue
+		}
+		for _, p := range t.Paths {
+			fmt.Fprintf(w, "[debug] exclude: %s -> %s\n", t.Name, p)
+		}
+		if len(t.Paths) > 1 {
+			fmt.Fprintf(w, "[debug] %s\n", i18n.T("chat.duplicate_exclude", map[string]any{"name": t.Name, "count": len(t.Paths)}))
+		}
+	}
+}
+
+// underPath reports whether p already lives under base (separator- and
+// case-insensitive, so Windows and Unix spellings compare equal).
+func underPath(base, p string) bool {
+	norm := func(s string) string { return strings.ToLower(strings.TrimRight(filepath.ToSlash(s), "/")) }
+	b := norm(base)
+	return b != "" && strings.HasPrefix(norm(p), b+"/")
 }
 
 func availableTasks(p *Project) string {

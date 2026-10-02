@@ -22,7 +22,7 @@ func (p *anthropicProvider) Chat(ctx context.Context, model string, mc *ModelCon
 
 	body := map[string]any{
 		"model":      model,
-		"max_tokens": orDefaultInt(mc.NumPredict, 1024),
+		"max_tokens": mc.ResponseMax(1024),
 		"messages":   rest,
 	}
 	if system != "" {
@@ -33,6 +33,7 @@ func (p *anthropicProvider) Chat(ctx context.Context, model string, mc *ModelCon
 		Content []struct {
 			Text string `json:"text"`
 		} `json:"content"`
+		StopReason string `json:"stop_reason"`
 		Usage struct {
 			InputTokens  int `json:"input_tokens"`
 			OutputTokens int `json:"output_tokens"`
@@ -47,11 +48,12 @@ func (p *anthropicProvider) Chat(ctx context.Context, model string, mc *ModelCon
 	if out.Error.Message != "" {
 		return "", Usage{}, fmt.Errorf("anthropic: %s", out.Error.Message)
 	}
-	if len(out.Content) == 0 {
-		return "", Usage{}, fmt.Errorf("anthropic: empty response (no content)")
+	usage := Usage{PromptTokens: out.Usage.InputTokens, CompletionTokens: out.Usage.OutputTokens, FinishReason: out.StopReason}
+	var text strings.Builder
+	for _, blk := range out.Content { // todos los bloques de texto, no solo el primero
+		text.WriteString(blk.Text)
 	}
-	usage := Usage{PromptTokens: out.Usage.InputTokens, CompletionTokens: out.Usage.OutputTokens}
-	return out.Content[0].Text, usage, nil
+	return text.String(), usage, nil // vacío → Session.finishTurn lo reporta con el uso consumido
 }
 
 func (p *anthropicProvider) ChatStream(ctx context.Context, model string, mc *ModelConfig, messages []ChatMessage, onToken func(string)) (string, Usage, error) {
@@ -59,7 +61,7 @@ func (p *anthropicProvider) ChatStream(ctx context.Context, model string, mc *Mo
 
 	body := map[string]any{
 		"model":      model,
-		"max_tokens": orDefaultInt(mc.NumPredict, 1024),
+		"max_tokens": mc.ResponseMax(1024),
 		"messages":   rest,
 		"stream":     true,
 	}
@@ -113,7 +115,8 @@ func (p *anthropicProvider) ChatStream(ctx context.Context, model string, mc *Mo
 		var event struct {
 			Type  string `json:"type"`
 			Delta struct {
-				Text string `json:"text"`
+				Text       string `json:"text"`
+				StopReason string `json:"stop_reason"`
 			} `json:"delta"`
 			Message struct {
 				Usage struct {
@@ -151,6 +154,9 @@ func (p *anthropicProvider) ChatStream(ctx context.Context, model string, mc *Mo
 
 		if event.Type == "message_delta" {
 			usage.CompletionTokens = event.Usage.OutputTokens
+			if event.Delta.StopReason != "" {
+				usage.FinishReason = event.Delta.StopReason
+			}
 		}
 	}
 

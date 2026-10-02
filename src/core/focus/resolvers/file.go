@@ -145,49 +145,34 @@ type FileResolver struct{}
 
 func NewFileResolver() focus.Resolver { return &FileResolver{} }
 
-func (r *FileResolver) candidatePath(ctx focus.Context, target string) string {
+// candidatePaths devuelve TODOS los archivos a los que apunta target
+// (ver locateFiles): una ruta exacta da uno; un nombre suelto o ruta
+// parcial repetido en varias carpetas da todos, sin elegir por el usuario.
+func (r *FileResolver) candidatePaths(ctx focus.Context, target string) []string {
 	if isSymbolNotation(target) || isGlobPattern(target) {
-		return ""
+		return nil
 	}
-	target = focus.StripExact(target)
-	m := newExcludeMatcher(ctx.RepoPath, ctx.Exclude)
-	// Ruta absoluta del host (multiplataforma) — ver fsutil.go. Se
-	// intenta ANTES de la resolución relativa al repo: una letra de
-	// unidad Windows o UNC es inequívoca; un "/algo" estilo Unix solo
-	// gana aquí si existe de verdad como archivo absoluto, si no cae al
-	// comportamiento de siempre dos líneas más abajo.
-	if abs, ok := resolveAbsoluteFile(target); ok {
-		if m.excludesPath(abs) {
-			return ""
-		}
-		return abs
-	}
-	path := repoRelativePath(ctx.RepoPath, target)
-	if path != "" && !m.excludesPath(path) && !isDir(path) && readFile(path) != "" {
-		return path
-	}
-	if !strings.ContainsAny(target, `/\`) {
-		if found := findByName(ctx, ctx.RepoPath, target); found != "" && !isDir(found) {
-			return found // findByName ya filtra por exclude vía walkFiles
-		}
-	}
-	return ""
+	return locateFiles(ctx, target)
 }
 
 func (r *FileResolver) Match(ctx focus.Context, target string) bool {
-	return r.candidatePath(ctx, target) != ""
+	return len(r.candidatePaths(ctx, target)) > 0
 }
 
 func (r *FileResolver) Resolve(ctx focus.Context, target string) ([]focus.ContextBlock, error) {
-	path := r.candidatePath(ctx, target)
-	if path == "" {
+	paths := r.candidatePaths(ctx, target)
+	if len(paths) == 0 {
 		return nil, focus.ErrNotFound
 	}
-	return []focus.ContextBlock{{
-		Source:  relOrBase(ctx.RepoPath, path),
-		Kind:    "file",
-		Content: readFileText(path),
-	}}, nil
+	blocks := make([]focus.ContextBlock, 0, len(paths))
+	for _, path := range paths {
+		blocks = append(blocks, focus.ContextBlock{
+			Source:  relOrBase(ctx.RepoPath, path),
+			Kind:    "file",
+			Content: readFileText(path),
+		})
+	}
+	return blocks, nil
 }
 
 // -----------------------------------------------------------------------------

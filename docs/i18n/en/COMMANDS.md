@@ -112,9 +112,15 @@ curl -X POST http://localhost:3000/mcp \
 
 ## chat
 
-**NAME** — interactive REPL. Inside: `/context-trace`, `/memory`, `/save`, `/delete`.
+**NAME** — interactive REPL. Inside: `/tasks`, `/task`, `/run`, `/context-trace`, `/memory`, `/save`, `/delete`.
 
-**SYNOPSIS** — `mova chat <project>`
+**SYNOPSIS** — `mova chat <project> [task|all]`
+
+- `mova chat <project> analizar` → loads **only** the prompt, focus and graph of the `analizar` task.
+- `mova chat <project>` (no task, several tasks in `project.json`) → loads **all** of them: every task's prompt, focus and graph. With a single task, that one. `mova chat <project> all` forces all-tasks mode.
+- Inside the chat, without leaving and keeping the history: `/tasks` (lists the tasks) · `/task <name|all>` (switches task and reloads context) · `/run <name>` (switches task and sends its `QUERY` variable).
+- With `"memory"` on in `project.json`, every substantial reply leaves its synthesis block in `memory.md` (see `PROJECT_JSON.md § Automatic memory`) and every task reads it: it survives leaving the chat and applies equally to MCP/HTTP. `/memory` saves the last reply by hand even when `memory` is off.
+- If the model spends its output budget without returning text, `mova chat` shows an error with the tokens consumed (see `MODEL_CONFIG.md`).
 
 ## memory / memory-read / memory-archive / memory-clear / memory-config
 

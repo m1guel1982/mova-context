@@ -9,17 +9,57 @@ import (
 	"mova.local/core/focus"
 	"mova.local/core/focus/resolvers"
 	"mova.local/dedup"
+	"mova.local/documents"
 )
 
-// resolveRepoPath aplica las reglas de resolución de ruta del repositorio.
-func resolveRepoPath(root, repo string) string {
+// ResolveRepoPath aplica las reglas de resolución de ruta del repositorio —
+// las MISMAS que documents.IsAbsCrossPlatform/NormalizeAbsPath ya usan
+// para "repo" en write_file/create_directory/generate_* (ver
+// documents/pathresolve.go), en vez del filepath.IsAbs nativo que este
+// archivo usaba antes: filepath.IsAbs es específico del SO en el que
+// corre Mova ahora mismo, así que un "repo": "C:\\proyecto" en
+// project.json se ignoraba silenciosamente (se unía mal con root) si
+// Mova corría en Linux/macOS, y viceversa con una ruta UNC. Con
+// IsAbsCrossPlatform, un repo absoluto Windows/UNC/Unix se reconoce
+// igual sin importar el SO anfitrión — mismo comportamiento que ya
+// tenían los demás caminos que resuelven "repo".
+func ResolveRepoPath(root, repo string) string {
 	if repo == "" || repo == "." {
 		return root
 	}
-	if filepath.IsAbs(repo) {
-		return repo
+	if documents.IsAbsCrossPlatform(repo) {
+		if normalized, err := documents.NormalizeAbsPath(repo); err == nil {
+			return normalized
+		}
+		// Ruta absoluta reconocida pero de un SO distinto al actual
+		// (p.ej. letra de unidad Windows corriendo en Linux) — cae al
+		// join relativo a root en vez de devolver una ruta inválida,
+		// mismo criterio de "nunca romper el proceso" que el resto de
+		// esta base de código.
 	}
 	return filepath.Join(root, repo)
+}
+
+// AbsUnder devuelve la ruta absoluta de source: si ya es absoluta (target
+// fuera del repo) se respeta tal cual, si no se une a repoPath — nunca
+// se antepone el repo a una ruta que ya lo trae.
+func AbsUnder(repoPath, source string) string {
+	if documents.IsAbsCrossPlatform(source) {
+		return filepath.Clean(source)
+	}
+	return filepath.Join(repoPath, filepath.FromSlash(strings.ReplaceAll(source, `\`, "/")))
+}
+
+// ResolveExcludeTargets resuelve cada entrada de `exclude` a los archivos
+// reales a los que apunta (solo para el log de debug). Usa su propio
+// índice, sin aplicar `exclude`, para poder mostrar lo que se excluye.
+func ResolveExcludeTargets(root, repo string, exclude []string) []focus.ResolvedTarget {
+	ctx := focus.Context{RepoPath: ResolveRepoPath(root, repo), Index: &focus.FileIndex{}}
+	out := make([]focus.ResolvedTarget, 0, len(exclude))
+	for _, ex := range exclude {
+		out = append(out, focus.ResolvedTarget{Name: ex, Paths: resolvers.LocateTarget(ctx, ex)})
+	}
+	return out
 }
 
 // DefaultResolvers construye la lista de resolvers Community en orden de prioridad.
@@ -99,9 +139,9 @@ func renderFocusContext(root, repo string, items []string, extraExclude []string
 	if len(items) == 0 {
 		return "", focus.ScanStats{}
 	}
-	repoPath := resolveRepoPath(root, repo)
+	repoPath := ResolveRepoPath(root, repo)
 	stats := &focus.ScanStats{}
-	ctx := focus.Context{RepoPath: repoPath, ExcludeDirs: extraExclude, Exclude: exclude, Stats: stats}
+	ctx := focus.Context{RepoPath: repoPath, ExcludeDirs: extraExclude, Exclude: exclude, Stats: stats, Index: &focus.FileIndex{}}
 
 	// dirLike reusa el Match() real de Glob/DirectoryResolver — nunca
 	// re-implementa "¿esto es un directorio?" con una heurística propia
@@ -146,7 +186,15 @@ func renderFocusContext(root, repo string, items []string, extraExclude []string
 			if dirLike(item) {
 				kind = "dir"
 			}
-			stats.RecordFocusItem(item, kind, len(blocks))
+			var paths []string
+			if kind == "file" {
+				for _, b := range blocks {
+					if b.Source != "" {
+						paths = append(paths, AbsUnder(repoPath, b.Source))
+					}
+				}
+			}
+			stats.RecordFocusItem(item, kind, len(blocks), paths)
 		}
 	}
 	stats.FilesIncluded = len(included)

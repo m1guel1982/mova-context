@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"mova.local/core"
+	"mova.local/mpaths"
 )
 
 // SpendState is mova-spend.json's exact shape — one project, one
@@ -42,7 +43,7 @@ type SpendState struct {
 // project.json). No project-level override for this one on purpose —
 // it's operational state, not something a project author relocates.
 func SpendPath(root, project string) string {
-	return filepath.Join(root, "projects", project, "mova-spend.json")
+	return filepath.Join(mpaths.ProjectsDir(root), project, "mova-spend.json")
 }
 
 func currentMonth() string { return time.Now().Format("2006-01") }

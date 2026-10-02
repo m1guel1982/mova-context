@@ -50,7 +50,7 @@ func (p *geminiNativeProvider) Chat(ctx context.Context, model string, mc *Model
 		"generationConfig": map[string]any{
 			"temperature":     mc.Temperature,
 			"topP":            mc.TopP,
-			"maxOutputTokens": orDefaultInt(mc.NumPredict, 2048),
+			"maxOutputTokens": mc.ResponseMax(2048),
 		},
 	}
 	if systemInstruction != nil {
@@ -97,6 +97,7 @@ func (p *geminiNativeProvider) Chat(ctx context.Context, model string, mc *Model
 					Text string `json:"text"`
 				} `json:"parts"`
 			} `json:"content"`
+			FinishReason string `json:"finishReason"`
 		} `json:"candidates"`
 		UsageMetadata struct {
 			PromptTokenCount     int `json:"promptTokenCount"`
@@ -113,17 +114,24 @@ func (p *geminiNativeProvider) Chat(ctx context.Context, model string, mc *Model
 	if out.Error.Message != "" {
 		return "", Usage{}, fmt.Errorf("google: %s", out.Error.Message)
 	}
-	if len(out.Candidates) == 0 || len(out.Candidates[0].Content.Parts) == 0 {
+	if len(out.Candidates) == 0 {
 		return "", Usage{}, fmt.Errorf("google: empty response (no candidates)")
 	}
 
-	text := out.Candidates[0].Content.Parts[0].Text
+	// Todas las partes de texto (no solo la primera). Sin partes (típico de
+	// MAX_TOKENS con "thinking") se devuelve "" CON el uso consumido:
+	// Session.finishTurn lo convierte en EmptyReplyError explicativo.
+	var text strings.Builder
+	for _, part := range out.Candidates[0].Content.Parts {
+		text.WriteString(part.Text)
+	}
 	usage := Usage{
 		PromptTokens:     out.UsageMetadata.PromptTokenCount,
 		CompletionTokens: out.UsageMetadata.CandidatesTokenCount,
+		FinishReason:     out.Candidates[0].FinishReason,
 	}
 
-	return text, usage, nil
+	return text.String(), usage, nil
 }
 
 func (p *geminiNativeProvider) ChatStream(ctx context.Context, model string, mc *ModelConfig, messages []ChatMessage, onToken func(string)) (string, Usage, error) {
@@ -160,7 +168,7 @@ func (p *geminiNativeProvider) ChatStream(ctx context.Context, model string, mc 
 		"generationConfig": map[string]any{
 			"temperature":     mc.Temperature,
 			"topP":            mc.TopP,
-			"maxOutputTokens": orDefaultInt(mc.NumPredict, 2048),
+			"maxOutputTokens": mc.ResponseMax(2048),
 		},
 	}
 	if systemInstruction != nil {

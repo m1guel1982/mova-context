@@ -14,6 +14,7 @@ import (
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/i18n"
+	"mova.local/mpaths"
 )
 
 // Options are the parameters of one context-trace run - the same
@@ -148,12 +149,23 @@ func runLocal(adapter core.Adapter, opts Options) (*Result, error) {
 
 	outDir := opts.Output
 	if outDir == "" {
-		// Local project default: the analyzed project's own root
-		relOrAbsPath := filepath.FromSlash(d.ProjectJSONPath)
-		if !filepath.IsAbs(relOrAbsPath) {
-			relOrAbsPath = filepath.Join(opts.Root, relOrAbsPath)
+		// config/general/config.json's "output_dir" (or this project's
+		// own project.json "paths.output_dir", which takes PRIORITY —
+		// see mpaths.ConfiguredOutputDirForProject's 3-tier order), when
+		// the operator actually configured one, wins over this
+		// command's own historical default. "" means unconfigured at
+		// EITHER tier, so the existing behavior (the analyzed project's
+		// own directory) is kept exactly as before.
+		if configured := mpaths.ConfiguredOutputDirForProject(opts.Root, d.OutputDirOverride); configured != "" {
+			outDir = configured
+		} else {
+			// Local project default: the analyzed project's own root
+			relOrAbsPath := filepath.FromSlash(d.ProjectJSONPath)
+			if !filepath.IsAbs(relOrAbsPath) {
+				relOrAbsPath = filepath.Join(opts.Root, relOrAbsPath)
+			}
+			outDir = filepath.Dir(relOrAbsPath)
 		}
-		outDir = filepath.Dir(relOrAbsPath)
 	} else {
 		outDir = NormalizeOutputPath(outDir, opts.Cwd)
 	}
@@ -212,9 +224,16 @@ func runRemote(opts Options) (*Result, error) {
 
 	outDir := opts.Output
 	if outDir == "" {
-		// Remote repository default: the current directory the CLI
-		// was run from (see COMMANDS.md).
-		outDir = NormalizeOutputPath("", opts.Cwd)
+		// Same config/general/config.json "output_dir" priority as
+		// runLocal above — falls back to the existing default (cwd)
+		// when unconfigured.
+		if configured := mpaths.ConfiguredOutputDir(opts.Root); configured != "" {
+			outDir = configured
+		} else {
+			// Remote repository default: the current directory the CLI
+			// was run from (see COMMANDS.md).
+			outDir = NormalizeOutputPath("", opts.Cwd)
+		}
 	} else {
 		outDir = NormalizeOutputPath(outDir, opts.Cwd)
 	}

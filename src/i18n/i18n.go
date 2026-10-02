@@ -100,6 +100,30 @@ func T(key string, args ...map[string]any) string {
 	return value
 }
 
+// TIn is T for an explicit language (e.g. a project.json's own "lang")
+// instead of the active one: same catalogs, same English fallback, same
+// hot-reload. An unknown/empty lang simply behaves like T.
+func TIn(lang, key string, args ...map[string]any) string {
+	if lang == "" {
+		return T(key, args...)
+	}
+	t.mu.RLock()
+	cat, loaded, root := t.catalogs[lang], t.catalogs[lang] != nil, t.root
+	t.mu.RUnlock()
+	if !loaded && root != "" && loadCatalog(root, lang) == nil {
+		t.mu.RLock()
+		cat = t.catalogs[lang]
+		t.mu.RUnlock()
+	}
+	if value, ok := cat[key]; ok {
+		if len(args) > 0 {
+			value = interpolate(value, args[0])
+		}
+		return value
+	}
+	return T(key, args...)
+}
+
 // ActiveLanguage returns the currently active language code (e.g.
 // "es") - mostly useful for logging/diagnostics.
 func ActiveLanguage() string {

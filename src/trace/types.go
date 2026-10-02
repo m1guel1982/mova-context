@@ -148,7 +148,15 @@ type Data struct {
 	// ── Local project mode ───────────────────────────────────────────
 	ProjectName     string
 	ProjectJSONPath string // relative path shown in the report's INPUT section
-	TaskName        string
+	// OutputDirOverride: this project's own project.json
+	// "paths.output_dir" (see core.ProjectPaths), "" if it declares
+	// none — set by AnalyzeLocal right after loading the project, read
+	// by trace.go's runLocal to give it PRIORITY over
+	// config/general/config.json's own "output_dir" (see
+	// mpaths.ConfiguredOutputDirForProject). Always "" in remote mode
+	// (IsRemote true) — there is no project.json to read one from.
+	OutputDirOverride string
+	TaskName          string
 	// IgnorePatterns: the --ignore glob/extglob patterns active for
 	// this run (see ignore_glob.go) - propagated into every renderer
 	// (console INPUT/FOCUS, PDF, PNG, pii-audit-log.json's

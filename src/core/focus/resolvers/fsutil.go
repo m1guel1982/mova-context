@@ -114,14 +114,13 @@ func countFiles(dir string) int {
 	return n
 }
 
-func findByName(ctx focus.Context, dir, name string) string {
-	var found string
-	walkFiles(ctx, dir, func(p string) {
-		if found == "" && filepath.Base(p) == name {
-			found = p
-		}
-	})
-	return found
+// findByName devuelve la primera coincidencia por nombre/ruta parcial
+// (ver findIndexed) — para quien solo necesita un archivo.
+func findByName(ctx focus.Context, name string) string {
+	if found := findIndexed(ctx, name); len(found) > 0 {
+		return found[0]
+	}
+	return ""
 }
 
 // relOrBase da la etiqueta de Source más útil para un path ya resuelto:

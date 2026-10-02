@@ -26,3 +26,7 @@ A `kind` not supported by the file's language doesn't break anything — that ta
 ```
 
 Analyzes `checkout.js` in full and only removes that function's body — the rest of the file stays intact.
+
+## Dependency graph
+
+The same `file::kind=names` entries in `focus` and `exclude` feed the dependency graph (`graph` in the task): see `PROJECT_JSON.md` § Dependency graph.

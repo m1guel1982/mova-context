@@ -58,10 +58,8 @@ func applyAutoApplyConfirmationMCP(statusLog *strings.Builder, adapter core.Adap
 	}
 
 	if project != "" {
-		if block, mErr := core.ExtractMemoryBlock(assistant); mErr == nil && block != "" {
-			if err := adapter.AppendMemory(project, block); err == nil {
-				out.WriteString("[Memory] Actualizado automáticamente tras Auto-Apply (" + project + ")\n")
-			}
+		if res, mErr := core.RecordMemory(adapter, root, project, "", assistant, core.RecordOptions{}); mErr == nil && res.Saved > 0 {
+			out.WriteString("[Memory] Actualizado automáticamente tras Auto-Apply (" + project + ")\n")
 		}
 	}
 

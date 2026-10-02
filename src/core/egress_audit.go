@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"mova.local/documents"
+	"mova.local/mpaths"
 )
 
 // DefaultEgressAuditFileName is used when "output_file" names a
@@ -35,7 +36,7 @@ const DefaultEgressAuditFileName = "egress_sanitized.md"
 //     documents/pathresolve.go) — recognizes every OS's absolute-path
 //     style regardless of which OS Mova itself runs on, using only
 //     os/path/filepath from the standard library under the hood.
-//   - relative → filepath.Join(root, "projects", project, output_file).
+//   - relative → filepath.Join(mpaths.ProjectsDir(root), project, output_file).
 //   - names only a directory (ends in a path separator, e.g.
 //     ".mova/") → DefaultEgressAuditFileName is appended.
 func ResolveEgressAudit(root, project string, proj *Project) (dryRun bool, outputFile string) {
@@ -57,7 +58,7 @@ func ResolveEgressAudit(root, project string, proj *Project) (dryRun bool, outpu
 			resolved = raw
 		}
 	} else {
-		resolved = filepath.Join(root, "projects", project, raw)
+		resolved = filepath.Join(mpaths.ProjectsDir(root), project, raw)
 	}
 
 	if isDirectoryLikeTarget(raw) {

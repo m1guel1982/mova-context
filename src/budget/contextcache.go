@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"mova.local/core"
+	"mova.local/mpaths"
 	"mova.local/sanitize"
 )
 
@@ -44,7 +45,7 @@ type contextCacheFile struct {
 
 // ContextCachePath resolves mova-context-cache.json for a project.
 func ContextCachePath(root, project string) string {
-	return filepath.Join(root, "projects", project, "mova-context-cache.json")
+	return filepath.Join(mpaths.ProjectsDir(root), project, "mova-context-cache.json")
 }
 
 func loadContextCacheFile(path string) contextCacheFile {

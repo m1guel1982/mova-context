@@ -75,6 +75,11 @@ type Context struct {
 	// estimación. nil es válido: los métodos de abajo son no-op sin
 	// panic cuando Stats es nil.
 	Stats *ScanStats
+
+	// Index: mapa nombre→rutas construido en una sola caminata del repo
+	// (ver index.go). nil es válido: cada consulta construye el suyo,
+	// igual que antes — solo se pierde el ahorro de compartirlo.
+	Index *FileIndex
 }
 
 // ContextBlock es la unidad mínima de conocimiento que produce un resolver.

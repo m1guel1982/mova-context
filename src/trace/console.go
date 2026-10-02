@@ -9,9 +9,10 @@
 // would hurt that more than it would help; see console_governance.go
 // for the sibling governance table, which follows the same rule.
 // Explanatory PROSE sentences do go through i18n.T like every other
-// user-facing surface (see mova.local/i18n) — this file's own two
-// calls plus console_governance.go's full box are the current
-// coverage; see docs/SOURCE.md § 23 for the full i18n scope note.
+// user-facing surface (see mova.local/i18n) — see
+// docs/i18n/{es,en}/PATHS.md § i18n de context-trace for the full,
+// up-to-date scope note (which lines are labels-by-design vs.
+// translated prose) and its own change history.
 package trace
 
 import (
@@ -61,10 +62,10 @@ func renderConsoleLocal(d *Data, outputs []string) string {
 		pct := float64(d.TotalTokens) / float64(d.MaxTokens) * 100
 		fmt.Fprintf(&b, "  %s / %s tokens\n  %s\n\n", formatInt(d.TotalTokens), formatInt(d.MaxTokens), formatPct(pct))
 	} else {
-		b.WriteString("  N/A (no limit configured in project.json)\n\n")
+		b.WriteString("  " + i18n.T("reports.budget_not_configured_short") + "\n\n")
 	}
 
-	fmt.Fprintf(&b, "ESTIMATED COST (for the %s tokens actually assembled for this task)\n", formatInt(costBasisTokens(d)))
+	fmt.Fprintf(&b, "%s\n", i18n.T("reports.estimated_cost_label", map[string]any{"tokens": formatInt(costBasisTokens(d))}))
 	b.WriteString(renderCostsConsole(d.Costs))
 
 	b.WriteString("\nOUTPUT\n")
@@ -87,7 +88,7 @@ func renderConsoleRemote(d *Data, outputs []string) string {
 	}
 	b.WriteString("\n")
 
-	fmt.Fprintf(&b, "FOCUS\n  Included             %d file(s)  (repository scope considered, before content-level discovery)\n", d.Focus.Included)
+	fmt.Fprintf(&b, "FOCUS\n  Included             %d file(s)  %s\n", d.Focus.Included, i18n.T("reports.focus_repo_scope_note"))
 	excludedLine := fmt.Sprintf("  Excluded             %d file(s)", d.Focus.Excluded)
 	if len(d.Focus.ExcludedSuggestion) > 0 {
 		excludedLine += fmt.Sprintf(" (suggestion: %s)", strings.Join(d.Focus.ExcludedSuggestion, ", "))
@@ -95,7 +96,7 @@ func renderConsoleRemote(d *Data, outputs []string) string {
 	b.WriteString(excludedLine + "\n")
 	if d.StateTotals.DiscoveredFiles > 0 && d.StateTotals.DiscoveredFiles != d.Focus.Included {
 		gap := d.Focus.Included - d.StateTotals.DiscoveredFiles
-		fmt.Fprintf(&b, "  Note: %d of the %d in-scope file(s) could not be read as text/image during discovery (binary/unreadable/empty) and are reported as EXCLUDED below - Focus is the SCOPE considered, Discovery is what was actually analyzed.\n", gap, d.Focus.Included)
+		fmt.Fprintf(&b, "  %s\n", i18n.T("reports.discovery_scope_note", map[string]any{"gap": gap, "included": d.Focus.Included}))
 	}
 	b.WriteString("\n")
 
@@ -107,7 +108,7 @@ func renderConsoleRemote(d *Data, outputs []string) string {
 		b.WriteString(renderGovernanceConsole(d))
 	}
 
-	b.WriteString("BUDGET\n  N/A (no active project.json)\n\n")
+	b.WriteString("BUDGET\n  " + i18n.T("reports.budget_not_configured_remote") + "\n\n")
 
 	fmt.Fprintf(&b, "  %s\n\n", TotalTokensLine(d.TotalTokens, d.Encoding))
 
@@ -123,7 +124,7 @@ func renderConsoleRemote(d *Data, outputs []string) string {
 	// against a remote/unconfigured repo never actually sends anything
 	// (see the GOVERNANCE box above: "audit mode - nothing written to
 	// disk"), so the label must read as a PROJECTION, not a real send.
-	fmt.Fprintf(&b, "PROJECTED COST (estimate if the %s candidate tokens were sent - audit mode, nothing sent - not the whole repository)\n", formatInt(costBasisTokens(d)))
+	fmt.Fprintf(&b, "%s\n", i18n.T("reports.projected_cost_label", map[string]any{"tokens": formatInt(costBasisTokens(d))}))
 	b.WriteString(renderCostsConsole(d.Costs))
 
 	if d.StateTotals.DiscoveredFiles > 0 {
@@ -227,7 +228,7 @@ func renderFirewallConsole(f FirewallStatus) string {
 // reader would reasonably flag as a bug (as this one was).
 func renderFirewallConsoleAudit(f FirewallStatus) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "  Sanitizer            %s\n", "DISABLED (Audit Mode - see GOVERNANCE below for per-file SANITIZED/BLOCKED decisions)")
+	fmt.Fprintf(&b, "  Sanitizer            %s\n", i18n.T("reports.audit_mode_disabled_sanitizer"))
 	piiLine := fmt.Sprintf("  PII Masking          %s", onOff(f.PIIMaskingOn))
 	if f.PIIWarning != "" {
 		piiLine += "  (" + f.PIIWarning + ")"
@@ -244,6 +245,6 @@ func renderCostsConsole(costs []CostRow) string {
 		fmt.Fprintf(&b, "  %-24s %s\n", c.Provider+" ("+c.Model+")", FormatCost(c.USD))
 	}
 	b.WriteString("  Local (Ollama/LM Studio/vLLM)  $0 (local execution)\n")
-	b.WriteString("  All figures above are technical ESTIMATES (public price lists + cl100k_base), not absolute costs.\n")
+	b.WriteString("  " + i18n.T("reports.cost_estimates_disclaimer") + "\n")
 	return b.String()
 }

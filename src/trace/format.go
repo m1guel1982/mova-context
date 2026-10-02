@@ -103,3 +103,9 @@ func orNA(s string) string {
 	}
 	return s
 }
+
+// filesTokLine renders "<label>: N file(s), M tok" in the active language
+// (PDF report lists) — one helper instead of repeating the i18n call.
+func filesTokLine(label string, files, tokens int) string {
+	return i18n.T("reports.f_files_tok_line", map[string]any{"label": label, "files": formatInt(files), "tok": formatInt(tokens)})
+}

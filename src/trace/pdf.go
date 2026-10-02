@@ -14,6 +14,7 @@ package trace
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"mova.local/documents"
@@ -35,30 +36,50 @@ func WriteContextReportPDF(path string, d *Data) error {
 	return documents.GeneratePDFDocument(path, contextReportHTML(d))
 }
 
+// mdInlineToHTML converts the small subset of inline Markdown used by
+// shared i18n strings (like reports.cost_basis_note or
+// reports.full_audit_log_exported, written once and reused by BOTH
+// markdown.go's Markdown output and this file's HTML/PDF output) into
+// the plain <b> tags documents.GeneratePDFDocument actually
+// understands (see this file's header comment — it only interprets
+// h1/h2/p/li). Without this conversion, a translated string containing
+// "**text**" or "`code`" would render as literal asterisks/backticks
+// in the generated PDF instead of being interpreted.
+func mdInlineToHTML(s string) string {
+	s = boldRe.ReplaceAllString(s, "<b>$1</b>")
+	s = codeRe.ReplaceAllString(s, "$1")
+	return s
+}
+
+var (
+	boldRe = regexp.MustCompile(`\*\*(.+?)\*\*`)
+	codeRe = regexp.MustCompile("`([^`]+)`")
+)
+
 func contextReportHTML(d *Data) string {
 	var b strings.Builder
-	b.WriteString("<h1>Context Report - Mova Context Trace</h1>")
+	b.WriteString("<h1>" + i18n.T("reports.h_report_title") + "</h1>")
 
 	if d.IsRemote {
-		fmt.Fprintf(&b, "<p><b>Repository:</b> %s</p><p><b>Branch:</b> %s</p>", d.RepoURL, orNA(d.Branch))
+		fmt.Fprintf(&b, "<p><b>%s:</b> %s</p><p><b>%s:</b> %s</p>", i18n.T("reports.f_repository"), d.RepoURL, i18n.T("reports.f_branch"), orNA(d.Branch))
 	} else {
-		fmt.Fprintf(&b, "<p><b>Project:</b> %s</p><p><b>Task:</b> %s</p><p><b>project.json:</b> %s</p>", d.ProjectName, d.TaskName, d.ProjectJSONPath)
+		fmt.Fprintf(&b, "<p><b>%s:</b> %s</p><p><b>%s:</b> %s</p><p><b>project.json:</b> %s</p>", i18n.T("reports.f_project"), d.ProjectName, i18n.T("reports.f_task"), d.TaskName, d.ProjectJSONPath)
 	}
 	fmt.Fprintf(&b, "<p><b>%s:</b> %s &middot; <b>%s:</b> %s &middot; <b>%s:</b> %s</p>", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
 
-	b.WriteString("<h2>Context composition</h2>")
+	b.WriteString("<h2>" + i18n.T("reports.h_composition") + "</h2>")
 	if len(d.Components) > 0 {
 		for _, c := range d.Components {
 			fmt.Fprintf(&b, "<li>%s: %s tok</li>", c.Name, formatInt(c.Tokens))
 		}
 	} else {
-		b.WriteString("<p>No active project.json - the whole repository was scanned.</p>")
+		b.WriteString("<p>" + mdInlineToHTML(i18n.T("reports.no_active_project_scanned")) + "</p>")
 	}
 	fmt.Fprintf(&b, "<p>%s</p>", TotalTokensLine(d.TotalTokens, d.Encoding))
 
-	fmt.Fprintf(&b, "<h2>Focus</h2><li>Included: %d file(s)</li><li>Excluded: %d file(s)</li>", d.Focus.Included, d.Focus.Excluded)
+	fmt.Fprintf(&b, "<h2>%s</h2><li>%s: %d</li><li>%s: %d</li>", i18n.T("reports.h_focus"), i18n.T("reports.f_files_included"), d.Focus.Included, i18n.T("reports.f_files_excluded"), d.Focus.Excluded)
 	if len(d.Focus.ExcludedSuggestion) > 0 {
-		fmt.Fprintf(&b, "<li>Exclude suggestion: %s</li>", strings.Join(d.Focus.ExcludedSuggestion, ", "))
+		fmt.Fprintf(&b, "<li>%s: %s</li>", i18n.T("reports.f_exclude_suggestion"), strings.Join(d.Focus.ExcludedSuggestion, ", "))
 	}
 
 	if len(d.DirBreakdown) > 0 {
@@ -67,36 +88,36 @@ func contextReportHTML(d *Data) string {
 
 	b.WriteString(governanceHTML(d))
 
-	b.WriteString("<h2>Context Governance</h2>")
-	fmt.Fprintf(&b, "<li>Sanitizer: %s</li>", onOff(d.Firewall.SanitizerOn))
-	piiLine := fmt.Sprintf("<li>PII Masking: %s", onOff(d.Firewall.PIIMaskingOn))
+	b.WriteString("<h2>" + i18n.T("reports.h_governance") + "</h2>")
+	fmt.Fprintf(&b, "<li>"+i18n.T("reports.f_sanitizer")+": %s</li>", onOff(d.Firewall.SanitizerOn))
+	piiLine := fmt.Sprintf("<li>"+i18n.T("reports.f_pii_masking")+": %s", onOff(d.Firewall.PIIMaskingOn))
 	if d.Firewall.PIIWarning != "" {
 		piiLine += " - " + d.Firewall.PIIWarning
 	}
 	b.WriteString(piiLine + "</li>")
-	fmt.Fprintf(&b, "<li>Cache Layout Guard: %s</li>", onOff(d.Firewall.CacheGuardOn))
-	fmt.Fprintf(&b, "<li>Circuit Breaker: %s</li>", onOff(d.Firewall.CircuitBreakerOn))
+	fmt.Fprintf(&b, "<li>"+i18n.T("reports.f_cache_guard")+": %s</li>", onOff(d.Firewall.CacheGuardOn))
+	fmt.Fprintf(&b, "<li>"+i18n.T("reports.f_circuit_breaker")+": %s</li>", onOff(d.Firewall.CircuitBreakerOn))
 
-	b.WriteString("<h2>Budget</h2>")
+	b.WriteString("<h2>" + i18n.T("reports.h_budget") + "</h2>")
 	if d.MaxTokens > 0 {
 		pct := float64(d.TotalTokens) / float64(d.MaxTokens) * 100
 		fmt.Fprintf(&b, "<p>%s / %s tokens (%s)</p>", formatInt(d.TotalTokens), formatInt(d.MaxTokens), formatPct(pct))
 	} else {
-		b.WriteString("<p>N/A (no active project.json or no budget.max_tokens configured)</p>")
+		b.WriteString("<p>" + mdInlineToHTML(i18n.T("reports.budget_not_configured_full")) + "</p>")
 	}
 
-	b.WriteString("<h2>Theoretical / Estimated Input Cost (USD)</h2>")
-	fmt.Fprintf(&b, "<p>Calculated over the <b>%s final sendable tokens</b> (ALLOWED + SANITIZED in discovery mode, or the assembled project context in a project.json run) - never over the whole scanned repository. All costs are estimates, based on the prices configured in config/prices.json. They exclude output tokens, tool calls, caching, and other provider-specific charges.</p>", formatInt(costBasisTokens(d)))
+	b.WriteString("<h2>" + i18n.T("reports.c_cost") + "</h2>")
+	fmt.Fprintf(&b, "<p>%s</p>", mdInlineToHTML(strings.TrimSpace(i18n.T("reports.cost_basis_note", map[string]any{"tokens": formatInt(costBasisTokens(d))}))))
 	for _, c := range d.Costs {
 		fmt.Fprintf(&b, "<li>%s (%s): %s</li>", c.Provider, c.Model, FormatCost(c.USD))
 	}
-	b.WriteString("<li>Local (Ollama / LM Studio / vLLM): $0 (local execution)</li>")
+	b.WriteString("<li>Local (Ollama / LM Studio / vLLM): " + i18n.T("reports.v_local_exec") + "</li>")
 
 	if len(d.Findings) > MaxPDFSecurityFindings {
-		fmt.Fprintf(&b, "<p><b>Full detailed audit log (%d files) exported to pii-audit-log.json</b></p>", len(d.Findings))
+		fmt.Fprintf(&b, "<p>%s</p>", mdInlineToHTML(i18n.T("reports.full_audit_log_exported", map[string]any{"count": len(d.Findings)})))
 	}
-	b.WriteString("<p>Mova Context Trace - Observable. Governed. Auditable.</p>")
-	b.WriteString("<p>This report is a technical analysis. It is not a legal, privacy, or security certification.</p>")
+	b.WriteString("<p>" + i18n.T("reports.trace_tagline") + "</p>")
+	b.WriteString("<p>" + i18n.T("reports.report_disclaimer") + "</p>")
 
 	return b.String()
 }
@@ -108,10 +129,10 @@ func contextReportHTML(d *Data) string {
 // in that fixed order, closing with the TOTAL line.
 func dirBreakdownHTML(d *Data) string {
 	var b strings.Builder
-	b.WriteString("<h2>Top directories by token usage</h2>")
+	b.WriteString("<h2>" + i18n.T("reports.h_top_dirs") + "</h2>")
 	for _, r := range d.DirBreakdown {
-		fmt.Fprintf(&b, "<li>%s - %s tok, %d file(s), %s of total</li>", r.Dir, formatInt(r.Tokens), r.Files, formatPct(r.Percent))
+		fmt.Fprintf(&b, "<li>%s</li>", i18n.T("reports.f_dir_line", map[string]any{"dir": r.Dir, "tok": formatInt(r.Tokens), "files": r.Files, "pct": formatPct(r.Percent)}))
 	}
-	fmt.Fprintf(&b, "<li><b>TOTAL - %s tok, %d file(s), 100.0%% of total</b></li>", formatInt(d.TotalTokens), d.Focus.Included)
+	fmt.Fprintf(&b, "<li><b>%s</b></li>", i18n.T("reports.f_dir_total", map[string]any{"tok": formatInt(d.TotalTokens), "files": d.Focus.Included}))
 	return b.String()
 }

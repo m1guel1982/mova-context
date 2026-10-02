@@ -62,6 +62,10 @@ type Project struct {
 	// location, so every project that doesn't set this is 100%
 	// unaffected. See mova.local/core.MemoryPath.
 	MemoryPath string `json:"memory_path,omitempty"`
+	// Memory: registro automático de memoria — bool o ruta (ver memory_setting.go).
+	Memory json.RawMessage `json:"memory,omitempty"`
+	// MemoryMaxChars: tope de memoria inyectada (0 = por defecto; ver memory_view.go).
+	MemoryMaxChars int `json:"memory_max_chars,omitempty"`
 	// Debug: when true, every door (chat, mova ui chat, CLI, HTTP API,
 	// MCP) prints what it resolved before running a task — repo path;
 	// each agent/skill/prompt's name AND resolved file path (or
@@ -94,6 +98,21 @@ type Project struct {
 	// false, OutputFile ""), zero behavior change — same "declare
 	// nothing, get today's behavior" rule as Diagram/Archive above.
 	EgressAudit *EgressAuditConfig `json:"egress_audit,omitempty"`
+
+	// Paths: optional PER-PROJECT override of the same 6 directories
+	// config/general/config.json declares globally
+	// (agents/skills/prompts/output_dir — see
+	// mova.local/mpaths). Nil/absent, or any individual field left ""
+	// = falls through to config/general/config.json's own value for
+	// that field, which itself falls through to Mova's historical
+	// default — same 3-tier "declare nothing, get today's behavior"
+	// rule as every other optional block here, just with one extra
+	// tier. There is deliberately NO "projects" field here: a project
+	// declaring where ALL projects live, inside itself, is circular —
+	// that one stays config/general/config.json-only (see
+	// mpaths.ProjectsDir). See docs/i18n/{es,en}/PATHS.md § jerarquía
+	// por proyecto.
+	Paths *ProjectPaths `json:"paths,omitempty"`
 
 	// Policies: optional per-project policy selection that COMPLETELY
 	// overrides config/policy.json's own list (see PolicySelector and
@@ -178,6 +197,43 @@ type EgressAuditConfig struct {
 	OutputFile string `json:"output_file,omitempty"`
 }
 
+// ProjectPaths maps project.json's optional "paths" object — see
+// core.Project.Paths's doc comment for the 3-tier priority
+// (project.json > config/general/config.json > Mova's historical
+// default) and mova.local/mpaths for the actual resolution (same
+// cross-platform rule as "repo": a recognized Windows/UNC/Unix
+// absolute path is used as-is; anything else resolves relative to
+// Mova's root — see docs/i18n/{es,en}/PATHS.md).
+type ProjectPaths struct {
+	Agents    string `json:"agents,omitempty"`
+	Skills    string `json:"skills,omitempty"`
+	Prompts   string `json:"prompts,omitempty"`
+	CacheDir  string `json:"cache_dir,omitempty"`
+	TempDir   string `json:"temp_dir,omitempty"`
+	OutputDir string `json:"output_dir,omitempty"`
+}
+
+// forKind returns this project's own directory override for a
+// knowledge kind ("agent"/"skill"/"prompt"), nil-safe — p == nil or an
+// unrecognized kind both return "", the same as "this project declares
+// no override", so every caller can call this unconditionally without
+// its own nil check.
+func (p *ProjectPaths) forKind(kind string) string {
+	if p == nil {
+		return ""
+	}
+	switch kind {
+	case "agent":
+		return p.Agents
+	case "skill":
+		return p.Skills
+	case "prompt":
+		return p.Prompts
+	default:
+		return ""
+	}
+}
+
 // DiagramConfig maps project.json's optional "diagram" object — see
 // mova.local/diagram.BuildDiagram, which reads DetailLevel (CLI's
 // --diagram flag can still override this per-run) and ExportFormats
@@ -235,165 +291,7 @@ type KnowledgeRef struct {
 	Domain string   `json:"domain"` // e.g. "software", "callcenter", "legal"
 	Use    []string `json:"use"`    // file names without extension
 	Custom []string `json:"custom"` // custom overrides (optional)
-}
-
-// Task defines a single operation within a project.
-type Task struct {
-	Prompt    string            `json:"prompt"`    // prompt file name, no extension
-	Agents    []string          `json:"agents"`    // extra agents for this task
-	Skills    []string          `json:"skills"`    // extra skills for this task
-	Variables map[string]string `json:"variables"` // task-level variable overrides
-	Focus     []string          `json:"focus"`     // task-level focus (overrides global focus if set)
-	// Exclude: mismo formato que Focus (nombre bare, ruta relativa,
-	// ruta absoluta multiplataforma, glob) pero para EXCLUIR — un
-	// archivo/directorio que matchea Exclude NUNCA se resuelve, sin
-	// importar si Focus lo pide explícitamente. Ver
-	// core.ResolveExclude / core/focus/resolvers/exclude.go.
-	// Sobreescribe (no combina con) Project.Exclude si viene con al
-	// menos un elemento, igual que Focus.
-	Exclude []string      `json:"exclude"`
-	Budget  *BudgetConfig `json:"budget"` // task-level budget ceiling (overrides project-level if set)
-}
-
-// ProjectSummary is used by mova list.
-type ProjectSummary struct {
-	Name        string
-	Description string
-	Lang        string
-	Tasks       []string
-}
-
-// SearchResult is returned by mova search and MCP search_context.
-type SearchResult struct {
-	Kind    string // "agent" | "skill" | "prompt"
-	Domain  string
-	Lang    string
-	Name    string
-	Excerpt string
-	Score   float64
-	// Path and Line let a caller navigate to the EXACT place a match
-	// was found, not just know that it exists — see mova.local/cli's
-	// tui_search.go, which opens Path in the same file viewer/jumper
-	// tui_fileview.go's ctrl+f already uses, landing directly on Line.
-	// Absolute path; Line is 1-indexed, 0 if the match was only in the
-	// file's Name (no in-content line to point to).
-	Path string
-	Line int
-}
-
-// ArchiveConfig maps project.json "archive" block.
-type ArchiveConfig struct {
-	Enabled        *bool  `json:"enabled"`          // default true
-	RetentionDays  int    `json:"retention_days"`   // default 30
-	KeepMemoryOnly bool   `json:"keep_memory_only"` // true = delete archives, keep memory.md
-	CleanupPolicy  string `json:"cleanup_policy"`   // "manual" (default) | "auto"
-	ConfirmDelete  *bool  `json:"confirm_delete"`   // default true
-}
-
-// BudgetConfig sets an optional token ceiling for `mova budget` — a soft
-// (actually hard, see EnforceLimit) limit on the ASSEMBLED CONTEXT size
-// (agents+skills+prompt+focus+memory), checked by mova.local/budget like
-// a linter: "this project's context grew past what you budgeted for".
-// This is a completely different knob from the model config's own
-// "num_predict" (config/models/<provider>/<config>.json) — that one caps
-// how many tokens the MODEL's own REPLY may generate, applied per-request
-// by the provider itself, not by Mova. Two different "max size" concepts
-// that are easy to confuse because of the similar names:
-//
-//	budget.max_tokens (this struct, project.json)        → INPUT  ceiling, enforced by Mova BEFORE sending anything
-//	model_config.num_predict (config/models/.../*.json)  → OUTPUT ceiling, sent to the provider AS a request parameter
-//
-// See core/budget_config.go for BudgetConfig/SanitizeConfig/ResolveBudget
-// — split into its own file once the Context Governance's fields pushed
-// this one over the 300-line limit.
-
-// MemoryDeleteRequest describes a delete operation (CLI → Adapter).
-type MemoryDeleteRequest struct {
-	All        bool
-	Archived   bool
-	Date       string
-	From       string
-	To         string
-	KeepActive bool
-}
-
-func ArchiveEnabled(cfg *ArchiveConfig) bool {
-	if cfg == nil || cfg.Enabled == nil {
-		return true
-	}
-	return *cfg.Enabled
-}
-
-func ConfirmDeleteRequired(cfg *ArchiveConfig) bool {
-	if cfg == nil || cfg.ConfirmDelete == nil {
-		return true
-	}
-	return *cfg.ConfirmDelete
-}
-
-func RetentionDays(cfg *ArchiveConfig) int {
-	if cfg == nil || cfg.RetentionDays <= 0 {
-		return 30
-	}
-	return cfg.RetentionDays
-}
-
-// LLMProfile controls how the engine formats context for different model capabilities.
-// Powerful models (Claude, GPT-4, Gemini) handle rich, dense context well.
-// Local models (Llama, Mistral, Phi, Qwen, Gemma, DeepSeek) benefit from
-// explicit, sequential, less-ambiguous formatting.
-//
-// This is the ONLY place where the LLM type influences behavior.
-// Agents, Skills, Prompts, and workflow.md never change.
-// Single source of truth: "provider" + "config" is a POINTER, nothing
-// more — it names config/models/<provider>/<config>.json, the one file
-// that holds the actual connection details (base_url, api_key, timeout)
-// AND inference parameters (temperature, num_predict, the real model
-// tag...) for that model. Nothing about the model is duplicated here.
-// (Older projects used "model" + "max_tokens" + "base_url" directly on
-// this struct; those fields are gone — "max_tokens" was never wired to
-// anything besides this struct itself, since every provider already
-// reads its output-token cap from the model config's own "num_predict",
-// and "base_url" now lives there too.)
-type LLMProfile struct {
-	Type     string `json:"type"`               // "powerful" | "local" (default: "powerful") — only knob that changes CONTEXT FORMATTING, see adaptContent. Unrelated to provider identity (see Provider below).
-	Provider string `json:"provider,omitempty"` // OPTIONAL. "ollama" | "google" | "anthropic" | "openai" | "lmstudio" | ... — a subfolder of config/models/. When omitted, it is resolved automatically from "config" (see models.ResolveConfigProvider) by locating the one provider folder that has that file — the provider's real identity then comes from that single file's own "type" field (e.g. "google", "anthropic", "openai-compatible", "ollama"), never duplicated here. Set this explicitly only to disambiguate a "config" filename that exists under more than one provider folder.
-	Config   string `json:"config"`             // filename (no .json) under config/models/<provider>/ — e.g. "llama3.2.3b", "gemini-2.5-flash"
-}
-
-// EmbeddingProfile configures the model used to generate vector embeddings.
-// Used for semantic search over agents/skills/prompts and memory.
-// Entirely optional — when absent, search falls back to keyword matching.
-//
-// Typical models:
-//   - bge-m3               (multilingual, Ollama — ideal for corpora ES+EN mezclados)
-//   - nomic-embed-text      (English-focused, lightweight, Ollama)
-//   - text-embedding-3-small (OpenAI)
-type EmbeddingProfile struct {
-	Provider string `json:"provider"` // "ollama" | "openai" | "openai-compatible"
-	Model    string `json:"model"`    // e.g. "bge-m3", "nomic-embed-text"
-	BaseURL  string `json:"base_url"` // required for ollama / openai-compatible
-	Dims     int    `json:"dims"`     // output dimensions (0 = model default)
-}
-
-// RerankerProfile configures a cross-encoder model to rerank retrieval results.
-// Applied after embedding search to improve precision.
-// Entirely optional — when absent, embedding cosine scores are used as-is.
-//
-// Typical models:
-//   - bge-reranker-v2-m3     (multilingual, best pair for bge-m3)
-//   - ms-marco-MiniLM-L-6-v2 (English, very fast)
-type RerankerProfile struct {
-	Provider string  `json:"provider"`  // "ollama" | "openai-compatible"
-	Model    string  `json:"model"`     // e.g. "bge-reranker-v2-m3"
-	BaseURL  string  `json:"base_url"`  // endpoint
-	MinScore float64 `json:"min_score"` // discard results below this score (0.0–1.0)
-}
-
-// isLocal returns true when the profile targets a local/smaller model.
-func (p *LLMProfile) IsLocal() bool {
-	if p == nil {
-		return false
-	}
-	return p.Type == "local"
+	// Variables: any KEY/value pairs injected into this block's markdown
+	// as ${KEY} or {{KEY}} — same engine as task.variables (see inject).
+	Variables map[string]string `json:"variables,omitempty"`
 }

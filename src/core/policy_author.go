@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"mova.local/mpaths"
 )
 
 // DefaultPolicyAuthor is the final value when no source declares an
@@ -23,7 +25,7 @@ const DefaultPolicyAuthor = "system:default"
 // then skipped and resolution continues with config/policy.json → env.
 func ResolvePolicyAuthor(root, project string) string {
 	if project != "" {
-		if a := readAuthorField(filepath.Join(root, "projects", project, "project.json")); a != "" {
+		if a := readAuthorField(filepath.Join(mpaths.ProjectsDir(root), project, "project.json")); a != "" {
 			return a
 		}
 	}
@@ -44,7 +46,7 @@ func TargetModelFor(root, project string) string {
 	if project == "" {
 		return "n/a"
 	}
-	data, err := os.ReadFile(filepath.Join(root, "projects", project, "project.json"))
+	data, err := os.ReadFile(filepath.Join(mpaths.ProjectsDir(root), project, "project.json"))
 	if err != nil {
 		return "n/a"
 	}

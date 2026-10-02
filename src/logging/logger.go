@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"mova.local/documents"
 )
 
 // Logger is the one object every door (CLI, chat, HTTP, MCP) opens via
@@ -26,11 +28,37 @@ type Logger struct {
 // disabled (the default), every Debug/Info/Warning/Error call is a
 // cheap no-op, so callers never need a nil check or an "if enabled"
 // guard of their own.
+//
+// file.path resolution uses the SAME cross-platform rule project.json's
+// "repo" field already has (documents.IsAbsCrossPlatform +
+// NormalizeAbsPath) instead of the plain filepath.IsAbs this function
+// used before: filepath.IsAbs is specific to whatever OS Mova happens
+// to run on right now, so a logging.json shared across a mixed
+// Windows/Linux/macOS team — or just moved from one machine to another
+// — could silently misjoin an absolute path from a different OS style
+// (e.g. a Windows drive letter read on Linux was neither treated as
+// absolute nor rejected, just wrongly joined under root as a bogus
+// nested path). The sample value ("logs/mova.log", a bare relative
+// path with no leading marker) is unaffected either way — it already
+// resolves under root exactly as documented.
 func Open(root string) *Logger {
 	cfg := LoadConfig(root)
 	path := cfg.File.Path
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, path)
+	if documents.IsAbsCrossPlatform(path) {
+		if normalized, err := documents.NormalizeAbsPath(path); err == nil {
+			path = normalized
+		} else {
+			// Absolute-looking but for a different OS than the one
+			// Mova runs on now (e.g. a Windows drive letter read on
+			// Linux/macOS) — fall back to the DEFAULT relative path
+			// (never to a raw join of the unusable value, which would
+			// itself produce a broken "<root>/C:\..." path), same
+			// "never break the process" contract every other path
+			// fallback in this codebase already follows.
+			path = filepath.Join(root, "logs", "mova.log")
+		}
+	} else {
+		path = filepath.Join(root, filepath.FromSlash(path))
 	}
 	return &Logger{
 		cfg:      cfg,

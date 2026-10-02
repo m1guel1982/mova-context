@@ -24,30 +24,30 @@ import (
 // token breakdown per layer and Context Governance status.
 func RenderContextReportMarkdown(d *Data) string {
 	var b strings.Builder
-	b.WriteString("# Context Report - Mova Context Trace\n\n")
+	b.WriteString("# " + i18n.T("reports.h_report_title") + "\n\n")
 
 	if d.IsRemote {
-		fmt.Fprintf(&b, "**Repository:** %s\n\n**Branch:** %s\n\n", d.RepoURL, orNA(d.Branch))
+		fmt.Fprintf(&b, "**%s:** %s\n\n**%s:** %s\n\n", i18n.T("reports.f_repository"), d.RepoURL, i18n.T("reports.f_branch"), orNA(d.Branch))
 	} else {
-		fmt.Fprintf(&b, "**Project:** %s\n\n**Task:** %s\n\n**project.json:** `%s`\n\n", d.ProjectName, d.TaskName, d.ProjectJSONPath)
+		fmt.Fprintf(&b, "**%s:** %s\n\n**%s:** %s\n\n**project.json:** `%s`\n\n", i18n.T("reports.f_project"), d.ProjectName, i18n.T("reports.f_task"), d.TaskName, d.ProjectJSONPath)
 	}
 	fmt.Fprintf(&b, "**%s:** `%s`  ·  **%s:** `%s`  ·  **%s:** `%s`\n\n", i18n.T("reports.agent_client_label"), orNA(d.AgentClient), i18n.T("reports.target_model_label"), orNA(d.TargetModel), i18n.T("reports.policy_author_label"), orNA(d.PolicyAuthor))
 	fmt.Fprintf(&b, "**%s:** `%s`  ·  **%s:** `%s`\n\n", i18n.T("reports.policy_source_label"), orNA(d.PolicySource), i18n.T("reports.policy_version_label"), orNA(d.PolicyVersion))
 
 	if len(d.Components) > 0 {
-		b.WriteString("## Context composition\n\n| Layer | Tokens |\n|---|---:|\n")
+		b.WriteString("## " + i18n.T("reports.h_composition") + "\n\n| " + i18n.T("reports.c_layer") + " | " + i18n.T("reports.c_tokens") + " |\n|---|---:|\n")
 		for _, c := range d.Components {
 			fmt.Fprintf(&b, "| %s | %s tok |\n", c.Name, formatInt(c.Tokens))
 		}
 		b.WriteString("\n")
 	} else {
-		b.WriteString("## Context composition\n\nNo active `project.json` - the whole repository was scanned.\n\n")
+		b.WriteString("## " + i18n.T("reports.h_composition") + "\n\n" + i18n.T("reports.no_active_project_scanned") + "\n\n")
 	}
 	fmt.Fprintf(&b, "%s\n\n", TotalTokensLine(d.TotalTokens, d.Encoding))
 
-	fmt.Fprintf(&b, "## Focus\n\n- Files included: **%d**\n- Files excluded: **%d**\n", d.Focus.Included, d.Focus.Excluded)
+	fmt.Fprintf(&b, "## %s\n\n- %s: **%d**\n- %s: **%d**\n", i18n.T("reports.h_focus"), i18n.T("reports.f_files_included"), d.Focus.Included, i18n.T("reports.f_files_excluded"), d.Focus.Excluded)
 	if len(d.Focus.ExcludedSuggestion) > 0 {
-		fmt.Fprintf(&b, "- Exclude suggestion: %s\n", strings.Join(d.Focus.ExcludedSuggestion, ", "))
+		fmt.Fprintf(&b, "- %s: %s\n", i18n.T("reports.f_exclude_suggestion"), strings.Join(d.Focus.ExcludedSuggestion, ", "))
 	}
 
 	if len(d.DirBreakdown) > 0 {
@@ -57,28 +57,28 @@ func RenderContextReportMarkdown(d *Data) string {
 
 	b.WriteString(RenderGovernanceMarkdown(d))
 
-	b.WriteString("\n## Context Governance\n\n")
+	b.WriteString("\n## " + i18n.T("reports.h_governance") + "\n\n")
 	b.WriteString(renderFirewallTable(d.Firewall))
 
 	if d.MaxTokens > 0 {
 		pct := float64(d.TotalTokens) / float64(d.MaxTokens) * 100
-		fmt.Fprintf(&b, "\n## Budget\n\n%s / %s tokens (%s)\n", formatInt(d.TotalTokens), formatInt(d.MaxTokens), formatPct(pct))
+		fmt.Fprintf(&b, "\n## %s\n\n%s / %s tokens (%s)\n", i18n.T("reports.h_budget"), formatInt(d.TotalTokens), formatInt(d.MaxTokens), formatPct(pct))
 	} else {
-		b.WriteString("\n## Budget\n\nN/A (no active `project.json` or no `budget.max_tokens` configured)\n")
+		b.WriteString("\n## " + i18n.T("reports.h_budget") + "\n\n" + i18n.T("reports.budget_not_configured_full") + "\n")
 	}
 
-	b.WriteString("\n## Estimated input cost\n\n")
+	b.WriteString("\n## " + i18n.T("reports.h_cost") + "\n\n")
 	fmt.Fprintf(&b, "%s", i18n.T("reports.cost_basis_note", map[string]any{"tokens": formatInt(costBasisTokens(d))}))
-	b.WriteString("| Provider | Model | Theoretical / Estimated Input Cost (USD) |\n|---|---|---:|\n")
+	b.WriteString("| " + i18n.T("reports.c_provider") + " | " + i18n.T("reports.c_model") + " | " + i18n.T("reports.c_cost") + " |\n|---|---|---:|\n")
 	for _, c := range d.Costs {
 		fmt.Fprintf(&b, "| %s | %s | %s |\n", c.Provider, c.Model, FormatCost(c.USD))
 	}
-	b.WriteString("| Local | Ollama / LM Studio / vLLM | $0 (local execution) |\n")
+	b.WriteString("| Local | Ollama / LM Studio / vLLM | " + i18n.T("reports.v_local_exec") + " |\n")
 
 	if len(d.Findings) > MaxPDFSecurityFindings {
-		fmt.Fprintf(&b, "\n**Full detailed audit log (%d files) exported to `pii-audit-log.json`**\n", len(d.Findings))
+		fmt.Fprintf(&b, "\n%s\n", i18n.T("reports.full_audit_log_exported", map[string]any{"count": len(d.Findings)}))
 	}
-	b.WriteString("\n---\n\nMova Context Trace - Observable. Governed. Auditable.\n\nThis report is a technical analysis. It is not a legal, privacy, or security certification.\n")
+	b.WriteString("\n---\n\n" + i18n.T("reports.trace_tagline") + "\n\n" + i18n.T("reports.report_disclaimer") + "\n")
 
 	return b.String()
 }
@@ -90,8 +90,8 @@ func RenderContextReportMarkdown(d *Data) string {
 // most, with a TOTAL row closing the table.
 func renderDirBreakdownMarkdown(d *Data) string {
 	var b strings.Builder
-	b.WriteString("## Top directories by token usage\n\n")
-	b.WriteString("| Directory | Tokens | Files | % of total |\n|---|---:|---:|---:|\n")
+	b.WriteString("## " + i18n.T("reports.h_top_dirs") + "\n\n")
+	b.WriteString("| " + i18n.T("reports.c_directory") + " | " + i18n.T("reports.c_tokens") + " | " + i18n.T("reports.c_files") + " | " + i18n.T("reports.c_pct_total") + " |\n|---|---:|---:|---:|\n")
 	for _, r := range d.DirBreakdown {
 		fmt.Fprintf(&b, "| %s | %s | %d | %s |\n", r.Dir, formatInt(r.Tokens), r.Files, formatPct(r.Percent))
 	}
@@ -109,14 +109,14 @@ func renderDirBreakdownMarkdown(d *Data) string {
 
 func renderFirewallTable(f FirewallStatus) string {
 	var b strings.Builder
-	b.WriteString("| Stage | Status |\n|---|---|\n")
-	fmt.Fprintf(&b, "| Sanitizer | %s |\n", onOff(f.SanitizerOn))
+	b.WriteString("| " + i18n.T("reports.c_stage") + " | " + i18n.T("reports.c_status") + " |\n|---|---|\n")
+	fmt.Fprintf(&b, "| "+i18n.T("reports.f_sanitizer")+" | %s |\n", onOff(f.SanitizerOn))
 	piiCell := onOff(f.PIIMaskingOn)
 	if f.PIIWarning != "" {
 		piiCell += "  \n" + f.PIIWarning
 	}
-	fmt.Fprintf(&b, "| PII Masking | %s |\n", piiCell)
-	fmt.Fprintf(&b, "| Cache Layout Guard | %s |\n", onOff(f.CacheGuardOn))
-	fmt.Fprintf(&b, "| Circuit Breaker | %s |\n", onOff(f.CircuitBreakerOn))
+	fmt.Fprintf(&b, "| "+i18n.T("reports.f_pii_masking")+" | %s |\n", piiCell)
+	fmt.Fprintf(&b, "| "+i18n.T("reports.f_cache_guard")+" | %s |\n", onOff(f.CacheGuardOn))
+	fmt.Fprintf(&b, "| "+i18n.T("reports.f_circuit_breaker")+" | %s |\n", onOff(f.CircuitBreakerOn))
 	return b.String()
 }

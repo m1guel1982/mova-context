@@ -15,6 +15,9 @@
 // Inside the chat:
 //
 //	set -model <name>         switch models, keeps history
+//	/tasks                    lists the project's tasks
+//	/task <name|all>          switches task without leaving the chat (keeps history; memory.md carries the context over)
+//	/run <name>               switches to a task and sends its QUERY
 //	/memory                   saves the last exchange to memory.md (requires [project])
 //	/budget                   generates mova-budget-report.md for the active project (requires [project])
 //	/context-trace            runs `context-trace` for the active project, or --repo <url> for a remote one
@@ -61,13 +64,14 @@ import (
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/documents"
-	"mova.local/i18n"
 	"mova.local/mcp"
 	"mova.local/models"
-	"mova.local/orchestrator"
 )
 
 func runChat(root, project, task string) {
+	// Los grafos se generan en segundo plano: ni el arranque ni `exit`
+	// esperan un render; al terminar cada uno se avisa en la terminal.
+	enableBackgroundGraphs(func(msg string) { consolePrint("\n" + msg + "\n> ") })
 	sess, err := models.NewSession(root)
 	must(err)
 
@@ -92,6 +96,10 @@ func runChat(root, project, task string) {
 		consolePrint("[Project] Loading project configuration...\n")
 		fa := core.NewFileAdapter(root)
 		proj, _ = fa.GetProject(project)
+		// Con una tarea nombrada (`mova chat <proyecto> analizar`) solo se
+		// carga el prompt/focus/grafo de ESA tarea; sin tarea y con varias
+		// declaradas, TODAS (core.ChatTaskName). `all` fuerza el modo todas.
+		task = core.ChatTaskName(proj, task)
 		adapter = newAdapter(root, proj)
 		applyProjectLLMProfile(sess, root, proj)
 
@@ -147,6 +155,12 @@ func runChat(root, project, task string) {
 			continue
 		}
 
+		// Salir no necesita recargar nada: se sale ya, sin reconstruir contexto.
+		if line == "exit" || line == "quit" || line == "salir" {
+			consolePrint("bye!\n")
+			return
+		}
+
 		// Hot reload: antes de interpretar la línea (comando o turno de
 		// chat), releer project.json y — solo si algo relevante
 		// cambió — reconstruir contexto/system prompt en caliente.
@@ -156,10 +170,6 @@ func runChat(root, project, task string) {
 		}
 
 		switch {
-		case line == "exit" || line == "quit" || line == "salir":
-			consolePrint("bye!\n")
-			return
-
 		case strings.HasPrefix(line, "set -model"):
 			name := strings.TrimSpace(strings.TrimPrefix(line, "set -model"))
 			if name == "" {
@@ -171,6 +181,42 @@ func runChat(root, project, task string) {
 				continue
 			}
 			consolePrint(fmt.Sprintf("[Model] Switched to: %s (provider: %s)\n", sess.Model, sess.Provider))
+
+		case line == "/tasks":
+			consolePrint(taskListing(root, project, proj, task))
+
+		case strings.HasPrefix(line, "/task ") || line == "/task":
+			if project == "" || proj == nil {
+				consolePrint("[Task] /task requiere abrir el chat con un proyecto.\n")
+				continue
+			}
+			name := strings.TrimSpace(strings.TrimPrefix(line, "/task"))
+			if name == "" {
+				consolePrint(taskListing(root, project, proj, task))
+				continue
+			}
+			if t, p2, a2, sig, ok := switchChatTask(root, project, name, sess, proj, adapter, task); ok {
+				task, proj, adapter, signature = t, p2, a2, sig
+			}
+
+		case strings.HasPrefix(line, "/run"):
+			if project == "" || proj == nil {
+				consolePrint("[Task] /run requiere abrir el chat con un proyecto.\n")
+				continue
+			}
+			name := strings.TrimSpace(strings.TrimPrefix(line, "/run"))
+			if name == "" || core.IsAllTasks(core.NormalizeTaskArg(proj, name)) {
+				consolePrint("[Task] Uso: /run <tarea>  (una tarea concreta; ver /tasks)\n")
+				continue
+			}
+			t, p2, a2, sig, ok := switchChatTask(root, project, name, sess, proj, adapter, task)
+			if !ok {
+				continue
+			}
+			task, proj, adapter, signature = t, p2, a2, sig
+			if runChatTurn(sess, adapter, proj, root, project, task, taskQuery(proj, task), scanner) {
+				signature = resignContext(root, project, task, proj)
+			}
 
 		case line == "/memory":
 			runChatMemory(adapter, project, sess, nil)
@@ -236,97 +282,9 @@ func runChat(root, project, task string) {
 				runChatMemory(adapter, project, sess, nil)
 				continue
 			}
-			runChatTurn(sess, adapter, proj, root, project, line, scanner)
-		}
-	}
-}
-
-// runChatTurn sends one ordinary chat message and prints the reply, the
-// token-usage line, and records real usage for the Feedback Loop.
-func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project, root, project, line string, scanner *bufio.Scanner) {
-	label := providerLabel(sess.Provider)
-	consolePrint("[" + label + "] Sending request...\n")
-
-	replLine := func() (string, bool) {
-		if !scanner.Scan() {
-			return "", false
-		}
-		return strings.TrimSpace(scanner.Text()), true
-	}
-	reply, streamed, err := sendWithTools(sess, adapter, proj, root, line, replLine, nil)
-	if err != nil {
-		consolePrint("Error: " + err.Error() + "\n")
-		return
-	}
-	if !streamed {
-		if sess.LastReplyWasDryRun {
-			// The provider was never called — say so instead of the
-			// generic "Response received.", which would otherwise
-			// falsely claim a real network round-trip happened (see
-			// project.json's "egress_audit": {"dry_run": true}).
-			consolePrint("[egress_audit] " + i18n.T("reports.egress_dry_run_done") + "\n")
-		} else {
-			consolePrint("[" + label + "] Response received.\n")
-		}
-		consolePrint(fmt.Sprintf("[%s]\n%s\n", sess.Model, renderMarkdown(reply)))
-	}
-	printTokenUsage(root, sess, proj)
-	recordRealUsage(root, project, proj, sess)
-}
-
-func chatBanner(sess *models.Session) string {
-	var b strings.Builder
-	b.WriteString("mova chat — provider: " + sess.Provider)
-	if sess.Model != "" {
-		b.WriteString(", model: " + sess.Model)
-	} else {
-		b.WriteString(" (no model set — use `set -model <name>`)")
-	}
-	b.WriteString("\ntype `exit` to quit.\n\n")
-	return b.String()
-}
-
-// resolveChatTarget turns the raw (project, task) positionals `mova
-// chat <project> [task]` was given into what core.FileAdapter.GetProject
-// actually needs, handling the ONE case it can't resolve on its own: a
-// multiagent GROUP name (projects/<group>/config.json — see
-// mova.local/orchestrator) has no project.json of its own, so
-// `mova chat <group>` and `mova chat <group> <agent>` both fail
-// GetProject verbatim. This never changes behavior for an ordinary
-// project or for the already-supported `mova chat <group>/<agent>`
-// single-argument form (core.FileAdapter.GetProject already resolves
-// that slash path) — it only fires when the literal name given isn't a
-// project by itself.
-//
-// Returns ok=false when it already printed enough guidance that the
-// caller should just return (ambiguous group with no agent chosen, or
-// an agent name that doesn't belong to this group).
-func resolveChatTarget(root, project, task string) (resolvedProject, resolvedTask string, ok bool) {
-	fa := core.NewFileAdapter(root)
-	if _, err := fa.GetProject(project); err == nil {
-		return project, task, true // ordinary project — unchanged path
-	}
-	if !orchestrator.IsGroup(root, project) {
-		return project, task, true // not a group either — let GetProject's own error surface as before
-	}
-
-	cfg, err := orchestrator.LoadGroupConfig(root, project)
-	if err != nil || len(cfg.Agents) == 0 {
-		consolePrint("[Project] \"" + project + "\" looks like a multiagent group, but its config.json couldn't be read or lists no agents.\n")
-		return "", "", false
-	}
-	if task != "" {
-		for _, agent := range cfg.Agents {
-			if agent == task {
-				return project + "/" + agent, "", true // "<group> <agent>" → "<group>/<agent>", no task filter applied
+			if runChatTurn(sess, adapter, proj, root, project, task, line, scanner) {
+				signature = resignContext(root, project, task, proj)
 			}
 		}
-		consolePrint("[Project] \"" + task + "\" is not an agent of group \"" + project + "\". Agents: " + strings.Join(cfg.Agents, ", ") + "\n")
-		return "", "", false
 	}
-	consolePrint("[Project] \"" + project + "\" is a multiagent group — pick one agent to chat with:\n")
-	for _, agent := range cfg.Agents {
-		consolePrint("  mova chat " + project + " " + agent + "\n")
-	}
-	return "", "", false
 }

@@ -65,6 +65,13 @@ func (a *dbAdapter) GetKnowledge(kind, domain, lang, name string) (string, error
 	return content, err
 }
 
+// GetKnowledgeWithPathOverride: a DB-backed catalog has no per-project
+// directory concept (knowledge lives in rows, not folders), so override
+// is intentionally ignored — see core.Adapter's doc comment.
+func (a *dbAdapter) GetKnowledgeWithPathOverride(kind, domain, lang, name, override string) (string, error) {
+	return a.GetKnowledge(kind, domain, lang, name)
+}
+
 func (a *dbAdapter) GetProject(name string) (*core.Project, error) {
 	var p core.Project
 	var vars, tasks string

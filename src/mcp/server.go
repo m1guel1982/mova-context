@@ -51,32 +51,6 @@ type Request struct {
 // variable is safe.
 var currentAgentClient = "mcp-agent"
 
-// AgentClientName returns the MCP client identified in the last
-// "initialize" handshake — "mcp-agent" by default when the client
-// didn't send "clientInfo" (see captureClientInfo).
-func AgentClientName() string { return currentAgentClient }
-
-// captureClientInfo reads params.clientInfo.name/version (standard
-// MCP shape, e.g. {"name":"Claude-Code","version":"1.2.0"}) and
-// builds a readable identifier like "Claude-Code/1.2.0". When the
-// client doesn't declare "clientInfo", or declares it empty,
-// currentAgentClient keeps its default "mcp-agent" — never empty.
-func captureClientInfo(params map[string]any) {
-	ci, ok := params["clientInfo"].(map[string]any)
-	if !ok {
-		return
-	}
-	name, _ := ci["name"].(string)
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return
-	}
-	if version, _ := ci["version"].(string); strings.TrimSpace(version) != "" {
-		name = name + "/" + strings.TrimSpace(version)
-	}
-	currentAgentClient = name
-}
-
 // StartStdio inicia el servidor usando Entrada/Salida estándar (requerido
 // por Claude Desktop/Cursor).
 func StartStdio(adapter core.Adapter, root string) error {
@@ -187,9 +161,19 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 		if entry == "" {
 			err = fmt.Errorf("save_memory: \"entry\" is required")
 		} else {
-			err = adapter.AppendMemory(project, entry)
-			if err == nil {
-				result = "✓ memory saved: projects/" + project + "/memory.md"
+			// Mismo registrador que el chat y chat_completion: formato con
+			// etiqueta de tarea, deduplicación, y respeta "memory" de
+			// project.json (false/ausente = no registra).
+			res, rerr := core.RecordMemory(adapter, root, project, str(args, "task"), entry, core.RecordOptions{Raw: true})
+			switch {
+			case rerr != nil:
+				err = rerr
+			case res.Off:
+				result = "memory desactivada en project.json (agrega \"memory\": true, o una ruta, para registrar): no se guardó nada."
+			case res.Saved == 0 && res.Skipped > 0:
+				result = "✓ sin cambios: esa síntesis ya estaba registrada"
+			default:
+				result = "✓ memory saved: " + res.Path
 			}
 		}
 	case "get_workflow":
@@ -300,41 +284,3 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 }
 
 // ── tiny helpers ──────────────────────────────────────────────────────────
-
-func str(m map[string]any, k string) string {
-	if m == nil {
-		return ""
-	}
-	v, _ := m[k].(string)
-	return v
-}
-
-// splitCommaArg splits a comma-separated MCP argument (e.g.
-// "ignore":"docs/**,scripts/**") into a clean slice - MCP has no
-// native repeated-flag concept like the CLI's flagStrAll, so comma
-// separation is the one form it supports.
-func splitCommaArg(s string) []string {
-	if s == "" {
-		return nil
-	}
-	var out []string
-	for _, part := range strings.Split(s, ",") {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
-}
-
-func serializeResult(result any, id json.RawMessage) map[string]any {
-	return map[string]any{"jsonrpc": "2.0", "id": id, "result": result}
-}
-
-func serializeError(code int, msg string, id json.RawMessage) map[string]any {
-	return map[string]any{
-		"jsonrpc": "2.0",
-		"id":      id,
-		"error":   map[string]any{"code": code, "message": msg},
-	}
-}

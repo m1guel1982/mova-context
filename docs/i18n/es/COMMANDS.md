@@ -112,9 +112,15 @@ curl -X POST http://localhost:3000/mcp \
 
 ## chat
 
-**NAME** — REPL interactivo. Dentro: `/context-trace`, `/memory`, `/save`, `/delete`.
+**NAME** — REPL interactivo. Dentro: `/tasks`, `/task`, `/run`, `/context-trace`, `/memory`, `/save`, `/delete`.
 
-**SYNOPSIS** — `mova chat <proyecto>`
+**SYNOPSIS** — `mova chat <proyecto> [tarea|all]`
+
+- `mova chat <proyecto> analizar` → carga **solo** el prompt, el focus y el grafo de la tarea `analizar`.
+- `mova chat <proyecto>` (sin tarea y con varias tareas en `project.json`) → carga **todas**: el prompt, el focus y el grafo de cada una. Con una sola tarea, esa. `mova chat <proyecto> all` fuerza el modo todas.
+- Dentro del chat, sin salir y conservando el historial: `/tasks` (lista las tareas) · `/task <nombre|all>` (cambia de tarea y recarga el contexto) · `/run <nombre>` (cambia de tarea y envía su variable `QUERY`).
+- Con `"memory"` activo en `project.json`, cada respuesta sustancial deja su bloque de síntesis en `memory.md` (ver `PROJECT_JSON.md § Memoria automática`) y todas las tareas lo leen: sobrevive a salir del chat y aplica igual a MCP/HTTP. `/memory` guarda a mano la última respuesta aunque `memory` esté apagado.
+- Si el modelo gasta el cupo de salida sin devolver texto, `mova chat` muestra un error con los tokens consumidos (ver `MODEL_CONFIG.md`).
 
 ## memory / memory-read / memory-archive / memory-clear / memory-config
 

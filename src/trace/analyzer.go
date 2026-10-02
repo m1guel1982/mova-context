@@ -64,15 +64,20 @@ func AnalyzeLocal(adapter core.Adapter, root, projectName, taskName, origin stri
 		firewall.PIIWarning = fmt.Sprintf("%d possible sensitive-data fragments masked", report.PIIStats.TokensMasked)
 	}
 
+	outputDirOverride := ""
+	if proj.Paths != nil {
+		outputDirOverride = proj.Paths.OutputDir
+	}
 	d := &Data{
-		Origin:          origin,
-		ProjectName:     projectName,
-		ProjectJSONPath: filepath.ToSlash(core.ProjectJSONPath(root, projectName)),
-		TaskName:        resolvedTask,
-		HasProjectJSON:  true,
-		Focus:           focusCounts,
-		Components:      componentsFromReport(report),
-		Firewall:        firewall,
+		Origin:            origin,
+		ProjectName:       projectName,
+		ProjectJSONPath:   filepath.ToSlash(core.ProjectJSONPath(root, projectName)),
+		OutputDirOverride: outputDirOverride,
+		TaskName:          resolvedTask,
+		HasProjectJSON:    true,
+		Focus:             focusCounts,
+		Components:        componentsFromReport(report),
+		Firewall:          firewall,
 		TotalTokens:     report.TotalTokens,
 		MaxTokens:       report.MaxTokens,
 		Costs:           costRowsFromModelCosts(report.TotalCosts),

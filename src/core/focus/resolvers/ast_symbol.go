@@ -83,43 +83,27 @@ func (r *AstSymbolResolver) Resolve(ctx focus.Context, target string) ([]focus.C
 		// CodeSymbolResolver/FallbackResolver.
 		return nil, focus.ErrNotFound
 	}
-	m := newExcludeMatcher(ctx.RepoPath, ctx.Exclude)
-	// Absolute host path (cross-platform: Windows drive letter, UNC
-	// share, or a real Unix absolute path) — tried BEFORE repo-relative
-	// resolution, same order FileResolver.candidatePath already uses
-	// (see file.go). Bug fixed here: before this, an AST-filtered
-	// target whose FILE part was an absolute path (e.g.
-	// "C:\legacy\settings.py::var=ADMIN_EMAIL", or a UNC network
-	// share) always fell straight to repoRelativePath, which silently
-	// discards absolute-looking prefixes and re-joins under RepoPath
-	// — meaning it could only ever resolve to a nonexistent path
-	// under the repo, never the real external file, and the target
-	// was reported as "not found" even when the file plainly existed.
-	var path string
-	if abs, ok := resolveAbsoluteFile(spec.file); ok {
-		if m.excludesPath(abs) {
-			return nil, focus.ErrNotFound
+	// Archivo(s) del target: ruta absoluta del host, ruta relativa al repo,
+	// o nombre/ruta parcial ("Gantt.js::func=show()") vía el índice — si el
+	// nombre existe en varias carpetas se procesan todas (ver locateFiles).
+	var blocks []focus.ContextBlock
+	for _, path := range locateFiles(ctx, spec.file) {
+		content := readFile(path)
+		if content == "" {
+			continue
 		}
-		path = abs
-	} else {
-		path = repoRelativePath(ctx.RepoPath, spec.file)
-		if path == "" || m.excludesPath(path) {
-			return nil, focus.ErrNotFound
+		if extracted, found := astfilter.Extract([]byte(content), spec.file, spec.kind, spec.names); found {
+			blocks = append(blocks, focus.ContextBlock{
+				Source:  relOrBase(ctx.RepoPath, path),
+				Kind:    "ast-symbol",
+				Content: extracted,
+			})
 		}
 	}
-	content := readFile(path)
-	if content == "" {
+	if len(blocks) == 0 {
 		return nil, focus.ErrNotFound
 	}
-	extracted, found := astfilter.Extract([]byte(content), spec.file, spec.kind, spec.names)
-	if !found {
-		return nil, focus.ErrNotFound
-	}
-	return []focus.ContextBlock{{
-		Source:  relOrBase(ctx.RepoPath, path),
-		Kind:    "ast-symbol",
-		Content: extracted,
-	}}, nil
+	return blocks, nil
 }
 
 // ApplyAstSymbolExcludes strips any "path::kind=names" entries in
@@ -156,4 +140,11 @@ func sameFileTarget(specFile, source string) bool {
 	specFile = strings.TrimPrefix(strings.ReplaceAll(specFile, `\`, "/"), "./")
 	src := strings.TrimPrefix(strings.ReplaceAll(source, `\`, "/"), "./")
 	return specFile == src || strings.HasSuffix(src, "/"+specFile)
+}
+
+// ParseSymbolTarget expone parseAstSymbolTarget al generador de grafos:
+// "file::kind=a,b" -> (file, kind canónico, [a b], true).
+func ParseSymbolTarget(target string) (file, kind string, names []string, ok bool) {
+	spec, ok := parseAstSymbolTarget(target)
+	return spec.file, spec.kind, spec.names, ok
 }

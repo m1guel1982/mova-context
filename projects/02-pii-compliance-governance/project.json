@@ -15,22 +15,24 @@
     "use": [
       "ai-privacy-reviewer"
     ],
-    "custom": []
+    "custom": [],
+    "variables": { "REGULATION": "Ley 21.719 (Chile)" }
   },
   "skills": {
     "domain": "base",
     "use": [
       "pii-context-reduction"
     ],
-    "custom": []
+    "custom": [],
+    "variables": { "REGULATION": "Ley 21.719 (Chile)" }
   },
 
   "tasks": {
     "analizar": {
       "prompt": "analizar-contexto-clientes-ia",
       "variables": {
-        "query": "Busca la información relevante de los clientes y dime qué datos personales tenemos, para qué los usamos y qué sistemas o procesos están involucrados.",
-        "regulation": "Ley 21.719 (Chile)"
+        "QUERY": "Busca la información relevante de los clientes y dime qué datos personales tenemos, para qué los usamos y qué sistemas o procesos están involucrados.",
+        "REGULATION": "Ley 21.719 (Chile)"
       },
       "focus": [
         "customers.json",

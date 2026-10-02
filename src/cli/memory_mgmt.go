@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"mova.local/core"
+	"mova.local/mpaths"
 )
 
 // runMemoryClear handles: mova memory-clear [project] [flags]
@@ -72,7 +73,7 @@ func runMemoryClear(adapter core.Adapter, root, project string) {
 
 // runMemoryConfig handles: mova memory-config [project] [action] [value]
 func runMemoryConfig(root, project, action, value string) {
-	projPath := filepath.Join(root, "projects", project, "project.json")
+	projPath := filepath.Join(mpaths.ProjectsDir(root), project, "project.json")
 	data, err := os.ReadFile(projPath)
 	must(err)
 

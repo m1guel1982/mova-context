@@ -12,7 +12,11 @@
 // block, not by the model's raw context window.
 package models
 
-import "fmt"
+import (
+	"fmt"
+
+	"mova.local/i18n"
+)
 
 // UsageInfo is the minimal pair of numbers this feature promises: how
 // many tokens the last request used, and the model's maximum context
@@ -32,11 +36,10 @@ type UsageInfo struct {
 func (u UsageInfo) FormatLine() string {
 	used := formatThousandsInt(u.UsedTokens)
 	if u.ContextWindow <= 0 {
-		return fmt.Sprintf("[Tokens] %s used / context window not configured for this model\n", used)
+		return i18n.T("chat.tokens_no_window", map[string]any{"used": used}) + "\n"
 	}
 	percent := (float64(u.UsedTokens) / float64(u.ContextWindow)) * 100
-	return fmt.Sprintf("[Tokens] %s used / %s max context window (%.1f%%)\n",
-		used, formatThousandsInt(u.ContextWindow), percent)
+	return i18n.T("chat.tokens_used", map[string]any{"used": used, "max": formatThousandsInt(u.ContextWindow), "pct": fmt.Sprintf("%.1f", percent)}) + "\n"
 }
 
 // UsageFor builds UsageInfo for the last turn of sess against mc.

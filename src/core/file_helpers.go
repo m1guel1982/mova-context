@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
 )
 
 func readFile(path string) string {
@@ -132,8 +133,8 @@ func score(name, content, q string) float64 {
 // Returns the number of entries deleted.
 // File mode: rewrites memory.md and/or removes archive files.
 func (a *fileAdapter) DeleteMemory(project string, req MemoryDeleteRequest) (int, error) {
-	memPath := filepath.Join(a.root, "projects", project, "memory.md")
-	archDir := filepath.Join(a.root, "projects", project, "memory-archive")
+	memPath := MemoryPath(a.root, project)
+	archDir := memoryArchiveDir(memPath)
 
 	// Delete only archived files, keep memory.md
 	if req.Archived || req.KeepActive {

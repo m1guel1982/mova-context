@@ -14,7 +14,7 @@ Vive siempre en `projects/<nombre>/project.json` (ruta fija, el motor no busca e
   "adapter": "file",
   "default_task": "revisar",
   "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
-  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+  "skills": { "domain": "base", "use": ["api-security"], "custom": [] },
   "tasks": {
     "revisar": { "prompt": "review-project", "variables": {}, "focus": ["archivo.js"] }
   },
@@ -41,6 +41,98 @@ Vive siempre en `projects/<nombre>/project.json` (ruta fija, el motor no busca e
 
 Ver `docs/i18n/es/AST_FILTER.md` para la sintaxis exacta de `archivo::kind=nombre`.
 
+## Variables dinámicas (agents, skills y prompts)
+
+Cualquier clave de un bloque `"variables"` reemplaza `${CLAVE}` o `{{CLAVE}}` en los `.md` — sin importar el nombre ni la tecnología. Mayúsculas/minúsculas no importan (`query` = `QUERY`); una marca sin variable se deja tal cual.
+
+```json
+{
+  "variables": { "STACK": "Node.js / JavaScript" },
+  "agents": { "domain": "base", "use": ["frontend-dev"], "custom": [],
+              "variables": { "QUERY": "Optimizar la carga del Gantt" } },
+  "skills": { "domain": "base", "use": ["ui-accessibility"], "custom": [],
+              "variables": { "UPGRADE_TRIGGER": "> 5.000 elementos en Gantt.js" } },
+  "tasks": { "optimizar": {
+      "prompt": "fix-or-improve",
+      "variables": { "QUERY": "Optimizar la carga de programación", "SKIPPED_ABSTRACTIONS": "sin capas de API nuevas" },
+      "focus": ["Gantt.js", "MenuAtencion.js::func=show()"] } }
+}
+```
+
+Precedencia (gana el último): `PROJECT`/`REPO`/`TASK`/`LANG` (automáticas) < `variables` raíz < `agents.variables` / `skills.variables` (solo su bloque) < `tasks.<t>.variables` (todos los bloques).
+
+`focus` y `exclude` aceptan un nombre suelto (`Gantt.js`), una ruta parcial (`programacion/Gantt.js`) o una ruta completa, con o sin `::func=...`. Si el nombre existe en varias carpetas, entran **todas** las coincidencias y `debug` lo avisa: para elegir una, usa una ruta más larga.
+
+## Grafo de dependencias (`graph`)
+
+Dentro de una tarea, `graph` genera — **sin LLM y sin gastar tokens** — un diagrama de las llamadas, referencias a variables e importaciones entre los archivos y símbolos de `focus` y `exclude`. Usa el mismo Tree-Sitter y los mismos `kind` que el [filtro AST](AST_FILTER.md) (`func`/`method`, `class`, `var`, `const`, `struct`, `interface`…).
+
+```json
+"tasks": { "analizar": {
+  "focus":   ["api-rms\\lib\\programacion\\Programacion.js::func=getAtenciones,saveAtencion", "Admin.js::func=getModelo"],
+  "exclude": ["Programacion.js::func=divideAtencion"],
+  "graph":   "graph.png"
+} }
+```
+
+| Valor de `graph` | Resultado |
+|---|---|
+| ausente, `""`, `false`, `null` | no se genera nada |
+| `true` | `graph.png` en la carpeta de `project.json` |
+| `"grafo.png"` / `"grafo.svg"` / `"grafo.pdf"` | ese formato, relativo a la carpeta de `project.json` (`projects/<proyecto>/`) |
+| `"grafo"` (sin extensión) o una carpeta (`"salida/"`) | `grafo.png` / `salida/graph.png` |
+| ruta absoluta: `C:\graficos\g.png`, `\\servidor\compartido\g.pdf`, `/opt/g.svg` | esa ruta; se crean las carpetas intermedias |
+| otra extensión (`.jpg`…) | no se genera y se avisa (solo `.png`, `.svg`, `.pdf`) |
+
+**Multiplataforma:** la ruta se resuelve con el mismo criterio del resto de Mova (`\` y `/` valen igual; Windows `C:\…`, UNC y Unix se reconocen en cualquier SO). Una ruta de Windows en un equipo Linux/macOS se rechaza con un mensaje claro en vez de escribirse en otro lugar.
+
+**Qué dibuja.** Cada archivo es un subgrafo; cada símbolo un nodo — función/método (azul), clase/tipo (violeta), variable/constante (ámbar). Con `::kind=nombres` solo entran esos símbolos; un archivo sin `::` aporta sus funciones y clases. Los símbolos de `exclude` salen en rojo punteado; los símbolos que los de `focus` usan pero no pediste salen punteados grises («fuera de foco»). Flechas: llamada (azul), referencia a variable (ámbar), importación archivo→archivo (violeta punteada, por carriles sobre los archivos) y llamada *inferida por nombre único* (azul punteada: no hay `require` que la resuelva, pero solo un símbolo de `focus`/`exclude` se llama así). Archivos con muchos símbolos pasan a 2–3 columnas internas y el espacio entre archivos crece con la cantidad de relaciones. La paleta y tipografía son las de `context-diagram.png`.
+
+**Todas las tareas.** Se genera un grafo por **cada** tarea que declare `graph` (no solo la activa), cada una con su propio `focus`/`exclude` (o el heredado del proyecto). Usa un archivo distinto por tarea (`"analizar.png"`, `"agregar-columnas.png"`…): si dos tareas apuntan al mismo archivo, la segunda se omite con un aviso `[Graph]`.
+
+**Cuándo y cómo se genera.** Cada vez que se arma el contexto (`mova run`, `mova chat`, MCP, HTTP, presupuesto) y hay tareas con `graph`.
+- **`mova chat`, `mova mcp start` (stdio y HTTP):** en **segundo plano**. El arranque, cada turno y `exit` no esperan; al terminar cada grafo el chat avisa `[Graph] <tarea>: grafo generado → ruta` y el servidor MCP/HTTP lo deja en su log.
+- **`mova run`, `trace`, `budget`:** en línea; el comando termina con los archivos ya escritos (las tareas se generan en paralelo).
+- **Caché:** la huella de `project.json` (focus, exclude, `graph`, `lang`) y el tamaño+fecha de cada archivo analizado se guardan en `graph-cache.json`, junto a `project.json`. Si nada cambió, ni un arranque nuevo de `mova chat` vuelve a renderizar (un turno sin cambios solo hace `stat` de los archivos). Se puede borrar sin riesgo.
+- **En caliente:** si editas `project.json` o un archivo analizado, el siguiente turno regenera lo afectado. El archivo se escribe de forma atómica (temporal + renombrado): cerrar el chat o abrir el grafo en un visor nunca deja un archivo a medias.
+- **Idioma:** los textos del diagrama y los mensajes `[Graph]` salen de `config/lang/{es,en}.json` (sección `graph`) en el `lang` del proyecto.
+
+**Rendimiento.** Cada forma se rasteriza solo dentro de su caja y en paralelo: un grafo típico (~35 símbolos) tarda ~0,1–0,4 s y uno de 130 símbolos / 300 relaciones unos 2 s en un núcleo; los grafos muy densos bajan la resolución automáticamente. `.svg` es instantáneo.
+
+**Alcance y límites.** Los `require`/`import` se resuelven hacia archivos de `focus`/`exclude` para JavaScript/TypeScript (rutas relativas o sufijo único) y Python (`from x import y`); en los demás lenguajes se resuelven las llamadas del mismo archivo y las inferidas por nombre único. No se siguen llamadas dinámicas (`obj[nombre]()`), funciones pasadas como callback sin invocar, ni archivos fuera de `focus`/`exclude`. Si un mismo archivo repite el nombre de un método en dos clases, se dibuja el primero. Si `focus` pide símbolos que no existen, el aviso `[Graph]` los lista.
+
+## Memoria automática (`memory`, `memory_max_chars`)
+
+`memory` activa el registro **automático** de memoria. Cada respuesta del modelo con trabajo real (≥200 caracteres) deja su **bloque de síntesis** `memory` en `memory.md`, y **todas** las tareas lo leen en la sección `MEMORY` de su contexto. Así `analizar` alimenta a `agregar-columnas` aunque las ejecutes por separado (`mova chat <proyecto> analizar`, luego `mova chat <proyecto> agregar-columnas`), cambies de tarea en el chat (`/task`) o uses MCP/HTTP.
+
+| Valor | Efecto |
+|---|---|
+| ausente / `false` | **No** se registra memoria automática. `memory.md` existente se sigue leyendo, y `/memory` manual sigue funcionando. |
+| `true` | `memory.md` junto a `project.json` (`projects/<proyecto>/memory.md`). |
+| `"<ruta>"` | Esa ubicación. Archivo (`…/memoria.md`) o carpeta (`…/memoria/` → `memoria/memory.md`). |
+
+Rutas multiplataforma, con las mismas reglas que `memory_path` y `egress_audit.output_file`: `C:\…`, `D:\…`, `E:\…` (Windows), `/mnt/…`, `/home/…` (Linux), `/Volumes/…` (macOS), `\\servidor\recurso\…` (red, en Windows), `~/…` (home) o relativa (a la carpeta del proyecto). Una ruta de otro sistema (p. ej. `C:\` en un servidor Linux) da un error explícito, no un archivo fantasma. Precedencia: `memory` (ruta) > `memory_path` > por defecto.
+
+```json
+"memory": true
+"memory": "D:\\mova\\memoria\\agunsa\\"
+"memory": "/mnt/compartido/mova/agunsa/memory.md"
+```
+
+**Qué se guarda.** Solo el bloque `memory` que el modelo entrega al final (Tarea, Realizado, Hallazgos `archivo::función`, Datos clave, Resuelto, Decisiones, Pendiente), no la respuesta completa: preciso y barato en tokens. Si el modelo no lo entrega, un resumen automático con las líneas técnicas. Cada entrada lleva fecha, tarea y una huella; una síntesis idéntica no se vuelve a escribir. Si el modelo entrega un bloque por tarea, se guardan por separado.
+
+**Qué se lee.** Con `memory.md` pequeño, entero. Con tope (`memory_max_chars`, por defecto 20000 caracteres ≈ 5k tokens) se conserva **siempre la entrada más reciente de cada tarea** y, con el espacio restante, las más nuevas; las demás quedan abreviadas.
+
+**Escritura segura.** Bloqueo de archivo y escritura atómica: chat, MCP y HTTP pueden escribir a la vez sin perder entradas.
+
+**Modo delegado** (sin `llm_profile`): Mova no ve la respuesta del anfitrión; `chat_completion` le pide llamar a `save_memory` con su bloque, que respeta este mismo campo.
+
+**Caché.** `mova-context-cache.json` solo acelera el saneado de `focus`/`memory` (clave: hash del texto); un cambio de `memory.md` se ve siempre. Con `pii_masking` activo el caché se desactiva (guardaba texto antes del enmascarado).
+
+## Qué tarea carga chat / MCP / HTTP
+
+Con una tarea nombrada se carga **solo** su prompt, focus y grafo (y solo se genera su `graph`). Sin tarea y con varias declaradas se cargan **todas**. `mova run` conserva su comportamiento (`default_task`).
+
 ## `egress_audit` — auditoría y dry-run antes del proveedor LLM
 
 ```json
@@ -53,7 +145,7 @@ Ver `docs/i18n/es/AST_FILTER.md` para la sintaxis exacta de `archivo::kind=nombr
 | Clave | Tipo | Default | Qué hace |
 |---|---|---|---|
 | `dry_run` | bool | `false` | Si es `true`: se completa la gobernanza/sanitización (y el log, si `output_file` está configurado), pero **nunca se llama al proveedor LLM**. El cliente recibe una respuesta exitosa indicando que el dry-run terminó y que no hubo inferencia. |
-| `output_file` | string | `""` (deshabilitado) | Dónde se agrega el log del contexto sanitizado. Independiente de `dry_run` — se puede auditar sin dry-run, o hacer dry-run sin auditar. |
+| `output_file` | string | `""` (deshabilitado) | Dónde se escribe el almacén de bloques del contexto sanitizado (sin duplicados). Independiente de `dry_run` — se puede auditar sin dry-run, o hacer dry-run sin auditar. |
 
 **Con el bloque ausente:** `dry_run=false`, `output_file=""` — comportamiento idéntico al actual, sin cambios.
 
@@ -63,12 +155,19 @@ Ver `docs/i18n/es/AST_FILTER.md` para la sintaxis exacta de `archivo::kind=nombr
   Ejemplo: en `projects/02-pii-compliance-governance/project.json`, `"output_file": ".mova/egress_sanitized.log"` escribe en `projects/02-pii-compliance-governance/.mova/egress_sanitized.log`.
 - Ruta absoluta — Unix (`/var/log/...`), Windows (`C:\...`, `D:\...`, `E:\...`) o UNC (`\\servidor\recurso\...`) — se usa tal cual, reconocida de forma multiplataforma sin importar en qué SO corre el binario de Mova (misma utilidad que ya usan `write_file`/`create_directory`).
 - Si `output_file` termina en `/` o `\` (nombra un directorio, no un archivo), se usa el nombre por defecto **`egress_sanitized.md`** dentro de ese directorio. Un nombre sin barra final (aunque no tenga extensión, ej. `.mova`) se respeta tal cual — no se le fuerza extensión.
-- Los directorios necesarios se crean automáticamente (`os.MkdirAll`, permisos estándar). El archivo se abre siempre en modo **append**: nunca se sobrescribe una ejecución anterior, y cada ejecución queda delimitada con su propio `execution_id` y `timestamp`.
+- Los directorios necesarios se crean automáticamente (`os.MkdirAll`, permisos estándar). El archivo es un almacén de **bloques sin duplicados** (ver «Qué se escribe»): ya no crece con cada mensaje.
 - Si el archivo configurado no puede crearse o escribirse, `mova` **devuelve error y no llama al proveedor LLM** — el mismo comportamiento en CLI/Chat, MCP y HTTP, porque las tres puertas comparten una única implementación (`models.Session.Send`/`SendStream`).
 
 ### Qué se escribe
 
-Únicamente el contexto **ya gobernado y sanitizado** (lo mismo que de verdad se enviaría al modelo) — nunca el contenido crudo pre-sanitización. Cada bloque incluye como mínimo `execution_id` y `timestamp` (UTC).
+Únicamente el contexto **ya gobernado y sanitizado** (lo mismo que de verdad se enviaría al modelo) — nunca el contenido crudo pre-sanitización.
+
+**Sin duplicados.** El archivo guarda un bloque por pieza del contexto (cabecera, cada agent/skill/prompt, cada `FOCUS`, memoria), cada uno con `key`, `sha` y `updated` (UTC):
+- misma clave y mismo contenido → no se toca nada (ni se reescribe el archivo);
+- misma clave y contenido distinto → el bloque se **reemplaza** completo;
+- clave nueva → se **anexa** al final.
+
+La escritura es atómica y serializada por archivo. Un archivo del formato antiguo (un bloque por mensaje) se migra solo, conservando únicamente el último contexto.
 
 ### Air-gap real — `dry_run` bloquea TODAS las herramientas que exponen contexto
 
@@ -84,7 +183,7 @@ Ver `docs/i18n/es/AST_FILTER.md` para la sintaxis exacta de `archivo::kind=nombr
 | `read_document_layer` | El texto extraído de `.docx`/`.xlsx`/`.pdf` |
 | `mova run` (CLI) | El mismo contexto completo que `get_full_context`, impreso por stdout |
 
-En todas, en vez del contenido real, se devuelve el mismo bloque fijo y traducido `reports.egress_airgap_message` + `reports.egress_airgap_directive` (esta última es una directiva explícita anti-elusión dirigida al modelo/agente que la recibe — ver `GOVERNANCE_CONTROLS.md § dry_run` para sus límites), con el conteo real de tokens:
+En todas, en vez del contenido real, se devuelve el mismo bloque fijo y traducido `reports.egress_airgap_message` + `reports.egress_airgap_directive` (esta última es una directiva explícita anti-elusión dirigida al modelo/agente que la recibe — ver `GOVERNANCE_CONTROLS.md § dry_run` para sus límites honestos), con el conteo real de tokens:
 
 ```
 [MOVA EGRESS AUDIT]
@@ -153,3 +252,22 @@ También se acepta la forma corta `"policies": ["security.json", "review.json"]`
 Un archivo con nombre propio (ej. `pii_strict_ventas.json`) se integra en la dimensión correcta porque la dimensión se detecta por el **contenido** del archivo (qué claves declara), no por su nombre. Si además excluyes `pii_strict.json`, el archivo del directorio por defecto queda fuera y el personalizado lo reemplaza.
 
 El reporte indica siempre qué se aplicó: `Origen de política: CLI -> {security.json}`.
+
+## `paths` — jerarquía de rutas por proyecto (agents/skills/prompts/cache_dir/temp_dir/output_dir)
+
+```json
+"paths": {
+  "agents": "projects/mi-proyecto/local-agents",
+  "skills": "projects/mi-proyecto/local-skills",
+  "prompts": "projects/mi-proyecto/local-prompts",
+  "output_dir": "projects/mi-proyecto/reportes"
+}
+```
+
+Mismos 6 campos que `config/general/config.json` (nunca `projects` — ver por qué en `PATHS.md`).
+Prioridad: `project.json` del proyecto actual → `config/general/config.json` → ruta por defecto
+histórica de Mova. Los 3 niveles usan la misma regla multiplataforma que `repo` (ver
+`docs/i18n/es/PATHS.md § Jerarquía por proyecto` para la referencia completa, incluido un ejemplo
+funcionando de punta a punta en `projects/02-pii-compliance-governance/project.json`). Ni este
+archivo ni `config/general/config.json` se cachean — cualquier edición se aplica en la siguiente
+solicitud, sin reiniciar Mova.

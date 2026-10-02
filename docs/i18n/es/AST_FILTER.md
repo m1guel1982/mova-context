@@ -27,3 +27,7 @@ nada.
 ```
 
 Analiza `checkout.js` completo y solo quita el cuerpo de esa función — el resto del archivo queda intacto.
+
+## Grafo de dependencias
+
+Los mismos `archivo::kind=nombres` de `focus` y `exclude` alimentan el grafo de dependencias (`graph` en la tarea): ver `PROJECT_JSON.md` § Grafo de dependencias.

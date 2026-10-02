@@ -10,6 +10,16 @@ package core
 // FileAdapter (this package) and adapters.DBAdapter both implement this.
 type Adapter interface {
 	GetKnowledge(kind, domain, lang, name string) (string, error)
+	// GetKnowledgeWithPathOverride is GetKnowledge, but honors a
+	// per-project directory override for kind's own catalog
+	// (project.json's "paths.agents"/"paths.skills"/"paths.prompts" —
+	// see ProjectPaths and mova.local/mpaths) when override is
+	// non-blank. override == "" behaves EXACTLY like GetKnowledge —
+	// in fact GetKnowledge is defined in terms of this method with
+	// override == "". A DB-backed adapter has no per-project directory
+	// concept, so it's expected to just ignore override and delegate
+	// straight to its own GetKnowledge (see adapters.DBAdapter).
+	GetKnowledgeWithPathOverride(kind, domain, lang, name, override string) (string, error)
 	GetProject(name string) (*Project, error)
 	ListProjects() ([]ProjectSummary, error)
 	GetMemory(project string) (string, error)

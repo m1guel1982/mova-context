@@ -59,7 +59,7 @@ func BuildGatedContext(adapter core.Adapter, root, project, task string) GatedCo
 	// sees the optimized size. Uses the Context Cache (contextcache.go)
 	// when enabled, so unchanged files skip re-sanitizing on repeat runs.
 	sanitizeCfg := sanitizeConfigFrom(cfg)
-	sanitizeStats := SanitizeCached(root, project, sections, sanitizeCfg, core.ContextCacheEnabled(cfg))
+	sanitizeStats := SanitizeCached(root, project, sections, sanitizeCfg, useContextCache(root, project, cfg))
 
 	// [1b] PII Masking — OPTIONAL, off by default (see
 	// core.PIIMaskingEnabled), runs right after the Sanitizer and

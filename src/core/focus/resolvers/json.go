@@ -36,7 +36,7 @@ func (r *JSONResolver) resolveFilePath(ctx focus.Context, file string) string {
 		return path
 	}
 	if !strings.ContainsAny(file, `/\`) {
-		return findByName(ctx, ctx.RepoPath, file)
+		return findByName(ctx, file)
 	}
 	return ""
 }

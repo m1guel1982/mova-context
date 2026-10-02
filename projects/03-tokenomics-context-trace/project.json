@@ -11,15 +11,16 @@
   "output_file": "egress_sanitized.md"
   },
 
+  "variables": { "STACK": "Node.js" },
   "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
-  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+  "skills": { "domain": "base", "use": ["minimal-tests"], "custom": [] },
 
   "tasks": {
     "revisar-checkout": {
       "prompt": "create-module",
       "variables": {
-        "module_name": "checkout",
-        "description": "Revisar el módulo de checkout y su log de errores recientes, sin el flujo de pago legacy"
+        "MODULE": "checkout",
+        "QUERY": "Revisar el módulo de checkout y su log de errores recientes, sin el flujo de pago legacy"
       },
       "focus": ["checkout.js", "server.log"],
       "exclude": ["checkout.js::func=procesarPagoLegacy"]

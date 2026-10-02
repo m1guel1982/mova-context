@@ -11,15 +11,16 @@
   "output_file": "egress_sanitized.md"
   },
 
-  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
-  "skills": { "domain": "base", "use": ["lazy-minimalism"], "custom": [] },
+  "variables": { "STACK": "Node.js / Express" },
+  "agents": { "domain": "base", "use": ["code-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": ["api-security"], "custom": [] },
 
   "tasks": {
     "revisar-api": {
       "prompt": "review-project",
       "variables": {
-        "module": "pedidos",
-        "description": "Revisar el endpoint de creación de pedidos y su configuración"
+        "REVIEW_TYPE": "seguridad",
+        "QUERY": "Revisar el endpoint de creación de pedidos y su configuración"
       },
       "focus": ["api.js", "config.txt"]
     }

@@ -1,26 +1,12 @@
-# Analizar contexto de clientes para IA — {{PROJECT}}
-Proyecto: `{{PROJECT}}` · Normativa de referencia: `{{REGULATION}}`
-Ockham: ver `../engineering/ockham-core.md`.
+# Analizar contexto de clientes para IA — `{{PROJECT}}`
+Normativa de referencia: `{{REGULATION}}`
 
-# Consulta original del negocio
-> {{QUERY}}
+Consulta original: {{QUERY}}
 
-# Objetivo
-Sobre el FOCUS entregado (datos de clientes desde JSON/PDF/DOCX, simulando un CRM/ERP/sistema legado), responder la consulta original desde el rol que te fue asignado (ver tu agente: Data Analyst, Purpose Analyst o AI Privacy Reviewer), usando exclusivamente el formato de respuesta definido en ese agente.
+Ockham: ver `ockham-core.md`.
 
-# Pasos
-1. Leer el FOCUS completo — no asumir datos que no aparezcan literalmente en él
-2. Aplicar el formato de respuesta de tu rol a cada hallazgo relevante
-3. Citar siempre la fuente (archivo/sección) de cada hallazgo
-4. Si tu rol es AI Privacy Reviewer, cerrar explícitamente con qué información no sería necesaria enviar a un LLM externo para responder la consulta original
-5. No afirmar que este análisis por sí solo garantiza cumplimiento de {{REGULATION}} — es una ayuda técnica, no asesoría legal
-
-# Dónde queda el reporte de este análisis (importante)
-Este proyecto tiene configurado `budget_path`/`token_history_path` propios — al correr `mova budget {{PROJECT}}` (o el job programado del proyecto), Mova Context genera automáticamente:
-- `mova-budget-report.md` en la carpeta de este agente, con el detalle de tokens, Sanitizer, PII Masking (si está activado) y Circuit Breaker.
-- Un reporte narrativo adicional en `reports/analisis-ley21719_{date}.md`, vía el job programado de este proyecto (ver `jobs` en `project.json`).
-
-Estos reportes se generan igual sin importar el canal usado (CLI `mova run`/`mova budget`, `mova chat`, `mova jobs run`, HTTP/API, o MCP) — es el mismo motor detrás de los cinco.
-
-# Formato de respuesta
-Usar exactamente el formato definido en tu agente — no inventar un formato nuevo aquí.
+Sobre el FOCUS (datos de clientes desde JSON/PDF/DOCX o CRM/ERP/sistemas legados), responde la consulta desde el rol asignado (ver tu agente) y con **el formato de ese agente**, sin inventar otro.
+1. Usa solo lo que aparece literalmente en el FOCUS.
+2. Cita la fuente (archivo/sección) de cada hallazgo.
+3. Si tu rol es AI Privacy Reviewer, cierra indicando qué información no haría falta enviar a un LLM externo para esta consulta.
+4. Esto no garantiza cumplir {{REGULATION}}: es ayuda técnica, no asesoría legal.

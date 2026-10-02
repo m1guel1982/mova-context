@@ -26,7 +26,7 @@ De acá en adelante, cada fila muestra solo el `arguments` — pegalo en la plan
 |---|---|---|
 | `context_trace` | Auditoría pre-inferencia — tokens, costo, políticas, decisión. Ver `GOVERNANCE_CONTROLS.md`. | `{"project": "02-pii-compliance-governance"}` |
 | `get_full_context` 🔒 | Contexto completo ensamblado (= `mova run`). Respeta `egress_audit.dry_run`. | `{"project": "02-pii-compliance-governance"}` |
-| `chat_completion` 🔒 | Envía un mensaje a un modelo local, con el contexto como system prompt. Respeta `egress_audit.dry_run` y delega al LLM anfitrión si no hay `llm_profile`. | `{"project": "02-pii-compliance-governance", "message": "resume el contexto"}` |
+| `chat_completion` 🔒 | Envía un mensaje a un modelo local, con el contexto como system prompt. Respeta `egress_audit.dry_run` y delega al LLM anfitrión si no hay `llm_profile`. `task`: una tarea concreta carga solo la suya; sin `task` y con varias tareas se cargan todas. Con `"memory"` activo en `project.json`, la síntesis de la respuesta se registra en `memory.md` y la leen las demás tareas (cada llamada es una sesión nueva: ese archivo es lo que las une). | `{"project": "02-pii-compliance-governance", "message": "resume el contexto"}` |
 | `estimate_budget` | Estima tokens/costo USD sin llamar a ningún modelo — escribe `mova-budget-report.md`. | `{"project": "02-pii-compliance-governance"}` |
 | `generate_diagram` | Diagrama visual del pipeline real (SVG/PNG/PDF). | `{"project": "02-pii-compliance-governance", "export": "png"}` |
 
@@ -45,7 +45,7 @@ De acá en adelante, cada fila muestra solo el `arguments` — pegalo en la plan
 |---|---|---|
 | `get_memory` 🔒 | Memoria activa de un proyecto. | `{"project": "02-pii-compliance-governance"}` |
 | `get_memory_all` 🔒 | Memoria activa + archivada. | `{"project": "02-pii-compliance-governance"}` |
-| `save_memory` | Agrega una entrada. | `{"project": "02-pii-compliance-governance", "entry": "decisión: usar Ley 21.719 como referencia"}` |
+| `save_memory` | Registra una síntesis (bloque `memory`) en `memory.md`, con su tarea y sin duplicar; respeta el campo `"memory"` de project.json (apagado = no guarda). `task` opcional. | `{"project": "02-pii-compliance-governance", "entry": "decisión: usar Ley 21.719 como referencia"}` |
 
 ## Multiagente
 
@@ -88,5 +88,4 @@ De acá en adelante, cada fila muestra solo el `arguments` — pegalo en la plan
 curl -X POST http://localhost:3000/save -H "Content-Type: application/json" \
   -d '{"path":"notas.md","content":"# Hola"}'
 ```
-
-Guía paso a paso para probar todo esto gratis, sin GPU: `MCP_HTTP_TESTING.md`.
+ 

@@ -208,3 +208,65 @@ func TestBuildContextSections_InlineTextFallback(t *testing.T) {
 		t.Errorf("expected the inline prompt text to appear verbatim in Prompt, got %q", sections.Prompt)
 	}
 }
+
+func TestInject_DynamicVariablesAnyNameBothSyntaxes(t *testing.T) {
+	vars := mergeVars(map[string]string{"stack": "Go"}, map[string]string{"Query": "q1", "STACK": "Node.js"})
+	got := inject("${QUERY} | {{query}} | {{ STACK }} | ${unknown} | {{QUERY}}", vars)
+	want := "q1 | q1 | Node.js | ${unknown} | q1"
+	if got != want {
+		t.Fatalf("inject = %q, want %q", got, want)
+	}
+	// una sola pasada: un valor con marcas no se vuelve a expandir
+	if got := inject("{{A}}", mergeVars(map[string]string{"A": "{{B}}", "B": "x"})); got != "{{B}}" {
+		t.Fatalf("values must not be re-expanded, got %q", got)
+	}
+}
+
+func TestBuildContextSections_AgentsAndSkillsVariables(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		full := filepath.Join(root, rel)
+		_ = os.MkdirAll(filepath.Dir(full), 0o755)
+		if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("agents/base/dev.md", "AGENT stack=${STACK} q={{QUERY}}\n")
+	write("skills/base/kiss.md", "SKILL trigger={{UPGRADE_TRIGGER}} q=${QUERY}\n")
+	write("prompts/base/p.md", "PROMPT {{REGULATION}} q={{QUERY}} lang={{LANG}}\n")
+	write("projects/fx/project.json", `{
+		"project": "fx", "repo": ".", "lang": "es", "default_task": "t",
+		"variables": {"STACK": "Go"},
+		"agents": {"domain": "base", "use": ["dev"], "variables": {"QUERY": "from-agents", "STACK": "Node.js"}},
+		"skills": {"domain": "base", "use": ["kiss"], "variables": {"QUERY": "from-skills", "UPGRADE_TRIGGER": "> 5000"}},
+		"tasks": {"t": {"prompt": "p", "variables": {"regulation": "Ley 21.719", "QUERY": "from-task", "LANG": "es"}}}
+	}`)
+	s, err := BuildContextSections(NewFileAdapter(root), root, "fx", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// task.variables gana sobre agents/skills.variables; agents pisa a project.variables
+	for name, tc := range map[string]struct{ got, want string }{
+		"agents": {s.Agents, "AGENT stack=Node.js q=from-task"},
+		"skills": {s.Skills, "SKILL trigger=> 5000 q=from-task"},
+		"prompt": {s.Prompt, "PROMPT Ley 21.719 q=from-task lang=es"},
+	} {
+		if !strings.Contains(tc.got, tc.want) {
+			t.Errorf("%s: want %q in:\n%s", name, tc.want, tc.got)
+		}
+	}
+}
+
+func TestDebugTargetPath_NeverDoublesAbsolutePrefix(t *testing.T) {
+	repo := filepath.Join(string(filepath.Separator), "agunsa", "antofagasta")
+	cases := map[string]string{
+		filepath.Join(repo, "portal-rms", "Gantt.js") + "::func=show()": filepath.Join(repo, "portal-rms", "Gantt.js"), // ya trae el repo
+		`portal-rms\www\Gantt.js::func=show()`:                          filepath.Join(repo, "portal-rms", "www", "Gantt.js"),
+		`C:\agunsa\antofagasta\portal-rms\Gantt.js`:                     filepath.Clean(`C:\agunsa\antofagasta\portal-rms\Gantt.js`), // abs de otro SO: solo Clean
+	}
+	for in, want := range cases {
+		if got := debugTargetPath(repo, in); got != want {
+			t.Errorf("debugTargetPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

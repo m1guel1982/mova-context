@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"mova.local/mpaths"
 )
 
 // GroupConfig maps projects/<group>/config.json — the orchestrator file
@@ -33,9 +35,11 @@ type GroupConfig struct {
 	Agents      []string `json:"agents"`      // subdirectory names, each with its own project.json
 }
 
-// ConfigPath returns projects/<group>/config.json under root.
+// ConfigPath returns <projects-dir>/<group>/config.json under root
+// (projects-dir from mpaths.ProjectsDir — "projects/" by default, or
+// whatever config/general/config.json declares).
 func ConfigPath(root, group string) string {
-	return filepath.Join(root, "projects", group, "config.json")
+	return filepath.Join(mpaths.ProjectsDir(root), group, "config.json")
 }
 
 // LoadGroupConfig reads and parses a group's config.json. If "agents" is
@@ -66,7 +70,7 @@ func LoadGroupConfig(root, group string) (*GroupConfig, error) {
 // discoverAgents lists every immediate subdirectory of projects/<group>/
 // that contains its own project.json.
 func discoverAgents(root, group string) []string {
-	dir := filepath.Join(root, "projects", group)
+	dir := filepath.Join(mpaths.ProjectsDir(root), group)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil

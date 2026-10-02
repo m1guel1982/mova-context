@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"mova.local/mpaths"
 )
 
 // FindRoot resuelve la raíz del proyecto. Se usa desde cualquier
@@ -88,10 +90,12 @@ func searchUpward(start string) (string, bool) {
 }
 
 // AutoDetect devuelve el nombre del proyecto si hay exactamente uno bajo
-// projects/, o "" si hay cero o más de uno (ambiguo — el usuario debe
-// especificarlo explícitamente).
+// el directorio de proyectos configurado (mpaths.ProjectsDir — por
+// defecto "projects/", o lo que declare config/general/config.json), o
+// "" si hay cero o más de uno (ambiguo — el usuario debe especificarlo
+// explícitamente).
 func AutoDetect(root string) string {
-	entries, _ := os.ReadDir(filepath.Join(root, "projects"))
+	entries, _ := os.ReadDir(mpaths.ProjectsDir(root))
 	var names []string
 	for _, e := range entries {
 		if e.IsDir() {

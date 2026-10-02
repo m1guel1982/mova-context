@@ -46,10 +46,10 @@
     "example": "24h",
     "description": "How long Ollama keeps this model loaded in memory after the last request, before unloading it to free RAM/VRAM. \"24h\" keeps it warm for a full day of use (no reload latency on the next call); \"0\" unloads immediately after each response; \"5m\" is Ollama's own default."
   },
-  "num_predict": {
+  "max_tokens": {
     "type": "integer",
     "example": 512,
-    "description": "Maximum number of tokens the model may generate in its reply (the output-token cap). This is the ONLY place this project sets a per-model output limit — see llama3.2.3b.json's own file header comment on why LLMProfile no longer duplicates a \"max_tokens\" field."
+    "description": "Maximum number of tokens the model may generate in its reply (the output-token cap). Single standard field for EVERY provider (Ollama, OpenAI/OpenRouter/LM Studio, Anthropic, Google); `num_predict` is still accepted as an alias. Sent to Ollama as num_predict, to OpenAI-compatible APIs and Anthropic as max_tokens, to Google as maxOutputTokens. This is the ONLY place this project sets a per-model output limit — see llama3.2.3b.json's own file header comment on why LLMProfile no longer duplicates a \"max_tokens\" field."
   },
   "temperature": {
     "type": "number",
@@ -84,7 +84,7 @@
     "threads": 6,
     "mirostat": 0,
     "keep_alive": "24h",
-    "num_predict": 512,
+    "max_tokens": 512,
     "temperature": 0,
     "context_window": 131072,
     "repeat_penalty": 1.1,

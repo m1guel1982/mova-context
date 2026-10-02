@@ -56,6 +56,10 @@ func RenderPNG(data *Data) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return encodePNG(img)
+}
+
+func encodePNG(img *image.RGBA) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
 		return nil, fmt.Errorf("diagram: encoding PNG: %w", err)
@@ -68,18 +72,20 @@ func RenderPNG(data *Data) ([]byte, error) {
 // pixel-identical).
 func rasterizeDiagram(data *Data) (*image.RGBA, error) {
 	c := build(data)
-	svgText := c.finalize()
+	return rasterizeSVG(c.finalize(), c.texts, pngScale)
+}
 
-	// IgnoreErrorMode, not WarnErrorMode: <text> elements are handled
-	// entirely by drawTextLayer below, on purpose (see this file's
-	// header) — every "cannot process text element" warning oksvg would
-	// otherwise print here is expected noise, not a real problem.
+// rasterizeSVG rasteriza un SVG generado por este paquete (formas vía
+// oksvg/rasterx) y le pinta encima la capa de texto (oksvg no renderiza
+// <text>). scale multiplica la resolución: los diagramas fijos usan
+// pngScale; el grafo la reduce solo si el lienzo sería gigantesco.
+func rasterizeSVG(svgText string, texts []textOp, scale float64) (*image.RGBA, error) {
 	icon, err := oksvg.ReadIconStream(strings.NewReader(svgText), oksvg.IgnoreErrorMode)
 	if err != nil {
 		return nil, fmt.Errorf("diagram: parsing generated SVG for raster export: %w", err)
 	}
-	w := int(icon.ViewBox.W * pngScale)
-	h := int(icon.ViewBox.H * pngScale)
+	w := int(icon.ViewBox.W * scale)
+	h := int(icon.ViewBox.H * scale)
 	icon.SetTarget(0, 0, float64(w), float64(h))
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
@@ -87,7 +93,7 @@ func rasterizeDiagram(data *Data) (*image.RGBA, error) {
 	raster := rasterx.NewDasher(w, h, scanner)
 	icon.Draw(raster, 1.0)
 
-	drawTextLayer(img, c.texts)
+	drawTextLayer(img, texts, scale)
 	return img, nil
 }
 
@@ -128,9 +134,12 @@ func loadBoldFont() *opentype.Font {
 // title line, box body lines...) across dozens of text ops.
 type faceCache struct {
 	faces map[string]font.Face
+	scale float64
 }
 
-func newFaceCache() *faceCache { return &faceCache{faces: map[string]font.Face{}} }
+func newFaceCache(scale float64) *faceCache {
+	return &faceCache{faces: map[string]font.Face{}, scale: scale}
+}
 
 func (fc *faceCache) get(size int, bold bool) font.Face {
 	key := fmt.Sprintf("%d-%v", size, bold)
@@ -147,7 +156,7 @@ func (fc *faceCache) get(size int, bold bool) font.Face {
 	// instead of hand-rolled advance-scaling like the old bitmap path.
 	face, err := opentype.NewFace(src, &opentype.FaceOptions{
 		Size:    float64(size),
-		DPI:     72 * pngScale,
+		DPI:     72 * fc.scale,
 		Hinting: font.HintingFull,
 	})
 	if err != nil {
@@ -160,8 +169,8 @@ func (fc *faceCache) get(size int, bold bool) font.Face {
 // drawTextLayer draws every recorded label onto img with a real,
 // anti-aliased outline font (see this file's header) — bold lines use
 // the actual Go Bold face, not a fake double-draw offset.
-func drawTextLayer(img *image.RGBA, texts []textOp) {
-	fc := newFaceCache()
+func drawTextLayer(img *image.RGBA, texts []textOp, scale float64) {
+	fc := newFaceCache(scale)
 	for _, t := range texts {
 		face := fc.get(t.Size, t.Bold)
 		if face == nil {
@@ -172,7 +181,7 @@ func drawTextLayer(img *image.RGBA, texts []textOp) {
 			Dst:  img,
 			Src:  image.NewUniform(col),
 			Face: face,
-			Dot:  fixed.P(int(float64(t.X)*pngScale), int(float64(t.Y)*pngScale)),
+			Dot:  fixed.P(int(float64(t.X)*scale), int(float64(t.Y)*scale)),
 		}
 		drawer.DrawString(t.Text)
 	}

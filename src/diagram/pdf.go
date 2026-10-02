@@ -34,7 +34,10 @@ func RenderPDF(data *Data) ([]byte, error) {
 // *image.RGBA, not just a diagram) — kept general in case a future
 // export (e.g. a budget report chart) wants the same wrapper, without
 // this function knowing anything about diagram.Data.
-func imageToPDF(img *image.RGBA) ([]byte, error) {
+func imageToPDF(img *image.RGBA) ([]byte, error) { return imageToPDFScaled(img, pngScale) }
+
+// imageToPDFScaled es imageToPDF para un raster hecho con otra escala.
+func imageToPDFScaled(img *image.RGBA, scale float64) ([]byte, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
 
@@ -58,8 +61,8 @@ func imageToPDF(img *image.RGBA) ([]byte, error) {
 	// scale (pngScale already doubled the source resolution — the PDF
 	// page itself stays a normal printable size, the image just has
 	// enough pixels to look sharp).
-	pageW := float64(w) / pngScale
-	pageH := float64(h) / pngScale
+	pageW := float64(w) / scale
+	pageH := float64(h) / scale
 
 	return buildPDF(pdfImageXObject{
 		Width: w, Height: h, PageW: pageW, PageH: pageH, Compressed: compressed.Bytes(),

@@ -37,67 +37,19 @@ func runChatMemory(adapter core.Adapter, project string, sess *models.Session, e
 		emit("There is no exchange to save yet.\n")
 		return
 	}
-
-	var contentToSave string
-	isStructuredBlock := false
-
-	// 1. Intentar extraer ÚNICAMENTE el bloque ```memory```
-	block, err := core.ExtractMemoryBlock(assistant)
-	if err == nil && block != "" {
-		contentToSave = block
-		isStructuredBlock = true
-	} else {
-		// 2. Fallback: Compactar la respuesta si viene en texto plano/extenso
-		contentToSave = summarizeContent(user, assistant)
-	}
-
-	// 3. Persistir en memory.md
-	if err := adapter.AppendMemory(project, contentToSave); err != nil {
+	// Acción explícita: se guarda aunque "memory" esté apagado en
+	// project.json, con el mismo formato y deduplicación que el registro
+	// automático (core.RecordMemory).
+	_ = user
+	res, err := core.RecordMemory(adapter, "", project, "", assistant, core.RecordOptions{Force: true})
+	switch {
+	case err != nil:
 		emit("Error saving memory: " + err.Error() + "\n")
-		return
+	case res.Message() != "":
+		emit(res.Message() + "\n")
+	default:
+		emit("[Memory] nada que guardar en la última respuesta.\n")
 	}
-
-	if isStructuredBlock {
-		emit("[Memory] Saved extracted ```memory``` block to memory.md (" + project + ")\n")
-	} else {
-		emit("[Memory] Saved compact summary to memory.md (" + project + ")\n")
-	}
-}
-
-// summarizeContent extracts the core task and main lines of the assistant response.
-func summarizeContent(user, assistant string) string {
-	// 1. Sanitizar y acortar la tarea del usuario
-	userTask := strings.TrimSpace(user)
-	if idx := strings.Index(userTask, "\n"); idx != -1 {
-		userTask = userTask[:idx]
-	}
-	if len(userTask) > 80 {
-		userTask = userTask[:80] + "..."
-	}
-
-	// 2. Extraer las primeras 3 líneas útiles de la respuesta
-	lines := strings.Split(assistant, "\n")
-	var keyLines []string
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Ignorar líneas vacías, tablas, separadores y headers pesados
-		if trimmed == "" || strings.HasPrefix(trimmed, "|") || strings.HasPrefix(trimmed, "---") || strings.HasPrefix(trimmed, "##") {
-			continue
-		}
-
-		keyLines = append(keyLines, trimmed)
-		if len(keyLines) >= 3 {
-			break
-		}
-	}
-
-	compactAssistant := strings.Join(keyLines, "\n")
-	if compactAssistant == "" {
-		compactAssistant = "Review completed."
-	}
-
-	return fmt.Sprintf("**task:** %s\n**summary:**\n%s\n", userTask, compactAssistant)
 }
 
 // runChatBudget implements chat's "/budget" — the same group-aware

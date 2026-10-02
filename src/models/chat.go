@@ -52,6 +52,11 @@ type Session struct {
 	// matching text that varies by language and token count (see
 	// egress_audit.go's EgressGateResult.Message).
 	LastReplyWasDryRun bool
+	// LastTruncated: la última respuesta llegó pero se cortó por el
+	// límite de salida (finish_reason=length). Los tres puertos (chat,
+	// MCP, HTTP) lo usan para avisar en vez de mostrar texto cortado
+	// como si estuviera completo.
+	LastTruncated bool
 }
 
 // NewSession arranca una sesión usando el proveedor/modelo activo
@@ -177,14 +182,7 @@ func (s *Session) Send(userText string) (string, error) {
 	}
 
 	reply, usage, err := pv.Chat(ctx, modelTag, mc, messages)
-	if err != nil {
-		// no dejamos el turno del usuario "colgado" sin respuesta en el historial
-		s.History = s.History[:len(s.History)-1]
-		return "", err
-	}
-	s.LastUsage = usage
-	s.History = append(s.History, ChatMessage{Role: "assistant", Content: reply})
-	return reply, nil
+	return s.finishTurn(mc, modelTag, reply, usage, err)
 }
 
 // SendStream es igual que Send, pero invoca el método de streaming del proveedor.
@@ -254,13 +252,7 @@ func (s *Session) SendStream(userText string, onToken func(string)) (string, err
 	}
 
 	reply, usage, err := sp.ChatStream(ctx, modelTag, mc, messages, onToken)
-	if err != nil {
-		s.History = s.History[:len(s.History)-1]
-		return "", err
-	}
-	s.LastUsage = usage
-	s.History = append(s.History, ChatMessage{Role: "assistant", Content: reply})
-	return reply, nil
+	return s.finishTurn(mc, modelTag, reply, usage, err)
 }
 
 // LastExchange — último par (user, assistant), usado por `/memory` en el

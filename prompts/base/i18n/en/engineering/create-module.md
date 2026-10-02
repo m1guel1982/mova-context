@@ -1,6 +1,5 @@
-# Create Module
-
-Project: `{{PROJECT}}` · Module: `{{MODULE}}` · Stack: `{{STACK}}` · API: `{{API_PREFIX}}/{{MODULE}}`
+# Create module `{{MODULE}}` — `{{PROJECT}}`
+Stack: {{STACK}} · Query: {{QUERY}}
 Ockham: see `ockham-core.md`.
 
-Output: file structure · migration {{DATABASE}} if applicable · endpoints with validation and auth ({{AUTH_METHOD}}) · Service + Repository separation · tests using {{TEST_FRAMEWORK}}. Follow agents/custom and skills/custom of the project.
+Deliver only what the query needs: file structure · migration if there is new data · endpoints with validation and auth · separate Service and Repository · minimal edge-case tests. Reuse what the project already has (helpers, dependencies, conventions) before creating anything new.

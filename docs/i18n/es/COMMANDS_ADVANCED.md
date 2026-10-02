@@ -4,10 +4,8 @@
 
 | Variable | Uso |
 |---|---|
-| `MOVA_PROJECT_ROOT` / `MOVA_PROJECT_PATH` | Fuerza la raíz del proyecto en vez de buscar `workflow.md` hacia arriba. |
-| `MOVA_ADAPTER` / `MOVA_DSN` | Cambia el backend de almacenamiento (`file` por defecto, o Postgres/MongoDB vía DSN). |
-| `MOVA_POLICY_AUTHOR` | Autor de política para CI/CD cuando `project.json`/`config/policy.json` no lo declaran — ver Matriz de Auditoría #3. |
-| `MOVA_MAX_CONCURRENCY` / `MOVA_HTTP_MAX_CONCURRENCY` | Límite de goroutines concurrentes (CLI / servidor HTTP). |
+| `MOVA_PROJECT_ROOT`  | Fuerza la raíz del proyecto en vez de buscar `workflow.md` hacia arriba. |
+
 
 ## Instalación
 

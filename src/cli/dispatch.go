@@ -13,6 +13,7 @@ import (
 	"mova.local/core"
 	httptransport "mova.local/http"
 	"mova.local/mcp"
+	"mova.local/mpaths"
 	"mova.local/orchestrator"
 	"mova.local/runtime"
 )
@@ -67,9 +68,11 @@ func dispatch(root string) {
 
 	case "memory":
 		project, response := needArg(2, "project"), needArg(3, "response")
-		block, err := core.ExtractMemoryBlock(response)
+		res, err := core.RecordMemory(getAdapter(project), root, project, "", response, core.RecordOptions{Force: true})
 		must(err)
-		must(getAdapter(project).AppendMemory(project, block))
+		if res.Saved == 0 && res.Skipped == 0 {
+			must(fmt.Errorf("no ```memory block found"))
+		}
 		consolePrint("memory updated: " + project + "\n")
 
 	case "memory-read":
@@ -78,7 +81,7 @@ func dispatch(root string) {
 		month := flagStr("--month", "")
 		adapter := getAdapter(project)
 		if month != "" {
-			path := filepath.Join(root, "projects", project, "memory-archive", month+".md")
+			path := filepath.Join(filepath.Dir(core.MemoryPath(root, project)), "memory-archive", month+".md")
 			data, err := os.ReadFile(path)
 			must(err)
 			consolePrint(string(data))
@@ -112,7 +115,7 @@ func dispatch(root string) {
 
 	case "init":
 		name := needArg(2, "name")
-		dir := filepath.Join(root, "projects", name)
+		dir := filepath.Join(mpaths.ProjectsDir(root), name)
 		os.MkdirAll(dir, 0755)
 		os.WriteFile(filepath.Join(dir, "project.json"), []byte(projectTemplate(root, name)), 0644)
 		os.WriteFile(filepath.Join(dir, "memory.md"), []byte(""), 0644)
@@ -142,6 +145,7 @@ func dispatch(root string) {
 		}
 
 		adapter := core.NewFileAdapter(root)
+		enableBackgroundGraphs(logGraphNotice) // servidor de larga vida: los grafos no bloquean ninguna llamada
 
 		// Flag --stdio determina si se levanta por Entrada/Salida estándar o por HTTP
 		if flagBool("--stdio") {

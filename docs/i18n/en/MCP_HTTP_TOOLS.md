@@ -26,7 +26,7 @@ From here on, each row shows just `arguments` — drop it into the template abov
 |---|---|---|
 | `context_trace` | Pre-inference audit — tokens, cost, policies, decision. See `GOVERNANCE_CONTROLS.md`. | `{"project": "02-pii-compliance-governance"}` |
 | `get_full_context` 🔒 | Full assembled context (= `mova run`). Honors `egress_audit.dry_run`. | `{"project": "02-pii-compliance-governance"}` |
-| `chat_completion` 🔒 | Sends a message to a local model, with the context as system prompt. Honors `egress_audit.dry_run` and delegates to the host LLM when no `llm_profile` is set. | `{"project": "02-pii-compliance-governance", "message": "summarize the context"}` |
+| `chat_completion` 🔒 | Sends a message to a local model, with the context as system prompt. Honors `egress_audit.dry_run` and delegates to the host LLM when no `llm_profile` is set. `task`: a named task loads only its own; with no `task` and several tasks, all are loaded. With `"memory"` on in `project.json`, the reply's synthesis is registered in `memory.md` and read by the other tasks (every call is a fresh session: that file is what links them). | `{"project": "02-pii-compliance-governance", "message": "summarize the context"}` |
 | `estimate_budget` | Estimates token/USD cost without calling any model — writes `mova-budget-report.md`. | `{"project": "02-pii-compliance-governance"}` |
 | `generate_diagram` | Visual diagram of the real pipeline (SVG/PNG/PDF). | `{"project": "02-pii-compliance-governance", "export": "png"}` |
 
@@ -45,7 +45,7 @@ From here on, each row shows just `arguments` — drop it into the template abov
 |---|---|---|
 | `get_memory` 🔒 | A project's active memory. | `{"project": "02-pii-compliance-governance"}` |
 | `get_memory_all` 🔒 | Active + archived memory. | `{"project": "02-pii-compliance-governance"}` |
-| `save_memory` | Appends an entry. | `{"project": "02-pii-compliance-governance", "entry": "decision: use Law 21.719 as reference"}` |
+| `save_memory` | Registers a synthesis (`memory` block) in `memory.md`, tagged with its task and de-duplicated; honors project.json's `"memory"` field (off = nothing saved). Optional `task`. | `{"project": "02-pii-compliance-governance", "entry": "decision: use Law 21.719 as reference"}` |
 
 ## Multi-agent
 
