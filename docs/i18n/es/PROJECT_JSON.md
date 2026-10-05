@@ -38,6 +38,7 @@ Vive siempre en `projects/<nombre>/project.json` (ruta fija, el motor no busca e
 | `budget.pii_masking.enabled` | Enmascarado estructural de PII (ver `ARTIFACTS.md`). |
 | `debug` | `true` imprime, en cada puerta (chat, CLI, HTTP, MCP), qué se resolvió antes de correr una tarea: ruta del repo, cada agente/skill/prompt con su ruta resuelta (o `"inline"`), las entradas de `focus`/`exclude` con su ruta absoluta, **y — en `context-trace` — la ruta exacta de cada política incluida/excluida** (ver `policies` abajo). Por defecto `false`. Nunca se agrega solo por generar un `project.json` con `mova init` — es opt-in manual. |
 | `egress_audit` | Auditoría del contexto **ya sanitizado** justo antes de salir hacia el LLM, y/o un dry-run que corta la llamada — ver sección dedicada abajo. |
+| `apply` / `tasks.<t>.apply` | Permite que la respuesta del modelo **modifique archivos** previa confirmación (`true`, `false` o `{enabled, backup}`; el respaldo `.bak` junto al archivo es `true` por defecto) — ver «Modificar archivos (`apply`)». |
 
 Ver `docs/i18n/es/AST_FILTER.md` para la sintaxis exacta de `archivo::kind=nombre`.
 
@@ -55,13 +56,13 @@ Cualquier clave de un bloque `"variables"` reemplaza `${CLAVE}` o `{{CLAVE}}` en
   "tasks": { "optimizar": {
       "prompt": "fix-or-improve",
       "variables": { "QUERY": "Optimizar la carga de programación", "SKIPPED_ABSTRACTIONS": "sin capas de API nuevas" },
-      "focus": ["Gantt.js", "MenuAtencion.js::func=show()"] } }
+      "focus": ["Gantt.js", "MenuOrders.js::func=show()"] } }
 }
 ```
 
 Precedencia (gana el último): `PROJECT`/`REPO`/`TASK`/`LANG` (automáticas) < `variables` raíz < `agents.variables` / `skills.variables` (solo su bloque) < `tasks.<t>.variables` (todos los bloques).
 
-`focus` y `exclude` aceptan un nombre suelto (`Gantt.js`), una ruta parcial (`programacion/Gantt.js`) o una ruta completa, con o sin `::func=...`. Si el nombre existe en varias carpetas, entran **todas** las coincidencias y `debug` lo avisa: para elegir una, usa una ruta más larga.
+`focus` y `exclude` aceptan un nombre suelto (`Gantt.js`), una ruta parcial (`schedule/Gantt.js`) o una ruta completa, con o sin `::func=...`. Si el nombre existe en varias carpetas, entran **todas** las coincidencias y `debug` lo avisa: para elegir una, usa una ruta más larga.
 
 ## Grafo de dependencias (`graph`)
 
@@ -69,8 +70,8 @@ Dentro de una tarea, `graph` genera — **sin LLM y sin gastar tokens** — un d
 
 ```json
 "tasks": { "analizar": {
-  "focus":   ["api-rms\\lib\\programacion\\Programacion.js::func=getAtenciones,saveAtencion", "Admin.js::func=getModelo"],
-  "exclude": ["Programacion.js::func=divideAtencion"],
+  "focus":   ["api-core\\lib\\schedule\\planner.js::func=getOrders,saveOrder", "Admin.js::func=getModelo"],
+  "exclude": ["planner.js::func=splitOrder"],
   "graph":   "graph.png"
 } }
 ```
@@ -88,7 +89,7 @@ Dentro de una tarea, `graph` genera — **sin LLM y sin gastar tokens** — un d
 
 **Qué dibuja.** Cada archivo es un subgrafo; cada símbolo un nodo — función/método (azul), clase/tipo (violeta), variable/constante (ámbar). Con `::kind=nombres` solo entran esos símbolos; un archivo sin `::` aporta sus funciones y clases. Los símbolos de `exclude` salen en rojo punteado; los símbolos que los de `focus` usan pero no pediste salen punteados grises («fuera de foco»). Flechas: llamada (azul), referencia a variable (ámbar), importación archivo→archivo (violeta punteada, por carriles sobre los archivos) y llamada *inferida por nombre único* (azul punteada: no hay `require` que la resuelva, pero solo un símbolo de `focus`/`exclude` se llama así). Archivos con muchos símbolos pasan a 2–3 columnas internas y el espacio entre archivos crece con la cantidad de relaciones. La paleta y tipografía son las de `context-diagram.png`.
 
-**Todas las tareas.** Se genera un grafo por **cada** tarea que declare `graph` (no solo la activa), cada una con su propio `focus`/`exclude` (o el heredado del proyecto). Usa un archivo distinto por tarea (`"analizar.png"`, `"agregar-columnas.png"`…): si dos tareas apuntan al mismo archivo, la segunda se omite con un aviso `[Graph]`.
+**Una tarea o todas.** Con una tarea nombrada (`mova chat <proyecto> analizar`) se genera **solo** su grafo; sin tarea y con varias declaradas (modo «todas»), el de cada tarea que declare `graph`, cada una con su propio `focus`/`exclude` (o el heredado del proyecto). Usa un archivo distinto por tarea (`"analizar.png"`, `"agregar-columnas.png"`…): si dos tareas apuntan al mismo archivo, la segunda se omite con un aviso `[Graph]`.
 
 **Cuándo y cómo se genera.** Cada vez que se arma el contexto (`mova run`, `mova chat`, MCP, HTTP, presupuesto) y hay tareas con `graph`.
 - **`mova chat`, `mova mcp start` (stdio y HTTP):** en **segundo plano**. El arranque, cada turno y `exit` no esperan; al terminar cada grafo el chat avisa `[Graph] <tarea>: grafo generado → ruta` y el servidor MCP/HTTP lo deja en su log.
@@ -115,8 +116,8 @@ Rutas multiplataforma, con las mismas reglas que `memory_path` y `egress_audit.o
 
 ```json
 "memory": true
-"memory": "D:\\mova\\memoria\\agunsa\\"
-"memory": "/mnt/compartido/mova/agunsa/memory.md"
+"memory": "D:\\mova\\memoria\\mi-proyecto\\"
+"memory": "/mnt/compartido/mova/mi-proyecto/memory.md"
 ```
 
 **Qué se guarda.** Solo el bloque `memory` que el modelo entrega al final (Tarea, Realizado, Hallazgos `archivo::función`, Datos clave, Resuelto, Decisiones, Pendiente), no la respuesta completa: preciso y barato en tokens. Si el modelo no lo entrega, un resumen automático con las líneas técnicas. Cada entrada lleva fecha, tarea y una huella; una síntesis idéntica no se vuelve a escribir. Si el modelo entrega un bloque por tarea, se guardan por separado.
@@ -128,6 +129,65 @@ Rutas multiplataforma, con las mismas reglas que `memory_path` y `egress_audit.o
 **Modo delegado** (sin `llm_profile`): Mova no ve la respuesta del anfitrión; `chat_completion` le pide llamar a `save_memory` con su bloque, que respeta este mismo campo.
 
 **Caché.** `mova-context-cache.json` solo acelera el saneado de `focus`/`memory` (clave: hash del texto); un cambio de `memory.md` se ve siempre. Con `pii_masking` activo el caché se desactiva (guardaba texto antes del enmascarado).
+
+## Modificar archivos desde la respuesta del modelo (`apply`)
+
+Con `apply` activo, las respuestas del modelo pueden **modificar archivos del repo** — **siempre después de preguntarte**. Funciona igual en Chat, MCP y HTTP (mismo código: `src/applyflow`).
+
+```json
+"apply": true                                   // aplicar, con respaldo (valor por defecto)
+"apply": { "enabled": true, "backup": true }    // respaldo al lado del archivo
+"apply": { "enabled": true, "backup": false }   // sin respaldo
+"apply": false                                  // (o ausente) solo lectura, como siempre
+```
+
+Se declara en el proyecto y/o **por tarea** (`tasks.<t>.apply`); el de la tarea gana. Con `apply` ausente o `false` no cambia nada de lo que ya hacía Mova.
+
+| Clave | Default | Qué hace |
+|---|---|---|
+| `apply` / `tasks.<t>.apply` | ausente = apagado | `true`, `false` o `{ "enabled", "backup" }`. Con el objeto, `enabled` vale `true` si se omite. |
+| `apply.backup` | `true` | **Antes de modificar un archivo existente, se copia al lado, en el mismo directorio**, como `<archivo>.mova-<AAAAMMDD-HHMMSS>.bak` (ej.: `cobros.js.mova-20261003-153012.bak`). Todos los respaldos de una confirmación comparten sello. Un archivo nuevo no tiene respaldo. `false` = se sobrescribe sin copia. |
+
+### Cómo funciona
+
+1. **Mova le enseña al modelo el formato** (se agrega a la sección `INSTRUCTION` del contexto): cada cambio es un bloque ` ```javascript:ruta/archivo.js::nombreFuncion() ` con la función **completa**, o ` ```javascript:ruta/archivo.js ` con el archivo completo. Un bloque sin ese encabezado es explicación y no se aplica.
+2. **Mova detecta los bloques, los valida y pregunta** (nada se escribe todavía):
+
+```
+Mova Context detectó 3 cambio(s) propuesto(s) en 2 archivo(s):
+  1. [MODIFICAR] src/despacho/planificador.js::normalizarPedido()  (+10 −9 líneas)
+  2. [MODIFICAR] src/facturacion/cobros.js::generarCobro()  (+9 −9 líneas)
+  3. [MODIFICAR] src/legacy/tarifasV1.js::tarifaPlanaV1()
+       ⚠ no se aplicará: el archivo está en exclude
+Respaldo activado: cada archivo existente se copia al lado (<archivo>.mova-<fecha>.bak) antes de modificarlo.
+¿Quieres modificar los archivos propuestos?
+  [s] Sí, TODOS los archivos   [1..N] Solo esos números (ej: 1,3)   [n] No, ninguno
+```
+
+3. **Tu respuesta decide**: `s`/`sí`/`todos` aplica **todos** los cambios aplicables; `1,3` (o `#1,#3`) solo esos; `n`/`no` ninguno. Cualquier otra cosa **no modifica nada** y se vuelve a preguntar. Los omitidos se informan con su motivo; el resto igual se aplica.
+
+### Dónde se responde
+
+| Puerta | Cómo se pregunta y se responde |
+|---|---|
+| **Chat** | La pregunta aparece en la terminal justo tras la respuesta; contestas `s`, `1,3` o `n`. |
+| **MCP / HTTP** | La respuesta de `chat_completion` termina con la lista y la pregunta («Todavía NO se ha cambiado nada»); la propuesta queda **pendiente** en `projects/<proyecto>/pending-changes.json` (vence a los 60 min). Respondes en la **siguiente llamada**: `message: "sí"` / `"1,3"` / `"no"`, o el argumento `apply_changes: "all" \| "1,3" \| "none"`. Esa llamada aplica **sin volver a llamar al modelo**. Un mensaje que no parece una respuesta se trata como consulta nueva y la propuesta sigue pendiente. |
+
+### Garantías (todas con tests)
+
+- **Nada se escribe sin una respuesta afirmativa explícita.**
+- **Nada fuera del repo**: rutas absolutas o con `..` se rechazan.
+- **`exclude` se respeta**: un archivo o función excluidos nunca se modifican (`archivo`, `archivo::func=a,b`). Un archivo completo no se reescribe si alguna de sus funciones está excluida: se pide solo las funciones a cambiar.
+- **Un fragmento nunca pisa un archivo**: si la función no se encuentra con certeza en un archivo existente, el bloque se omite y el archivo queda intacto (antes se reescribía entero con el fragmento). Un reemplazo que desbalancea llaves (fragmento truncado) también se rechaza. Reconoce funciones `function`, métodos de clase (`async _processOrder(...) {`) y funciones flecha con llaves de JS/TS, además de Go/Java/C/Python.
+- **Cada archivo es independiente**: el fallo de uno no detiene a los demás.
+
+### Prompts que ya preguntan «(Sí/No)» al modelo
+
+Un prompt clásico (p. ej. «¿Deseas que aplique estas modificaciones directamente en los archivos fuentes? (Sí/No)») no podía funcionar: **el modelo no puede escribir archivos** y su propuesta, sin destino, no tenía nada que Mova pudiera aplicar — por eso responder «Sí» «no hacía nada». Ahora, con `apply` activo, si respondes «Sí» a esa pregunta y la propuesta no trae bloques con destino, Mova pide al modelo convertirla en bloques aplicables y **te muestra la lista real con la pregunta final**. Lo recomendado es quitar la pregunta del prompt y dejar que la haga Mova (ver `capabilities/<tu-proyecto>/prompts/<tu-prompt>.md`, fases 1-3).
+
+### Archivos que Mova crea
+
+`*.mova-*.bak` (respaldos, junto al código) y `projects/<proyecto>/pending-changes.json` (propuesta MCP/HTTP pendiente). Agrega `*.mova-*.bak` a tu `.gitignore`. Para deshacer: copia el `.bak` sobre el archivo.
 
 ## Qué tarea carga chat / MCP / HTTP
 

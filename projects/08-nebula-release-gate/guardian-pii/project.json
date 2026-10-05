@@ -1,0 +1,36 @@
+{
+  "project": "guardian-pii",
+  "author": "system:default",
+  "description": "Agente 2/3 — revisa qué datos personales viajan al cobro y a la notificación; su contexto sale enmascarado.",
+  "repo": "examples/06-nebula-delivery-graph-memory/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "auditar-pii",
+
+  "memory": "../memory.md",
+  "egress_audit": { "dry_run": false, "output_file": "egress_sanitized.md" },
+
+  "variables": { "STACK": "Node.js / JavaScript" },
+  "agents": { "domain": "base", "use": ["ai-privacy-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": ["pii-context-reduction"], "custom": [] },
+
+  "tasks": {
+    "auditar-pii": {
+      "prompt": "review-project",
+      "variables": {
+        "REVIEW_TYPE": "seguridad",
+        "QUERY": "Auditar qué datos personales del cliente (nombre, email, documento) llegan a cobros y notificaciones y si es necesario. Parte del hallazgo del mapeador en MEMORY."
+      },
+      "focus": ["src/facturacion/notificaciones.js::func=notificarCliente,formatearAviso", "src/facturacion/cobros.js::func=generarCobro,registrarCobro", "datos/pedidos-demo.json"],
+      "exclude": ["src/legacy/tarifasV1.js"],
+      "graph": "grafo.png"
+    }
+  },
+
+  "budget": {
+    "max_tokens": 12000,
+    "pii_masking": { "enabled": true },
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": true },
+    "cache_hint": true
+  }
+}

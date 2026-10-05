@@ -29,7 +29,8 @@ import (
 
 func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) (string, error) {
 	message := str(args, "message")
-	if message == "" {
+	// «apply_changes» responde a una propuesta pendiente y no necesita mensaje.
+	if message == "" && str(args, "apply_changes") == "" {
 		return "", fmt.Errorf("message is required")
 	}
 
@@ -192,6 +193,15 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 	}
 
 	label := providerLabelMCP(sess.Provider)
+	// Cambios pendientes de una llamada anterior y «Sí» a un prompt (Sí/No):
+	// ver chat_tool_apply.go (mismo flujo que el chat, mova.local/applyflow).
+	nlMessage := message
+	if txt, handled := remoteApplyAnswer(root, project, proj, args, message); handled {
+		return statusLog.String() + txt, nil
+	}
+	if rq, ok := reformatForApply(&statusLog, sess, proj, savedTask, message); ok {
+		message, nlMessage = rq, ""
+	}
 	if applyReply, handled := applyAutoApplyConfirmationMCP(&statusLog, adapter, root, proj, project, sess, message); handled {
 		writeTokenUsage(&statusLog, root, sess, proj)
 		if project != "" && proj != nil {
@@ -204,18 +214,18 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 	// edit flow (which just emptied the file's content instead of
 	// removing it), because delete verbs used to also match
 	// editVerbRe. See nl_delete.go/nl_read.go.
-	if deleteReply, handled := applyNaturalLanguageDelete(&statusLog, root, proj, message, boolArg(args, "apply_delete")); handled {
+	if deleteReply, handled := applyNaturalLanguageDelete(&statusLog, root, proj, nlMessage, boolArg(args, "apply_delete")); handled {
 		writeTokenUsage(&statusLog, root, sess, proj)
 		return statusLog.String() + deleteReply, nil
 	}
-	if renameReply, handled := applyNaturalLanguageRename(&statusLog, root, proj, message, boolArg(args, "apply_rename")); handled {
+	if renameReply, handled := applyNaturalLanguageRename(&statusLog, root, proj, nlMessage, boolArg(args, "apply_rename")); handled {
 		writeTokenUsage(&statusLog, root, sess, proj)
 		return statusLog.String() + renameReply, nil
 	}
-	if readReply, handled := applyNaturalLanguageRead(root, proj, message); handled {
+	if readReply, handled := applyNaturalLanguageRead(root, proj, nlMessage); handled {
 		return statusLog.String() + readReply, nil
 	}
-	if editReply, handled := applyNaturalLanguageEdits(&statusLog, sess, root, proj, message, boolArg(args, "apply_edits")); handled {
+	if editReply, handled := applyNaturalLanguageEdits(&statusLog, sess, root, proj, nlMessage, boolArg(args, "apply_edits")); handled {
 		writeTokenUsage(&statusLog, root, sess, proj)
 		if project != "" && proj != nil {
 			recordRealUsageMCP(root, project, proj, sess)
@@ -223,7 +233,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		return statusLog.String() + documents.AutoTagCodeFences(editReply), nil
 	}
 
-	nlIntent := applyNaturalLanguageDirectories(&statusLog, root, proj, message)
+	nlIntent := applyNaturalLanguageDirectories(&statusLog, root, proj, nlMessage)
 	var reply string
 	if len(nlIntent.Files) > 0 {
 		// File-creation intent detected directly in the person's own
@@ -274,5 +284,5 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		}
 	}
 
-	return statusLog.String() + documents.AutoTagCodeFences(reply), nil
+	return statusLog.String() + documents.AutoTagCodeFences(reply) + offerApply(root, project, savedTask, proj, sess, reply), nil
 }

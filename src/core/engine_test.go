@@ -258,11 +258,11 @@ func TestBuildContextSections_AgentsAndSkillsVariables(t *testing.T) {
 }
 
 func TestDebugTargetPath_NeverDoublesAbsolutePrefix(t *testing.T) {
-	repo := filepath.Join(string(filepath.Separator), "agunsa", "antofagasta")
+	repo := filepath.Join(string(filepath.Separator), "acme", "site")
 	cases := map[string]string{
-		filepath.Join(repo, "portal-rms", "Gantt.js") + "::func=show()": filepath.Join(repo, "portal-rms", "Gantt.js"), // ya trae el repo
-		`portal-rms\www\Gantt.js::func=show()`:                          filepath.Join(repo, "portal-rms", "www", "Gantt.js"),
-		`C:\agunsa\antofagasta\portal-rms\Gantt.js`:                     filepath.Clean(`C:\agunsa\antofagasta\portal-rms\Gantt.js`), // abs de otro SO: solo Clean
+		filepath.Join(repo, "portal-a", "Gantt.js") + "::func=show()": filepath.Join(repo, "portal-a", "Gantt.js"), // ya trae el repo
+		`portal-a\www\Gantt.js::func=show()`:                          filepath.Join(repo, "portal-a", "www", "Gantt.js"),
+		`C:\acme\site\portal\Gantt.js`:                     filepath.Clean(`C:\acme\site\portal\Gantt.js`), // abs de otro SO: solo Clean
 	}
 	for in, want := range cases {
 		if got := debugTargetPath(repo, in); got != want {

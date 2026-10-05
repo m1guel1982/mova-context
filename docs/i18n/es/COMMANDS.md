@@ -1,134 +1,103 @@
-# mova — Comandos
+# mova(1) — Comandos (unificado: COMMANDS + COMMANDS_ADVANCED)
 
-Estilo manual: `NAME`, `SYNOPSIS`, `EXAMPLES`. Cada comando se entiende en 15 segundos.
+Estilo MAN page. Tools MCP / rutas HTTP / comandos slash del chat: ver `FUNCTIONS.md` (matriz única).
 
-## run
+## NAME
+`mova` — gobernanza pre-inferencia del contexto para LLMs: seleccionar, sanitizar, enmascarar PII, presupuestar, auditar.
 
-**NAME** — ensambla el contexto de un proyecto (Agents+Skills+Prompt+Focus+Memory) y opcionalmente genera evidencia visual.
+## SYNOPSIS
+`mova <comando> [proyecto] [tarea] [flags]` — `[proyecto]` = carpeta bajo `projects/`.
 
-**SYNOPSIS** — `mova run <proyecto> [tarea] [--diagram --export svg,png,pdf --path <dir|archivo.ext>]`
+## COMMANDS
 
-**EXAMPLES**
+### run
+Ensambla el contexto de un proyecto (Agents+Skills+Prompt+Focus+Memory); opcionalmente dibuja evidencia.
+`mova run <proyecto> [tarea] [--count] [--diagram --export svg,png,pdf --path <dir|archivo.ext>]`
+- `--count`: solo estima tokens/USD, sin imprimir contexto ni escribir reporte; acepta un grupo multiagente.
+- `--export`: lista separada por comas. `--path`: directorio (archivo `<proyecto>.<fmt>`) o, con un formato, ruta completa.
 ```bash
-mova run 02-pii-compliance-governance
 mova run 02-pii-compliance-governance --diagram --export png --path ./evidencia.png
 ```
 
-## context-trace (alias: trace)
-
-**NAME** — audita el contexto antes de la inferencia: qué se seleccionó, qué se sanitizó, tokens, costo, identidad de auditoría.
-
-**SYNOPSIS** — `mova context-trace <proyecto> [--export md,pdf] [--diagram] [--policies_include <lista>] [--policies_exclude <lista>]` · `mova context-trace --repo <url> [--task <texto>] [--ignore <patrones>]`
-
-**EXAMPLES**
+### context-trace (alias `trace`)
+Auditoría previa a la inferencia: qué se seleccionó, sanitizó, tokens, costo, quién/qué lo autorizó.
+`mova context-trace <proyecto> [--export md|pdf] [--diagram] [--policies_include <l>] [--policies_exclude <l>]`
+`mova context-trace --repo <url|ruta> [--task <texto>] [--ignore <globs>] [--prune-docstrings]` (discovery, sin `project.json`)
+`--prune-docstrings` elimina comentarios/docstrings del código seleccionado.
+- `--repo` termina con `Generate a 'project.json'? [Y/n]` por stdin: responde, o usa `< /dev/null` en scripts/CI (si no, espera).
+- Políticas: lista con nombres simples (búsqueda recursiva en `config/policy/`) o rutas completas; pisan `project.json` y `config/policy.json`.
 ```bash
-mova context-trace 02-pii-compliance-governance --export md
 mova trace --repo https://github.com/usuario/repo --task "revisar login" --ignore "docs/**,*.lock"
 ```
 
-**POLICIES** — `--policies_include` / `--policies_exclude` aceptan una lista separada por comas, mezclando nombres simples (búsqueda recursiva en `config/policy/`) y rutas completas multiplataforma. Tienen precedencia sobre `project.json` y `config/policy.json` — ver `PROJECT_JSON.md § policies`.
+### budget
+Desglose de tokens/USD por proveedor de la tarea activa; escribe `mova-budget-report.md`. 100 % local (tiktoken-go).
+`mova budget <proyecto> [tarea] [--focus]` — `--focus` compara además repo completo vs. solo focus.
 
-```bash
-mova context-trace 02-pii-compliance-governance \
-  --policies_include "security.json,C:\custom\pii_strict_ventas.json" \
-  --policies_exclude "pii_permissive.json"
-```
+### chat
+REPL interactivo con un modelo local/cloud; el contexto de Mova es el system prompt.
+`mova chat <proyecto> [tarea|all]` · `mova chat <grupo> <agente>` · `mova chat <grupo>` (lista agentes)
+- Sin tarea y con varias en `project.json` → carga todas. `all` lo fuerza.
+- Dentro: `/tasks` `/task <n|all>` `/run <n>` `/budget` `/diagram` `/context-trace` `/memory` `/save` `/delete` `/tools` `/clear`, `set -model <n>`, `exit`.
+- `"memory"` activo → cada respuesta sustancial deja un bloque de síntesis en `memory.md`.
+- `"apply"` activo → los bloques ```` ```lang:ruta::func() ```` propuestos se listan; eliges `[s]` todos · `[1..N]` · `[n]` ninguno. Los archivos existentes se respaldan en `<archivo>.mova-<fecha>.bak` (`"backup": false` lo desactiva). Lo `exclude`d nunca se toca.
+- Si el modelo gasta su cupo de salida sin devolver texto, se muestra un error con los tokens consumidos (ver `MODEL_CONFIG.md`).
 
-## budget
-
-**NAME** — desglose de tokens/costo por proveedor para la tarea activa de un proyecto; genera `mova-budget-report.md`.
-
-**SYNOPSIS** — `mova budget <proyecto> [tarea] [--focus]`
-
-## mcp start
-
-**NAME** — levanta el servidor MCP para que un agente (Claude Code, Cursor, Windsurf) se conecte y llame sus tools (`context_trace`, `get_full_context`, `chat_completion`, etc.) — ver más abajo la lista completa.
-
-**SYNOPSIS** — `mova mcp start [--stdio] [--port 3000]`
-
-`--stdio` levanta el servidor por entrada/salida estándar (lo que usan Claude Code/Cursor/Windsurf al conectarse). Sin `--stdio`, levanta HTTP en el puerto indicado (por defecto `3000`) — ver sección **HTTP** más abajo.
-
-**EXAMPLES**
-```bash
-mova mcp start --stdio
-mova mcp start --port 3000
-```
-
+### mcp start
+Levanta el servidor MCP (Claude Code, Cursor, Windsurf) o el HTTP para curl/Postman.
+`mova mcp start [--stdio] [--port 3000]` — sin `--stdio` sirve HTTP (puerto por defecto 3000).
 ```json
 { "mcpServers": { "mova": { "command": "mova", "args": ["mcp", "start", "--stdio"] } } }
 ```
-
-### Funciones MCP disponibles (`tools/call`)
-
-| Tool | Para qué |
-|---|---|
-| `list_projects` | Lista los proyectos del registro de Mova. |
-| `get_full_context` | Contexto completo ensamblado (= `mova run`): agents+skills+prompt+memory+focus. |
-| `get_knowledge` | Un agente, skill o prompt puntual. |
-| `get_memory` / `get_memory_all` | Memoria activa / activa+archivada de un proyecto. |
-| `save_memory` | Agrega una entrada a `memory.md`. |
-| `get_workflow` | Lee `workflow.md`, pero solo después de resolver el proyecto y validar su presupuesto. |
-| `search_context` | Busca en todo el conocimiento (agents/skills/prompts). |
-| `chat_completion` | Envía un mensaje a un modelo local/cloud, con el contexto de Mova como system prompt. **Si `project.json` declara `egress_audit`, esta es la tool afectada** — ver `PROJECT_JSON.md § egress_audit`: puede auditar el contexto saliente y/o cortar antes de llegar al proveedor (dry-run). |
-| `estimate_budget` | Estima tokens/costo USD del contexto real de un proyecto; escribe `mova-budget-report.md`. |
-| `generate_diagram` | Diagrama visual del pipeline real (SVG/PNG/PDF). |
-| `context_trace` | Auditoría pre-inferencia — ver `context-trace.md`. |
-| `list_agents` / `run_agent` | Listar/ejecutar un grupo multiagente. |
-| `save` / `delete_path` / `create_directory` / `read_file` / `read_document_layer` | Gestión unificada de archivos/directorios. |
-
-## HTTP
-
-**NAME** — el mismo servidor MCP expuesto sobre HTTP — pensado para Postman/curl/integraciones sin stdio.
-
-**SYNOPSIS** — `mova mcp start --port <puerto>` (sin `--stdio`)
-
-### Endpoints HTTP disponibles
-
-| Endpoint | Método | Qué hace |
-|---|---|---|
-| `/mcp` | `POST` | JSON-RPC 2.0 genérico — `{"method":"tools/call","params":{"name":"<tool>","arguments":{...}}}`. Todas las tools de la tabla de arriba, incluida `chat_completion` (y por lo tanto `egress_audit`), pasan por acá. |
-| `/save` | `POST` | Atajo directo a la tool `save`. |
-| `/delete` | `POST` | Atajo directo a `delete_path`. |
-| `/workflow` | `POST` | Atajo directo a `get_workflow`. |
-| `/agents/run` | `POST` | Atajo directo a `run_agent`. |
-| `/diagram` | `POST` | Atajo directo a `generate_diagram`. |
-| `/api/v1/context-trace` | `POST` | Atajo directo a `context_trace`. |
-| `/health` | `GET` | Chequeo de vida del servidor. |
-
-**EXAMPLES**
 ```bash
-curl -X POST http://localhost:3000/mcp \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"chat_completion","arguments":{"project":"02-pii-compliance-governance","message":"resume el contexto"}}}'
+curl -s localhost:3000/health     # vida del servidor
 ```
 
-## list / init / search
+### agents list | agents run
+Orquestador multiagente. `mova agents list <grupo>` · `mova agents run <grupo> [agente|--all]`
+Arma el contexto y el grafo de cada agente **sin llamar al modelo** (en paralelo, con tope de trabajadores).
+Un **grupo** es `projects/<grupo>/config.json` = `{"group","description","agents":[...]}`; cada agente es un
+proyecto normal en `projects/<grupo>/<agente>/project.json`, direccionado `<grupo>/<agente>`.
+Si se omite `agents`, se descubren las subcarpetas. (No existe el campo `is_group`/`members`.)
+```bash
+mova agents run 05-nebula-flota facturador
+```
 
-**NAME** — `list`: proyectos disponibles · `init <nombre>`: crea `projects/<nombre>/project.json` mínimo · `search <query>`: busca en agentes/skills/prompts.
+### familia memory
+`mova memory <p> "texto"` guardar · `memory-read <p> [--all] [--month AAAA-MM]` leer · `memory-archive <p> [--days N]` (def. 30)
+· `memory-clear <p> [--archived|--keep-active|--date D|--from D --to D] [--yes]` · `memory-config <p> enable|disable|days N|confirm true|false`.
 
-## config / show / install / model-list / remove
+### list · init · search
+`mova list` proyectos · `mova init <nombre>` crea `projects/<nombre>/project.json` mínimo · `mova search "consulta" [dominio]`.
 
-**NAME** — gestión de modelos: `config` (perfil activo) · `show <proveedor/modelo>` · `install <proveedor/modelo>` · `model-list` · `remove <proveedor/modelo>`.
+### config · show · install · model-list · remove
+Modelos locales: `mova config <proveedor>` · `mova show config [modelo]` · `mova install a,b` · `mova model-list` · `mova remove a,b`.
+Los perfiles viven en `config/models/<proveedor>/*.json`; cada proyecto elige con `llm_profile.config`.
 
-## chat
+## ENVIRONMENT
+| Variable | Efecto |
+|---|---|
+| `MOVA_PROJECT_ROOT` | Fuerza la raíz en vez de buscar `workflow.md` hacia arriba (necesario si un cliente MCP lanza `mova` en otro directorio). |
+| `MOVA_PROJECT_PATH` | Igual, y omite por completo la búsqueda de `workflow.md`. |
+| `MOVA_POLICY_AUTHOR` | Autoridad de política (`project.json` → `config/policy.json` → esta → `system:default`). |
+| `MOVA_ADAPTER=db` `MOVA_DSN=postgres://…` | Adaptador PostgreSQL en vez de archivos. |
 
-**NAME** — REPL interactivo. Dentro: `/tasks`, `/task`, `/run`, `/context-trace`, `/memory`, `/save`, `/delete`.
+## POLICY CASCADE
+`config/policy.json` enumera archivos de `config/policy/` (`security`, `review`, `compliance`, `pii_*`) cargados en orden;
+agregar/quitar una entrada no requiere recompilar.
 
-**SYNOPSIS** — `mova chat <proyecto> [tarea|all]`
+## INSTALL
+Desde la raíz del repo (requiere Go ≥ 1.24): `make install` — compila el binario del host con `CGO_ENABLED=0`, lo copia a
+`$(go env GOPATH)/bin/mova` y agrega esa carpeta al perfil del shell. `make build-all` compila en `dist/` para
+Windows, Linux (amd64, arm64) y macOS (amd64, arm64). Instaladores: `installers/{linux,macos,windows}`.
 
-- `mova chat <proyecto> analizar` → carga **solo** el prompt, el focus y el grafo de la tarea `analizar`.
-- `mova chat <proyecto>` (sin tarea y con varias tareas en `project.json`) → carga **todas**: el prompt, el focus y el grafo de cada una. Con una sola tarea, esa. `mova chat <proyecto> all` fuerza el modo todas.
-- Dentro del chat, sin salir y conservando el historial: `/tasks` (lista las tareas) · `/task <nombre|all>` (cambia de tarea y recarga el contexto) · `/run <nombre>` (cambia de tarea y envía su variable `QUERY`).
-- Con `"memory"` activo en `project.json`, cada respuesta sustancial deja su bloque de síntesis en `memory.md` (ver `PROJECT_JSON.md § Memoria automática`) y todas las tareas lo leen: sobrevive a salir del chat y aplica igual a MCP/HTTP. `/memory` guarda a mano la última respuesta aunque `memory` esté apagado.
-- Si el modelo gasta el cupo de salida sin devolver texto, `mova chat` muestra un error con los tokens consumidos (ver `MODEL_CONFIG.md`).
+## EXAMPLES
+```bash
+mova list
+mova budget 03-tokenomics-context-trace --focus
+mova run --count 05-nebula-flota
+mova mcp start --port 3000 &  curl -s localhost:3000/health
+```
 
-## memory / memory-read / memory-archive / memory-clear / memory-config
-
-**NAME** — gestión de `memory.md` de un proyecto (ver `docs/i18n/es/ARTIFACTS.md`).
-
-## agents list / agents run
-
-**NAME** — orquestador multiagente: `list` (grupos definidos) · `run <grupo>` (ejecuta cada proyecto miembro).
-
----
-Ver `docs/i18n/es/COMMANDS_ADVANCED.md` para variables de entorno y flags avanzados.
+## SEE ALSO
+`FUNCTIONS.md` · `PROJECT_JSON.md` · `GOVERNANCE_CONTROLS.md` · `ARTIFACTS.md` · `AST_FILTER.md` · `CONTEXT-TRACE.md`

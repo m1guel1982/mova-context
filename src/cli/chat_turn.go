@@ -56,6 +56,8 @@ func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project,
 	if sess.LastTruncated {
 		consolePrint(i18n.T("chat.reply_truncated") + "\n")
 	}
+	// «apply» activo: Mova pregunta y modifica los archivos propuestos.
+	offerChatApply(root, project, task, proj, reply, scanner)
 	printTokenUsage(root, sess, proj)
 	recordRealUsage(root, project, proj, sess)
 	if project != "" && !sess.LastReplyWasDryRun {

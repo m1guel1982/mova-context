@@ -402,5 +402,31 @@
     "governance_summary_footer": "These are estimates from the local tokenizer and config/prices.json — consistent and useful for comparing before/after, not a guarantee of what a provider will actually bill (see the Historical Accuracy section below for how close local estimates have run to real usage on this project).",
     "section_file_breakdown": "## Tokens per File (Focus)",
     "file_breakdown_header": "| File | Tokens |\n|---|---|"
+  },
+  "apply": {
+    "header": "Mova Context detected {{changes}} proposed change(s) in {{files}} file(s):",
+    "item": "  {{n}}. [{{action}}] {{target}}  (+{{added}} −{{removed}} lines)",
+    "item_skip": "       ⚠ will not be applied: {{reason}}",
+    "question_chat": "\nDo you want to modify the proposed files?\n  [y] Yes, ALL files\n  [1..N] Only those numbers (e.g. 1,3)\n  [n] No, none\nChoose [y/1..N/n]: ",
+    "question_remote": "Do you want to modify the proposed files? NOTHING has been changed yet. Reply \"yes\" to apply all {{count}}, \"1,3\" to apply only those numbers, or \"no\" to discard (you can also send apply_changes: \"all\" | \"1,3\" | \"none\").",
+    "applied": "✓ Modified: {{target}}",
+    "backup": "     original backed up at: {{path}}",
+    "skipped": "✗ Skipped {{target}}: {{reason}}",
+    "summary": "Result: {{applied}} applied, {{skipped}} skipped.",
+    "cancelled": "Changes discarded. No file was modified.",
+    "invalid": "I did not understand the answer and nothing was modified. Reply \"yes\" (all), numbers like \"1,3\" (between 1 and {{count}}) or \"no\".",
+    "no_pending": "There are no pending changes to confirm in this project.",
+    "expired": "The pending proposal expired (over {{minutes}} min) and was discarded. Ask for the changes again.",
+    "save_failed": "The pending proposal could not be saved ({{error}}); nothing will be applied.",
+    "excluded_file": "the file is in exclude",
+    "excluded_symbol": "function {{symbol}}() is in exclude",
+    "excluded_whole": "the file contains functions in exclude ({{symbols}}); send only the functions to change",
+    "skip_not_found": "function {{symbol}}() was not found with certainty in the file (the file will not be touched)",
+    "skip_unbalanced": "the block unbalances braces compared to the original function (truncated fragment?)",
+    "model_instruction": "\n\n---\n## FILE MODIFICATION\nYou may propose changes to the code. Mova will ask the person for confirmation BEFORE writing anything. To propose a change use a code block whose header names the target:\n- Existing function (preferred): ```javascript:path/file.js::functionName()  with the COMPLETE, already corrected function (signature, body and closing brace).\n- New file or full rewrite: ```javascript:path/file.js  with the COMPLETE file.\nRules: one block per function or file, and if the request involves N files deliver all N blocks; paths relative to the repository, exactly as shown in FOCUS; do not include functions or files from exclude; no diffs, no «...» and no incomplete fragments. A block without that header is treated as explanation and is NOT applied. Briefly explain each change outside the blocks.\n",
+    "backup_on": "Backup on: every existing file is copied next to it (<file>.mova-<date>.bak) before being modified.",
+    "backup_off": "Backup off (apply.backup = false): files are overwritten with no copy.",
+    "reformat_request": "Yes, apply the approved proposal. You cannot write files: Mova will modify them after a final confirmation. Deliver that proposal NOW as code blocks whose header names the target, for example ```javascript:path/file.js::functionName()  with the COMPLETE, already corrected function (or ```javascript:path/file.js with the whole file). One block per function or file, repository-relative paths as in FOCUS, no diffs or incomplete fragments and nothing from exclude. After the blocks write one line per change. Do NOT claim to have modified any file.",
+    "reformatting": "Converting the approved proposal into applicable blocks…"
   }
 }

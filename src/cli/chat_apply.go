@@ -16,11 +16,11 @@ import (
 	"strconv"
 	"strings"
 
+	"mova.local/applyflow"
 	"mova.local/core"
 	"mova.local/documents"
 	"mova.local/i18n"
 	"mova.local/models"
-	"mova.local/patcher"
 )
 
 // handleAutoApplyConfirmation returns true when it handled line itself
@@ -42,30 +42,24 @@ func handleAutoApplyConfirmation(adapter core.Adapter, root string, proj *core.P
 		return false
 	}
 
-	blocks := documents.ExtractLabeledCodeBlocks(assistant)
-	if len(blocks) == 0 {
+	task := ""
+	if proj != nil {
+		task = core.ChatTaskName(proj, "")
+	}
+	p := applyflow.BuildForced(root, project, task, proj, assistant)
+	if p == nil {
 		return false
 	}
-	blocks = filterBlocksByIDs(blocks, ids)
-
-	repoRoot := root
-	if proj != nil && proj.Repo != "" {
-		repoRoot = proj.Repo
+	sel := map[int]bool{}
+	for i := range p.Changes {
+		sel[i+1] = len(ids) == 0
 	}
-
-	applied, err := patcher.ApplyBlocks(repoRoot, blocks)
-	for _, a := range applied {
-		if a.Symbol != "" && !a.WholeFile {
-			emit(i18n.T("chat.auto_apply_symbol_updated", map[string]any{"path": a.Path, "symbol": a.Symbol}) + "\n")
-		} else if a.WholeFile && a.Symbol != "" {
-			emit("[Auto-Apply] " + a.Path + " - símbolo '" + a.Symbol + "' no encontrado con certeza, archivo completo reescrito\n")
-		} else {
-			emit(i18n.T("chat.auto_apply_file_updated", map[string]any{"path": a.Path}) + "\n")
+	for _, id := range ids {
+		if n, err := strconv.Atoi(strings.TrimSpace(id)); err == nil {
+			sel[n] = true
 		}
 	}
-	if err != nil {
-		emit("[Auto-Apply] Advertencia: " + err.Error() + "\n")
-	}
+	emit(p.Apply(root, sel).Text + "\n")
 
 	if project != "" {
 		if res, mErr := core.RecordMemory(adapter, root, project, "", assistant, core.RecordOptions{}); mErr == nil && res.Saved > 0 {
@@ -74,26 +68,4 @@ func handleAutoApplyConfirmation(adapter core.Adapter, root string, proj *core.P
 	}
 
 	return true
-}
-
-// filterBlocksByIDs keeps only the 1-indexed blocks named in ids
-// (from a "#1,#3" confirmation) - an empty ids list means "apply
-// everything", the plain "sí"/"yes" case.
-func filterBlocksByIDs(blocks []documents.LabeledCodeBlock, ids []string) []documents.LabeledCodeBlock {
-	if len(ids) == 0 {
-		return blocks
-	}
-	wanted := map[int]bool{}
-	for _, id := range ids {
-		if n, err := strconv.Atoi(strings.TrimSpace(id)); err == nil {
-			wanted[n] = true
-		}
-	}
-	var out []documents.LabeledCodeBlock
-	for i, b := range blocks {
-		if wanted[i+1] {
-			out = append(out, b)
-		}
-	}
-	return out
 }

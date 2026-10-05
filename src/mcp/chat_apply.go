@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"mova.local/applyflow"
 	"mova.local/core"
 	"mova.local/documents"
 	"mova.local/models"
-	"mova.local/patcher"
 )
 
 // applyAutoApplyConfirmationMCP mirrors cli/chat_apply.go's
@@ -30,32 +30,25 @@ func applyAutoApplyConfirmationMCP(statusLog *strings.Builder, adapter core.Adap
 		return "", false
 	}
 
-	blocks := documents.ExtractLabeledCodeBlocks(assistant)
-	if len(blocks) == 0 {
+	task := ""
+	if proj != nil {
+		task = core.ChatTaskName(proj, "")
+	}
+	p := applyflow.BuildForced(root, project, task, proj, assistant)
+	if p == nil {
 		return "", false
 	}
-	blocks = filterBlocksByIDsMCP(blocks, ids)
-
-	repoRoot := root
-	if proj != nil && proj.Repo != "" {
-		repoRoot = proj.Repo
+	sel := map[int]bool{}
+	for i := range p.Changes {
+		sel[i+1] = len(ids) == 0
 	}
-
-	applied, err := patcher.ApplyBlocks(repoRoot, blocks)
-	var out strings.Builder
-	for _, a := range applied {
-		switch {
-		case a.Symbol != "" && !a.WholeFile:
-			out.WriteString("[APLICADO] " + a.Path + "::" + a.Symbol + "() - función actualizada\n")
-		case a.Symbol != "" && a.WholeFile:
-			out.WriteString("[Auto-Apply] " + a.Path + " - símbolo '" + a.Symbol + "' no encontrado con certeza, archivo completo reescrito\n")
-		default:
-			out.WriteString("[Auto-Apply] Archivo actualizado: " + a.Path + "\n")
+	for _, id := range ids {
+		if n, err := strconv.Atoi(strings.TrimSpace(id)); err == nil {
+			sel[n] = true
 		}
 	}
-	if err != nil {
-		out.WriteString("[Auto-Apply] Advertencia: " + err.Error() + "\n")
-	}
+	var out strings.Builder
+	out.WriteString(p.Apply(root, sel).Text + "\n")
 
 	if project != "" {
 		if res, mErr := core.RecordMemory(adapter, root, project, "", assistant, core.RecordOptions{}); mErr == nil && res.Saved > 0 {
@@ -65,23 +58,4 @@ func applyAutoApplyConfirmationMCP(statusLog *strings.Builder, adapter core.Adap
 
 	statusLog.WriteString("[Auto-Apply] Confirmation detected - applying previous proposal directly.\n")
 	return out.String(), true
-}
-
-func filterBlocksByIDsMCP(blocks []documents.LabeledCodeBlock, ids []string) []documents.LabeledCodeBlock {
-	if len(ids) == 0 {
-		return blocks
-	}
-	wanted := map[int]bool{}
-	for _, id := range ids {
-		if n, err := strconv.Atoi(strings.TrimSpace(id)); err == nil {
-			wanted[n] = true
-		}
-	}
-	var out []documents.LabeledCodeBlock
-	for i, b := range blocks {
-		if wanted[i+1] {
-			out = append(out, b)
-		}
-	}
-	return out
 }

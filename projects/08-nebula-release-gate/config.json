@@ -1,0 +1,5 @@
+{
+  "group": "08-nebula-release-gate",
+  "description": "Ejemplo 8 — Puerta de release multiagente (ficticio): mapeador -> guardian-pii -> revisor. Sin llm_profile: un agente anfitrión (Claude Code/Cursor) orquesta por MCP/HTTP y registra cada hallazgo con save_memory en la memoria compartida.",
+  "agents": ["mapeador", "guardian-pii", "revisor"]
+}

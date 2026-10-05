@@ -1,0 +1,43 @@
+{
+  "project": "facturador",
+  "author": "system:default",
+  "description": "Agente 2/3 — mejora el módulo de cobros y tarifas partiendo de lo que el planificador dejó en la memoria compartida.",
+  "repo": "examples/06-nebula-delivery-graph-memory/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "mejorar-cobros",
+
+  "memory": "../memory.md",
+  "egress_audit": { "dry_run": false, "output_file": "egress_sanitized.md" },
+
+  "variables": { "STACK": "Node.js / JavaScript" },
+  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
+  "skills": { "domain": "base", "use": ["minimal-tests"], "custom": [] },
+
+  "tasks": {
+    "mejorar-cobros": {
+      "prompt": "fix-or-improve",
+      "variables": {
+        "QUERY": "Corregir el reporte de cobros para que muestre la llegada real cuando exista (respaldo: la programada). Parte de los hallazgos del planificador que están en MEMORY y verifícalos contra el código.",
+        "SKIPPED_ABSTRACTIONS": "No crear clases ni capas nuevas: cambios mínimos en funciones existentes.",
+        "UPGRADE_TRIGGER": "Si se agregan más columnas de tiempo al reporte, extraer un mapeador de columnas."
+      },
+      "focus": [
+        "src/facturacion/cobros.js::func=generarCobro,construirFilaReporte,exportarReporteCobros,registrarCobro,conciliarCobros",
+        "src/facturacion/tarifas.js::func=calcularTarifa,aplicarDescuentoFlota,recargoRadiacion,redondearCreditos"
+      ],
+      "exclude": [
+        "src/legacy/tarifasV1.js",
+        "src/facturacion/tarifas.js::func=recargoRadiacionLegacy"
+      ],
+      "graph": "grafo.png"
+    }
+  },
+
+  "llm_profile": { "config": "nebula-demo" },
+  "budget": {
+    "max_tokens": 12000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": true },
+    "cache_hint": true
+  }
+}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	focusrender "mova.local/core/focus/render"
+	"mova.local/i18n"
 )
 
 // buildFocus: el focus de cada tarea en alcance, con SU exclude. Tareas
@@ -95,6 +96,9 @@ func (e *buildEnv) instruction() string {
 	} else {
 		b.WriteString("Apply the prompt and context above. Deliver your technical report and conclude EXCLUSIVELY with the following summary block. It is the MEMORY other tasks will read: do not store the full chat, but do not omit anything another task needs to continue without redoing your analysis:\n\n")
 		b.WriteString("```memory\n## YYYY-MM-DD — session\n**Task:** <name of the task executed>\n**Done:** <1-line summary>\n**Findings:** <one per line: `file::function` — field/key — status (exists / lost / overwritten) — cause or evidence>\n**Key data:** <EXACT identifiers another task will need: functions, keys, columns, paths, values>\n**Resolved:** <key findings fixed>\n**Decisions:** <business rules and design choices agreed>\n**Pending:** <concrete next steps and tech debt>\n**LLM Errors:** <none or notes>\n```\n\nBlock rules: copy files, functions, keys and columns verbatim (no paraphrasing); include only the minimum necessary code; if you worked several tasks, give one block per task.\n")
+	}
+	if ApplyEnabled(e.proj, e.taskName) {
+		b.WriteString(i18n.TIn(e.lang, "apply.model_instruction"))
 	}
 	return b.String()
 }

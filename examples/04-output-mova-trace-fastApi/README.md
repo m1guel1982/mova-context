@@ -17,8 +17,8 @@ Esta es la salida por consola, junto con los reportes y el diagrama generados au
 
 ```text
 [  0%] Preparing target repository...
-[ 15%] Target ready for analysis: C:\Users\mandr\AppData\Local\Temp\mova-trace-2147425420
-[ 85%] Temporary directory removed: C:\Users\mandr\AppData\Local\Temp\mova-trace-2147425420
+[ 15%] Target ready for analysis: C:\Users\<user>\AppData\Local\Temp\mova-trace-2147425420
+[ 85%] Temporary directory removed: C:\Users\<user>\AppData\Local\Temp\mova-trace-2147425420
 [ 90%] Generating reports...
 [100%] Done.
 ```

@@ -15,7 +15,7 @@ import (
 	"mova.local/models"
 )
 
-const doorBlock = "```memory\n**Tarea:** analizar\n**Realizado:** análisis ACT/SCT\n**Hallazgos:** `Programacion.js::_mapVueloHistorialCobros` — ONB_ACT — se pierde\n**Datos clave:** TDN_ACT, ONB_ACT\n```"
+const doorBlock = "```memory\n**Tarea:** analizar\n**Realizado:** análisis ETA\n**Hallazgos:** `planner.js::_mapOrderHistory` — FIELD_B — se pierde\n**Datos clave:** FIELD_D, FIELD_B\n```"
 
 // recorder: LLM falso (Ollama) que guarda los mensajes recibidos y responde con una síntesis.
 type recorder struct {
@@ -38,7 +38,7 @@ func (r *recorder) server(t *testing.T) *httptest.Server {
 		r.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"message": map[string]string{"role": "assistant", "content": "Informe técnico. " + strings.Repeat("Detalle ACT/SCT. ", 14) + "\n\n" + doorBlock},
+			"message": map[string]string{"role": "assistant", "content": "Informe técnico. " + strings.Repeat("Detalle ETA. ", 14) + "\n\n" + doorBlock},
 			"done":    true, "prompt_eval_count": 10, "eval_count": 5,
 		})
 	}))
@@ -81,12 +81,12 @@ func TestChatCompletion_MemoryCarriesAnalysisToNextTask(t *testing.T) {
 		t.Fatalf("status line missing:\n%s", out)
 	}
 	mem, err := os.ReadFile(filepath.Join(root, "projects", "p", "memory.md"))
-	if err != nil || !strings.Contains(string(mem), "ONB_ACT — se pierde") || !strings.Contains(string(mem), "— tarea: analizar") {
+	if err != nil || !strings.Contains(string(mem), "FIELD_B — se pierde") || !strings.Contains(string(mem), "— tarea: analizar") {
 		t.Fatalf("memory.md not written as expected: %v\n%s", err, mem)
 	}
 	callTool(t, root, "chat_completion", map[string]any{"project": "p", "task": "agregar-columnas", "message": "agrega las columnas"})
 	sent := rec.sent()
-	if !strings.Contains(sent, "## MEMORY") || !strings.Contains(sent, "ONB_ACT — se pierde") {
+	if !strings.Contains(sent, "## MEMORY") || !strings.Contains(sent, "FIELD_B — se pierde") {
 		t.Fatalf("the 2nd task's LLM request does not carry the 1st task's synthesis:\n%s", sent)
 	}
 	// El mismo resultado, ahora sin tarea (todas): también la ve y no duplica la entrada idéntica.
@@ -120,7 +120,7 @@ func TestChatCompletion_MemoryCustomPath(t *testing.T) {
 	ext := filepath.Join(t.TempDir(), "mnt", "memoria-compartida")
 	root := memProject(t, srv.URL, fmt.Sprintf(`,"memory":%q`, filepath.ToSlash(ext)+"/"))
 	callTool(t, root, "chat_completion", map[string]any{"project": "p", "task": "analizar", "message": "revisar"})
-	if b, err := os.ReadFile(filepath.Join(ext, "memory.md")); err != nil || !strings.Contains(string(b), "ONB_ACT") {
+	if b, err := os.ReadFile(filepath.Join(ext, "memory.md")); err != nil || !strings.Contains(string(b), "FIELD_B") {
 		t.Fatalf("memory must be written to the configured path: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "projects", "p", "memory.md")); err == nil {
@@ -152,7 +152,7 @@ func TestDelegatedMode_SaveMemoryHonorsFlagAndHint(t *testing.T) {
 		t.Fatalf("identical entry must be a no-op: %s", again)
 	}
 	mem, _ := os.ReadFile(filepath.Join(root, "projects", "p", "memory.md"))
-	if strings.Count(string(mem), "sha=") != 1 || !strings.Contains(string(mem), "ONB_ACT") {
+	if strings.Count(string(mem), "sha=") != 1 || !strings.Contains(string(mem), "FIELD_B") {
 		t.Fatalf("memory.md:\n%s", mem)
 	}
 

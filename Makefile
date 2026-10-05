@@ -93,10 +93,11 @@ build-all:
 	$(MKDIR_DIST)
 	GOOS=windows GOARCH=amd64 $(GO_BUILD) -o dist/mova-windows-amd64.exe ./src/cli
 	GOOS=linux GOARCH=amd64 $(GO_BUILD) -o dist/mova-linux-amd64 ./src/cli
+	GOOS=linux GOARCH=arm64 $(GO_BUILD) -o dist/mova-linux-arm64 ./src/cli
 	GOOS=darwin GOARCH=amd64 $(GO_BUILD) -o dist/mova-macos-amd64 ./src/cli
 	GOOS=darwin GOARCH=arm64 $(GO_BUILD) -o dist/mova-macos-arm64 ./src/cli
 
-install:
+install: build
 	@mkdir -p "$(GOPATH_DIR)/bin"
 	@cp "dist/$(BINARY_NAME)" "$(GOPATH_DIR)/bin/$(TARGET_NAME)"
 	@grep -qF '$(GOPATH_DIR)/bin' $(SHELL_PROFILE) 2>/dev/null || \
@@ -109,9 +110,10 @@ endif
 build:
 	$(MKDIR_DIST)
 	$(GO_BUILD) -o dist/$(TARGET_NAME) ./src/cli
+	@cp dist/$(TARGET_NAME) dist/$(BINARY_NAME) 2>/dev/null || true
 
 clean:
 	$(RM_RF)
 
 test:
-	cd src && CGO_ENABLED=0 go test ./...
+	cd src && CGO_ENABLED=0 go test -tags "$(GO_TAGS)" ./...

@@ -1,0 +1,5 @@
+{
+  "group": "05-nebula-flota",
+  "description": "Ejemplo 7 — Flota multiagente de Nebula Delivery (ficticio): tres agentes especializados sobre el mismo repo, cada uno con su propio focus/exclude, grafo y egress, y una memoria compartida en projects/05-nebula-flota/memory.md.",
+  "agents": ["planificador", "facturador", "auditor"]
+}

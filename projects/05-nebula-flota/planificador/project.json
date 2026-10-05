@@ -1,0 +1,42 @@
+{
+  "project": "planificador",
+  "author": "system:default",
+  "description": "Agente 1/3 — revisa la arquitectura del ruteo (planificador + rutas). Deja su síntesis en la memoria compartida del grupo.",
+  "repo": "examples/06-nebula-delivery-graph-memory/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "revisar-ruteo",
+
+  "memory": "../memory.md",
+  "egress_audit": { "dry_run": false, "output_file": "egress_sanitized.md" },
+
+  "variables": { "STACK": "Node.js / JavaScript" },
+  "agents": { "domain": "base", "use": ["backend-dev"], "custom": [] },
+  "skills": { "domain": "base", "use": [], "custom": [] },
+
+  "tasks": {
+    "revisar-ruteo": {
+      "prompt": "review-project",
+      "variables": {
+        "REVIEW_TYPE": "arquitectura",
+        "QUERY": "Revisar el ruteo de cápsulas: cómo se elige y puntúa una ruta, qué datos del pedido se conservan y cuáles se pierden al normalizar. Registra en la memoria lo que el facturador necesita saber."
+      },
+      "focus": [
+        "src/despacho/planificador.js::func=planificarEntrega,normalizarPedido,elegirRuta,puntuarRuta,validarVentanaOrbital",
+        "src/despacho/rutas.js::func=calcularTrayectoria,estimarCombustible,cargarCatalogoRutas"
+      ],
+      "exclude": [
+        "src/despacho/planificador.js::func=depurarTrazaPlanificador",
+        "src/telemetria/sensores.js"
+      ],
+      "graph": "grafo.png"
+    }
+  },
+
+  "llm_profile": { "config": "nebula-demo" },
+  "budget": {
+    "max_tokens": 12000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": true },
+    "cache_hint": true
+  }
+}

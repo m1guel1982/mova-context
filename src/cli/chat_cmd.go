@@ -282,6 +282,7 @@ func runChat(root, project, task string) {
 				runChatMemory(adapter, project, sess, nil)
 				continue
 			}
+			line = reformatIfNeeded(sess, proj, task, line)
 			if runChatTurn(sess, adapter, proj, root, project, task, line, scanner) {
 				signature = resignContext(root, project, task, proj)
 			}

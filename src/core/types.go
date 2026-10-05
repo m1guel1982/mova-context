@@ -66,6 +66,10 @@ type Project struct {
 	Memory json.RawMessage `json:"memory,omitempty"`
 	// MemoryMaxChars: tope de memoria inyectada (0 = por defecto; ver memory_view.go).
 	MemoryMaxChars int `json:"memory_max_chars,omitempty"`
+	// Apply: las respuestas del modelo pueden MODIFICAR archivos del repo
+	// previa confirmación — bool u objeto {"enabled","backup"} (ver
+	// apply_policy.go y mova.local/applyflow). Task.Apply lo anula por tarea.
+	Apply json.RawMessage `json:"apply,omitempty"`
 	// Debug: when true, every door (chat, mova ui chat, CLI, HTTP API,
 	// MCP) prints what it resolved before running a task — repo path;
 	// each agent/skill/prompt's name AND resolved file path (or
@@ -265,25 +269,6 @@ func ResolveWorkflowPath(root string, proj *Project, explicit string) string {
 		return resolve(proj.WorkflowPath)
 	}
 	return filepath.Join(root, "workflow.md")
-}
-
-// ToolsConfig turns "mova chat" (and the MCP "chat_completion" tool) into
-// a small agent: when enabled, the model can ask Mova — in plain text,
-// using a simple marker-based protocol described in
-// mova.local/mcp/agent_tools.go — to create directories/files, write a
-// .docx/.pdf/.xlsx/.svg, patch an existing file, etc., and keep
-// answering using the real result. Works with ANY provider (Ollama,
-// Gemini, Claude, GPT...) because it doesn't rely on each API's native
-// function-calling format — same "simplicidad" principle as the rest of
-// Mova: one plain-text protocol, three doors (CLI/MCP/HTTP).
-type ToolsConfig struct {
-	Enabled bool     `json:"enabled"`         // default false — opt-in per project
-	Allow   []string `json:"allow,omitempty"` // optional whitelist (subset of mova.local/mcp.AgentToolNames()); empty/omitted = all of them allowed
-}
-
-// ToolsEnabled reports whether a project turned on chat tool-calling.
-func ToolsEnabled(cfg *ToolsConfig) bool {
-	return cfg != nil && cfg.Enabled
 }
 
 // KnowledgeRef points to agents/skills: domain + list of names.

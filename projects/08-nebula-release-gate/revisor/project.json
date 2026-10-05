@@ -1,0 +1,36 @@
+{
+  "project": "revisor",
+  "author": "system:default",
+  "description": "Agente 3/3 — cierra la puerta: revisa el cambio mínimo en cobros con los hallazgos de los dos agentes previos.",
+  "repo": "examples/06-nebula-delivery-graph-memory/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "revisar-cierre",
+
+  "memory": "../memory.md",
+  "egress_audit": { "dry_run": false, "output_file": "egress_sanitized.md" },
+
+  "variables": { "STACK": "Node.js / JavaScript" },
+  "agents": { "domain": "base", "use": ["code-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": [], "custom": [] },
+
+  "tasks": {
+    "revisar-cierre": {
+      "prompt": "review-project",
+      "variables": {
+        "REVIEW_TYPE": "calidad",
+        "QUERY": "Revisar generarCobro y construirFilaReporte a la luz de los hallazgos de MEMORY (pérdida de etaReal y exceso de PII). Indica si el release pasa o no y por qué."
+      },
+      "focus": ["src/facturacion/cobros.js::func=generarCobro,construirFilaReporte"],
+      "exclude": ["src/legacy/tarifasV1.js"],
+      "graph": "grafo.png"
+    }
+  },
+
+  "budget": {
+    "max_tokens": 12000,
+    "pii_masking": { "enabled": false },
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": true },
+    "cache_hint": true
+  }
+}

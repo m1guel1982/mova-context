@@ -1,0 +1,15 @@
+# UNTESTED on GitHub (the equivalent local cross-builds were verified). Push a tag vX.Y.Z to publish binaries.
+name: release
+on: { push: { tags: ['v*'] } }
+permissions: { contents: write }
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.24.x', cache-dependency-path: src/go.sum }
+      - run: make build-all
+      - run: cd dist && sha256sum mova-* > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with: { files: "dist/*" }

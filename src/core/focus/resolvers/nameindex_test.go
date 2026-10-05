@@ -15,9 +15,9 @@ func fixtureRepo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	files := map[string]string{
-		"portal-rms/www/main/programacion/Gantt.js": "function show() { return 'rms'; }\nfunction other() {}\n",
-		"portal-sic/www/main/programacion/Gantt.js": "function show() { return 'sic'; }\n",
-		"portal-rms/www/main/Unico.js":              "function solo() {}\n",
+		"portal-a/www/main/schedule/Gantt.js": "function show() { return 'a'; }\nfunction other() {}\n",
+		"portal-b/www/main/schedule/Gantt.js": "function show() { return 'b'; }\n",
+		"portal-a/www/main/Unico.js":              "function solo() {}\n",
 	}
 	for rel, content := range files {
 		full := filepath.Join(root, filepath.FromSlash(rel))
@@ -43,11 +43,11 @@ func TestFileResolver_BareNameReturnsEveryMatch(t *testing.T) {
 func TestFileResolver_PartialPathNarrowsMatches(t *testing.T) {
 	root := fixtureRepo(t)
 	ctx := focus.Context{RepoPath: root, Index: &focus.FileIndex{}}
-	blocks, err := NewFileResolver().Resolve(ctx, `portal-rms\www\main\programacion\Gantt.js`)
-	if err != nil || len(blocks) != 1 || !strings.Contains(filepath.ToSlash(blocks[0].Source), "portal-rms") {
-		t.Fatalf("want only the portal-rms file, got %+v err=%v", blocks, err)
+	blocks, err := NewFileResolver().Resolve(ctx, `portal-a\www\main\schedule\Gantt.js`)
+	if err != nil || len(blocks) != 1 || !strings.Contains(filepath.ToSlash(blocks[0].Source), "portal-a") {
+		t.Fatalf("want only the portal-a file, got %+v err=%v", blocks, err)
 	}
-	blocks, _ = NewFileResolver().Resolve(ctx, "main/programacion/gantt.js") // sufijo, sin distinguir mayúsculas
+	blocks, _ = NewFileResolver().Resolve(ctx, "main/schedule/gantt.js") // sufijo, sin distinguir mayúsculas
 	if len(blocks) != 2 {
 		t.Fatalf("trailing-segments match must find both portals, got %d", len(blocks))
 	}
@@ -77,11 +77,11 @@ func TestExclude_BareAndPartialNames(t *testing.T) {
 	if _, err := NewFileResolver().Resolve(ctx, "Gantt.js"); err == nil {
 		t.Fatal("bare-name exclude must hide every Gantt.js")
 	}
-	// ruta parcial: solo la de portal-sic
-	ctx = focus.Context{RepoPath: root, Exclude: []string{"portal-sic/www/main/programacion/Gantt.js"}, Index: &focus.FileIndex{}}
+	// ruta parcial: solo la de portal-b
+	ctx = focus.Context{RepoPath: root, Exclude: []string{"portal-b/www/main/schedule/Gantt.js"}, Index: &focus.FileIndex{}}
 	blocks, err := NewFileResolver().Resolve(ctx, "Gantt.js")
-	if err != nil || len(blocks) != 1 || !strings.Contains(filepath.ToSlash(blocks[0].Source), "portal-rms") {
-		t.Fatalf("partial-path exclude must leave only portal-rms, got %+v err=%v", blocks, err)
+	if err != nil || len(blocks) != 1 || !strings.Contains(filepath.ToSlash(blocks[0].Source), "portal-a") {
+		t.Fatalf("partial-path exclude must leave only portal-a, got %+v err=%v", blocks, err)
 	}
 }
 

@@ -1,6 +1,22 @@
-# mova — Pre-Inference Context Governance for LLMs
 
-**Category: Pre-Inference Context Governance and Audit for LLMs.**
+
+# mova — context sovereignty before inference
+
+> **You decide what context may reach the AI. mova leaves evidence of that decision.**
+
+| You decide | You block | You verify |
+|---|---|---|
+| What goes in: Focus/AST, Exclude, task | What must not leave: masked PII, token cap, `dry_run` | What the model received: report, PII audit, `egress_sanitized.md`, diagram |
+
+**What it is:** a local binary that runs *before* the model call (CLI, `mova chat`, MCP, HTTP). **Honest scope:** it governs the context that passes through mova; it cannot see what an IDE or agent sends on its own, and PII masking is heuristic, not a compliance guarantee.
+
+**Try it in 2 minutes, no API key, no model calls:**
+
+```bash
+git clone <this-repo> && cd mova && make install     # needs Go ≥ 1.24
+mova run --count 02-pii-compliance-governance         # → 7153 tokens (before: 20,014, −64%)
+mova run 02-pii-compliance-governance --diagram --export png --path ./evidence.png
+```
 
 `mova` sits between "context is ready" and "send it to the LLM". For developers and agents (Claude Code,
 Cursor, Windsurf), it answers **11 audit questions** about selection, governance, security, traceability,
@@ -15,7 +31,7 @@ intends to hand to an LLM, and the evidence of the decisions made about that con
 mova run 02-pii-compliance-governance --diagram --export png --path ./evidence.png
 ```
 
-See `examples/` — 3 examples, each 1 command / 15 seconds to understand.
+See `examples/` — 8 examples, each 1 command / 15 seconds to understand.
 
 ## Pre-Inference Audit Matrix
 
@@ -60,6 +76,9 @@ One engine, four doors — CLI, `mova chat`, MCP (stdio/HTTP), HTTP REST — all
 | `examples/03-tokenomics-context-trace` | `focus`/`exclude` (AST)/`task`, budget, Context Trace |
 | `examples/04-output-mova-trace-fastApi` | Validation of `mova context-trace` on the remote FastAPI repository. Demonstrates precise `focus`/`exclude` filtering via AST parsing, token budget control, and context traceability on real-world codebases. |
 | `examples/05-test-mcp-cursor` | Validation of Air-Gap isolation and egress governance on the `02-pii-compliance-governance` project. Demonstrates `chat_completion` interception under `dry_run: true`, PII sanitization, and audit evidence generated via an MCP client. |
+| `examples/06-nebula-delivery-graph-memory` | Two chained tasks (analyze → add columns) with memory, AST graph and audited egress (project `04-nebula-delivery`) |
+| `examples/07-nebula-multiagente-flota` | 3-agent group with shared memory (project `05-nebula-flota`) |
+| `examples/08-nebula-release-gate` | Multiagent without its own LLM: a host agent orchestrates via MCP/HTTP with `run_agent` + `save_memory` |
 
 ## Honest limits of the "Air-Gap" (`dry_run`) — 15 seconds
 
@@ -76,7 +95,7 @@ process does with the text it receives. I don't present this as an absolute guar
 ## Install
 
 ```bash
-git clone <this-repo> && cd mova/src && make install
+git clone <this-repo> && cd mova && make install
 ```
 
 ## Connect an MCP agent
@@ -93,8 +112,8 @@ git clone <this-repo> && cd mova/src && make install
 - [`docs/i18n/en/CONTEXT-TRACE.md`](../en/CONTEXT-TRACE.md) — how the context decision is made
 - [`docs/i18n/en/ARTIFACTS.md`](../en/ARTIFACTS.md) — what every file Mova generates is for
 - [`docs/i18n/en/GOVERNANCE_CONTROLS.md`](../en/GOVERNANCE_CONTROLS.md) — `debug`, `policies`, `on_exceed`, `dry_run`: what stops the process vs. what just explains it
-- [`docs/i18n/en/MCP_HTTP_TOOLS.md`](../en/MCP_HTTP_TOOLS.md) — every MCP tool and HTTP endpoint, copy-paste
-- [`docs/i18n/en/source.md`](../en/source.md) — technical architecture reference
+- [`docs/i18n/en/FUNCTIONS.md`](../en/FUNCTIONS.md) — every function and argument, by channel (MCP · HTTP · Chat/CLI)
+- [`docs/i18n/en/SOURCE.md`](../en/SOURCE.md) — technical architecture reference
 - [`docs/i18n/en/FAQ.md`](../en/FAQ.md)
 
 **Technical note:** PII masking is a heuristic mitigation, not a legal compliance guarantee.

@@ -33,59 +33,16 @@ import (
 type AppliedFile struct {
 	Path      string
 	Symbol    string // "" for a whole-file write
-	WholeFile bool   // true if the symbol patch fell back to a full rewrite
+	WholeFile bool   // archivo completo (nuevo, o bloque sin símbolo)
+	Backup    string // copia del original antes de sobrescribir ("" si no hubo)
 }
 
-// ApplyBlocks writes every block to disk under root, one file at a
-// time, and returns what was actually written, in order. A write
-// failure for one block does not stop the rest — every block is
-// independent (multi-file, multi-symbol support per spec 3.2) — but
-// is returned as an error so the caller can report exactly which
-// file(s) failed.
+// ApplyBlocks mantiene la firma histórica (sin respaldo ni exclusiones):
+// ver ApplyBlocksOpts, que es la implementación única que usan Chat, MCP
+// y HTTP.
 func ApplyBlocks(root string, blocks []documents.LabeledCodeBlock) ([]AppliedFile, error) {
-	var applied []AppliedFile
-	var errs []string
-
-	for _, b := range blocks {
-		target := resolveTargetPath(root, b.Path)
-		if b.Symbol == "" {
-			if err := atomicWriteFile(target, b.Content); err != nil {
-				errs = append(errs, fmt.Sprintf("%s: %v", b.Path, err))
-				continue
-			}
-			applied = append(applied, AppliedFile{Path: b.Path, WholeFile: true})
-			continue
-		}
-
-		ok, err := patchSymbol(target, b.Symbol, b.Content)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%s::%s(): %v", b.Path, b.Symbol, err))
-			continue
-		}
-		if ok {
-			applied = append(applied, AppliedFile{Path: b.Path, Symbol: b.Symbol})
-			continue
-		}
-		// Symbol not found with confidence - safe fallback: atomic
-		// whole-file write (see this file's header).
-		if err := atomicWriteFile(target, b.Content); err != nil {
-			errs = append(errs, fmt.Sprintf("%s: %v", b.Path, err))
-			continue
-		}
-		applied = append(applied, AppliedFile{Path: b.Path, Symbol: b.Symbol, WholeFile: true})
-	}
-
-	if len(errs) > 0 {
-		return applied, fmt.Errorf("failed to apply %d block(s): %s", len(errs), strings.Join(errs, "; "))
-	}
-	return applied, nil
-}
-
-func resolveTargetPath(root, p string) string {
-	if filepath.IsAbs(p) {
-		return p
-	}
-	return filepath.Join(root, p)
+	applied, _, err := ApplyBlocksOpts(root, blocks, Options{})
+	return applied, err
 }
 
 // atomicWriteFile writes content to a temp file in the same
@@ -107,51 +64,78 @@ func atomicWriteFile(path, content string) error {
 	return nil
 }
 
-// funcHeaderPattern matches the most common function/method
-// declaration shapes across the language families Mova Context deals
-// with (Go/JS/TS/Java/C-family: "func"/"function"; Python: "def").
-// %s is substituted with the exact symbol name being searched for.
-const funcHeaderPattern = `^\s*(?:export\s+)?(?:async\s+)?(?:func|function|def)\s+%s\s*\(`
+// symbolPatterns: formas de declaración que reconoce el parcheador para
+// un símbolo (%s = nombre exacto). Cubre Go/JS/TS/Java/C ("func"/"function"/
+// "def"), métodos de clase JS/TS (`async _processOrder(a, b) {`), y
+// funciones flecha / expresiones (`const f = (a) => {`, `const f = function`).
+// Las flechas de una sola expresión (sin llaves) NO se parchean: se
+// reportan como "no encontrado" en vez de adivinar.
+var symbolPatterns = []string{
+	`^\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:func|function\*?|def)\s+%s\s*\(`,
+	`^\s*(?:(?:public|private|protected|static|async|get|set)\s+)*%s\s*\([^)]*\)\s*(?::\s*[\w<>\[\]| ]+)?\s*\{`,
+	`^\s*(?:export\s+)?(?:const|let|var)\s+%s\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>)`,
+}
 
-// patchSymbol replaces exactly the body of the named function inside
-// path with newContent, preserving every other line untouched
-// (imports, other functions, comments, global variables - spec 3.3's
-// "Trazabilidad y Estilo" requirement). Returns ok=false (never an
-// error) when the symbol cannot be located with confidence, so the
-// caller falls back to a whole-file write instead of guessing.
+func findSymbolStart(lines []string, symbol string) int {
+	var res []*regexp.Regexp
+	for _, p := range symbolPatterns {
+		res = append(res, regexp.MustCompile(fmt.Sprintf(p, regexp.QuoteMeta(symbol))))
+	}
+	for i, line := range lines {
+		for _, re := range res {
+			if re.MatchString(line) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// patchSymbol reemplaza exactamente la función nombrada dentro de path,
+// sin tocar ninguna otra línea. Devuelve ok=false (nunca error) si no la
+// localiza con certeza — y el llamador YA NO reescribe el archivo entero
+// con un fragmento (antes lo hacía y destruía el resto del archivo).
+// Rechaza (error) un reemplazo que desbalancee llaves respecto de lo que
+// sustituye: señal de un fragmento truncado o mal copiado.
 func patchSymbol(path, symbol, newContent string) (bool, error) {
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return false, nil // nothing to patch into yet - fall back to whole-file create
-	}
 	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
 		return false, err
 	}
 	lines := strings.Split(string(data), "\n")
-
-	headerRe := regexp.MustCompile(fmt.Sprintf(funcHeaderPattern, regexp.QuoteMeta(symbol)))
-	start := -1
-	for i, line := range lines {
-		if headerRe.MatchString(line) {
-			start = i
-			break
-		}
-	}
+	start := findSymbolStart(lines, symbol)
 	if start == -1 {
 		return false, nil
 	}
-
 	end := findFunctionEnd(lines, start)
 	if end == -1 {
 		return false, nil
 	}
-
+	old := strings.Join(lines[start:end+1], "\n")
+	if braceNet(old) != braceNet(newContent) {
+		return false, fmt.Errorf("el bloque de reemplazo desbalancea llaves respecto de la función original (probable fragmento truncado); no se escribió nada")
+	}
 	var out []string
 	out = append(out, lines[:start]...)
 	out = append(out, strings.Split(strings.TrimRight(newContent, "\n"), "\n")...)
 	out = append(out, lines[end+1:]...)
-
 	return true, atomicWriteFile(path, strings.Join(out, "\n"))
+}
+
+func braceNet(s string) int {
+	n := 0
+	for _, ch := range s {
+		switch ch {
+		case '{':
+			n++
+		case '}':
+			n--
+		}
+	}
+	return n
 }
 
 // findFunctionEnd locates the last line of the function that starts

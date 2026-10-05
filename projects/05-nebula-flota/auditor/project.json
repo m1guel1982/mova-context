@@ -1,0 +1,43 @@
+{
+  "project": "auditor",
+  "author": "system:default",
+  "description": "Agente 3/3 — audita datos personales en cobros y notificaciones. Su contexto sale con PII enmascarado y deja su hallazgo en la memoria compartida.",
+  "repo": "examples/06-nebula-delivery-graph-memory/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "auditar-datos",
+
+  "memory": "../memory.md",
+  "egress_audit": { "dry_run": false, "output_file": "egress_sanitized.md" },
+
+  "variables": { "REGULATION": "Ley 21.719 (Chile) — protección de datos personales" },
+  "agents": { "domain": "base", "use": ["ai-privacy-reviewer"], "custom": [] },
+  "skills": { "domain": "base", "use": ["pii-context-reduction"], "custom": [] },
+
+  "tasks": {
+    "auditar-datos": {
+      "prompt": "review-project",
+      "variables": {
+        "REVIEW_TYPE": "seguridad",
+        "QUERY": "Auditar qué datos personales del cliente (nombre, email) circulan por cobros y notificaciones y si salen innecesariamente hacia el LLM o hacia el reporte."
+      },
+      "focus": [
+        "src/facturacion/notificaciones.js::func=notificarCliente,formatearAviso",
+        "src/facturacion/cobros.js::func=generarCobro,registrarCobro",
+        "datos/pedidos-demo.json"
+      ],
+      "exclude": [
+        "src/legacy/tarifasV1.js"
+      ],
+      "graph": "grafo.png"
+    }
+  },
+
+  "llm_profile": { "config": "nebula-demo" },
+  "budget": {
+    "max_tokens": 12000,
+    "pii_masking": { "enabled": true },
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": true },
+    "cache_hint": true
+  }
+}

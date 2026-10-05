@@ -14,13 +14,13 @@ import (
 	"mova.local/models"
 )
 
-const chatBlock = "```memory\n**Tarea:** analizar\n**Realizado:** análisis\n**Hallazgos:** `Programacion.js::saveAtencion` — ONB_SCT — se pierde\n```"
+const chatBlock = "```memory\n**Tarea:** analizar\n**Realizado:** análisis\n**Hallazgos:** `planner.js::saveOrder` — FIELD_A — se pierde\n```"
 
 func chatFixture(t *testing.T, memField string) (root string, sess *models.Session) {
 	t.Helper()
 	llm := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{
-			"message": map[string]string{"role": "assistant", "content": "Informe. " + strings.Repeat("Detalle ACT/SCT. ", 14) + "\n\n" + chatBlock},
+			"message": map[string]string{"role": "assistant", "content": "Informe. " + strings.Repeat("Detalle ETA. ", 14) + "\n\n" + chatBlock},
 			"done":    true, "prompt_eval_count": 10, "eval_count": 5,
 		})
 	}))
@@ -58,7 +58,7 @@ func TestChatTurnRecordsMemoryAndDedupes(t *testing.T) {
 		t.Fatal("first turn must record memory")
 	}
 	mem, _ := os.ReadFile(filepath.Join(root, "projects", "p", "memory.md"))
-	if !strings.Contains(string(mem), "ONB_SCT — se pierde") || !strings.Contains(string(mem), "— tarea: analizar") {
+	if !strings.Contains(string(mem), "FIELD_A — se pierde") || !strings.Contains(string(mem), "— tarea: analizar") {
 		t.Fatalf("memory.md:\n%s", mem)
 	}
 	if runChatTurn(sess, ad, proj, root, "p", "analizar", "otra vez", scan) {

@@ -19,7 +19,7 @@ import (
 	"mova.local/models"
 )
 
-const httpBlock = "```memory\n**Tarea:** analizar\n**Realizado:** análisis\n**Hallazgos:** `FPVE.js::_parseaVuelo` — TDN_SCT — se pierde\n```"
+const httpBlock = "```memory\n**Tarea:** analizar\n**Realizado:** análisis\n**Hallazgos:** `FPVE.js::_parseOrder` — FIELD_C — se pierde\n```"
 
 // Puerta HTTP real: servidor levantado con StartServer, POST /mcp (JSON-RPC) → chat_completion.
 func TestHTTPDoor_MemoryCarriesAnalysisToNextTask(t *testing.T) {
@@ -31,7 +31,7 @@ func TestHTTPDoor_MemoryCarriesAnalysisToNextTask(t *testing.T) {
 		lastSent = string(raw)
 		mu.Unlock()
 		json.NewEncoder(w).Encode(map[string]any{
-			"message": map[string]string{"role": "assistant", "content": "Informe. " + strings.Repeat("Detalle ACT/SCT. ", 14) + "\n\n" + httpBlock},
+			"message": map[string]string{"role": "assistant", "content": "Informe. " + strings.Repeat("Detalle ETA. ", 14) + "\n\n" + httpBlock},
 			"done":    true, "prompt_eval_count": 10, "eval_count": 5,
 		})
 	}))
@@ -80,13 +80,13 @@ func TestHTTPDoor_MemoryCarriesAnalysisToNextTask(t *testing.T) {
 		t.Fatalf("HTTP reply lacks the memory status:\n%s", out)
 	}
 	mem, err := os.ReadFile(filepath.Join(dir, "memory.md"))
-	if err != nil || !strings.Contains(string(mem), "TDN_SCT — se pierde") {
+	if err != nil || !strings.Contains(string(mem), "FIELD_C — se pierde") {
 		t.Fatalf("memory.md via HTTP: %v\n%s", err, mem)
 	}
 	call("agregar-columnas") // otra petición HTTP = sesión nueva
 	mu.Lock()
 	defer mu.Unlock()
-	if !strings.Contains(lastSent, "MEMORY") || !strings.Contains(lastSent, "TDN_SCT") {
+	if !strings.Contains(lastSent, "MEMORY") || !strings.Contains(lastSent, "FIELD_C") {
 		t.Fatalf("2nd HTTP request's LLM call does not carry the 1st task's synthesis:\n%s", lastSent)
 	}
 }

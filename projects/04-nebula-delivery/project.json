@@ -1,0 +1,110 @@
+{
+  "project": "04-nebula-delivery",
+  "author": "system:default",
+  "description": "Ejemplo 6 — Nebula Delivery (ficticio): 2 tareas encadenadas. 'analizar-trazabilidad' encuentra dónde se pierde la hora real de llegada y deja su síntesis en memory.md; 'agregar-columnas' parte de esa memoria. Cada tarea genera su grafo AST y el egress queda auditado.",
+  "repo": "examples/06-nebula-delivery-graph-memory/repo",
+  "lang": "es",
+  "adapter": "file",
+  "default_task": "analizar-trazabilidad",
+
+  "memory": true,
+  "egress_audit": {
+    "dry_run": false,
+    "output_file": "egress_sanitized.md"
+  },
+
+  "paths": {
+    "agents": "examples/06-nebula-delivery-graph-memory/capabilities/agents",
+    "skills": "examples/06-nebula-delivery-graph-memory/capabilities/skills",
+    "prompts": "examples/06-nebula-delivery-graph-memory/capabilities/prompts"
+  },
+
+  "agents": {
+    "domain": "base",
+    "use": ["trazabilidad-dev"],
+    "custom": [],
+    "variables": {
+      "ROLE_TITLE": "Backend Developer Senior",
+      "STACK": "Node.js / JavaScript",
+      "TARGET_MODULES": "src/despacho/planificador.js, src/despacho/rutas.js, src/facturacion/tarifas.js, src/facturacion/cobros.js",
+      "DATA_FIELDS": "Llegada: etaProgramada (programada) y etaReal (real, medida por telemetría). Regla de renderizado: priorizar etaReal sobre etaProgramada.",
+      "SOURCE_KEYS": "etaProgramada, etaReal, llegada",
+      "ANALYSIS_FLOW": "pedido crudo -> normalizarPedido -> planificarEntrega -> generarCobro -> construirFilaReporte -> exportarReporteCobros",
+      "BUSINESS_RULE": "Conservar etaProgramada y etaReal durante todo el flujo. Solo en el valor FINAL del reporte se usa etaReal si existe y es válida; si no, etaProgramada."
+    }
+  },
+
+  "skills": {
+    "domain": "base",
+    "use": ["mapa-de-columnas"],
+    "custom": [],
+    "variables": {
+      "REPORT_COLUMNS": "Pedido, Destino, Hora llegada, Monto (créditos)",
+      "DATA_SOURCES": "pedido crudo (datos/pedidos-demo.json) / plan de entrega / cobro",
+      "SOURCE_KEYS": "etaProgramada, etaReal, llegada",
+      "OUTPUT_FORMAT": "CSV de cobros (exportarReporteCobros)",
+      "PRIORITY_RULE": "etaReal > etaProgramada únicamente en el valor final mostrado en el reporte",
+      "TRACEABILITY_RULE": "No descartar ni sobrescribir etaReal/etaProgramada en etapas intermedias",
+      "LOSS_DETECTION": "Detectar objetos reconstruidos campo a campo, proyecciones y mapeos que eliminen etaReal o etaProgramada"
+    }
+  },
+
+  "tasks": {
+    "analizar-trazabilidad": {
+      "prompt": "analizar-trazabilidad",
+      "variables": {
+        "PROJECT_NAME": "04-nebula-delivery",
+        "LANG": "es",
+        "STACK": "Node.js / JavaScript",
+        "QUERY": "Analizar planificador, rutas, tarifas y cobros para determinar dónde existen etaProgramada y etaReal y en qué función se pierde, sobrescribe o deja de propagarse cada una hasta el reporte de cobros.",
+        "BUSINESS_RULE": "Si etaReal existe y es válida se usa en el valor final; si no, etaProgramada. Aplica solo al valor mostrado en el reporte.",
+        "TRACEABILITY_FLOW": "pedido crudo -> normalizarPedido -> planificarEntrega -> generarCobro -> construirFilaReporte -> exportarReporteCobros",
+        "REQUIRED_SOURCE_KEYS": "etaProgramada, etaReal, llegada",
+        "ANALYSIS_OBJECTIVE": "Encontrar el primer punto del flujo donde desaparece cada dato, sin modificar archivos."
+      },
+      "focus": [
+        "src/despacho/planificador.js::func=normalizarPedido,validarVentanaOrbital,elegirRuta,planificarEntrega",
+        "src/despacho/rutas.js::func=calcularTrayectoria,estimarCombustible",
+        "src/facturacion/cobros.js::func=generarCobro,construirFilaReporte,exportarReporteCobros"
+      ],
+      "exclude": [
+        "src/legacy/tarifasV1.js",
+        "src/despacho/planificador.js::func=depurarTrazaPlanificador"
+      ],
+      "graph": "analizar.png"
+    },
+
+    "agregar-columnas": {
+      "prompt": "agregar-columnas",
+      "variables": {
+        "PROJECT_NAME": "04-nebula-delivery",
+        "LANG": "es",
+        "STACK": "Node.js / JavaScript",
+        "QUERY": "Agregar al reporte de cobros las columnas 'Llegada real' y 'Llegada programada' usando etaReal cuando exista y etaProgramada como respaldo, sin pisar una fuente con la otra. Parte de los hallazgos de analizar-trazabilidad.",
+        "MAPPER_FUNCS": "normalizarPedido, generarCobro, construirFilaReporte",
+        "GENERATOR_FUNCS": "exportarReporteCobros",
+        "SOURCE_KEYS": "etaProgramada, etaReal, llegada",
+        "PRIORITY_RULE": "etaReal > etaProgramada solo en el valor final del reporte",
+        "OUTPUT_FORMAT": "CSV de cobros (exportarReporteCobros)"
+      },
+      "focus": [
+        "src/despacho/planificador.js::func=normalizarPedido",
+        "src/facturacion/cobros.js::func=generarCobro,construirFilaReporte,exportarReporteCobros,registrarCobro",
+        "src/facturacion/tarifas.js::func=calcularTarifa,aplicarDescuentoFlota,recargoRadiacion,redondearCreditos"
+      ],
+      "exclude": [
+        "src/legacy/tarifasV1.js",
+        "src/facturacion/tarifas.js::func=recargoRadiacionLegacy"
+      ],
+      "graph": "agregar-columnas.png"
+    }
+  },
+
+  "llm_profile": { "config": "nebula-demo" },
+
+  "budget": {
+    "max_tokens": 16000,
+    "sanitize": { "enabled": true, "dedupe_logs": true, "strip_blank": true, "strip_comments": true },
+    "cache_hint": true
+  }
+}

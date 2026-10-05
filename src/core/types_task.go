@@ -27,6 +27,9 @@ type Task struct {
 	// project.json, o ruta absoluta/UNC); true = "graph.png" junto a
 	// project.json; ""/false/ausente = no se genera. Ver core/graph_hook.go.
 	Graph json.RawMessage `json:"graph,omitempty"`
+	// Apply: bool u objeto {"enabled","backup"}; anula al del proyecto para
+	// esta tarea. false = solo lectura; ausente = el valor del proyecto.
+	Apply json.RawMessage `json:"apply,omitempty"`
 }
 
 // ProjectSummary is used by mova list.
@@ -170,4 +173,23 @@ func (p *LLMProfile) IsLocal() bool {
 		return false
 	}
 	return p.Type == "local"
+}
+
+// ToolsConfig turns "mova chat" (and the MCP "chat_completion" tool) into
+// a small agent: when enabled, the model can ask Mova — in plain text,
+// using a simple marker-based protocol described in
+// mova.local/mcp/agent_tools.go — to create directories/files, write a
+// .docx/.pdf/.xlsx/.svg, patch an existing file, etc., and keep
+// answering using the real result. Works with ANY provider (Ollama,
+// Gemini, Claude, GPT...) because it doesn't rely on each API's native
+// function-calling format — same "simplicidad" principle as the rest of
+// Mova: one plain-text protocol, three doors (CLI/MCP/HTTP).
+type ToolsConfig struct {
+	Enabled bool     `json:"enabled"`         // default false — opt-in per project
+	Allow   []string `json:"allow,omitempty"` // optional whitelist (subset of mova.local/mcp.AgentToolNames()); empty/omitted = all of them allowed
+}
+
+// ToolsEnabled reports whether a project turned on chat tool-calling.
+func ToolsEnabled(cfg *ToolsConfig) bool {
+	return cfg != nil && cfg.Enabled
 }

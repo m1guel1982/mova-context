@@ -1,5 +1,5 @@
 // nameindex.go — resolución rápida de referencias por nombre o ruta
-// parcial ("Gantt.js", "programacion/Gantt.js") para focus y exclude,
+// parcial ("Gantt.js", "schedule/Gantt.js") para focus y exclude,
 // apoyada en focus.FileIndex: una sola caminata del repo por ejecución.
 package resolvers
 
@@ -23,7 +23,7 @@ func indexFor(ctx focus.Context) map[string][]string {
 
 // findIndexed devuelve TODOS los archivos indexados a los que puede
 // referirse target: un nombre suelto ("Gantt.js") o los últimos
-// segmentos de una ruta ("programacion/Gantt.js"), sin distinguir
+// segmentos de una ruta ("schedule/Gantt.js"), sin distinguir
 // mayúsculas. Varias coincidencias se devuelven todas, en orden
 // determinista.
 func findIndexed(ctx focus.Context, target string) []string {

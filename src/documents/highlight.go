@@ -24,7 +24,11 @@ import (
 
 // fenceLine matches an opening/closing ``` fence and captures whatever
 // language tag (if any) follows it on the same line.
-var fenceLine = regexp.MustCompile("^```([A-Za-z0-9_+#.-]*)\\s*$")
+// El tag puede ser un lenguaje ("go") o un bloque con destino de Mova
+// ("javascript:src/a.js::f()"): ambos cuentan como YA etiquetados; antes los
+// segundos no coincidían y el cierre del bloque se tomaba por una apertura,
+// corrompiendo las cercas de toda respuesta con propuestas de cambios.
+var fenceLine = regexp.MustCompile("^```([A-Za-z0-9_+#.:/\\\\()-]*)\\s*$")
 
 // AutoTagCodeFences scans text for ``` fences with no language tag and
 // inserts one detected from the fenced content — fences that already

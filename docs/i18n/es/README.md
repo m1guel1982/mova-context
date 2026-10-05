@@ -1,6 +1,22 @@
-# mova — Gobernanza de Contexto Pre-Inferencia para LLMs
 
-**Categoría: Gobernanza y Auditoría de Contexto Pre-Inferencia para LLMs.**
+
+# mova — soberanía del contexto antes de la inferencia
+
+> **Tú decides qué contexto puede llegar a la IA. mova deja evidencia de esa decisión.**
+
+| Decides | Bloqueas | Compruebas |
+|---|---|---|
+| Qué entra: Focus/AST, Exclude, tarea | Lo que no debe salir: PII enmascarado, tope de tokens, `dry_run` | Qué recibió el modelo: informe, auditoría PII, `egress_sanitized.md`, diagrama |
+
+**Qué es:** un binario local que corre *antes* de la llamada al modelo (CLI, `mova chat`, MCP, HTTP). **Alcance honesto:** gobierna el contexto que pasa por mova; no puede ver lo que un IDE o agente envíe por su cuenta, y el enmascarado de PII es heurístico, no una garantía de cumplimiento.
+
+**Pruébalo en 2 minutos, sin API key ni llamadas al modelo:**
+
+```bash
+git clone <este-repo> && cd mova && make install     # requiere Go ≥ 1.24
+mova run --count 02-pii-compliance-governance         # → 7153 tokens (antes: 20 014, −64 %)
+mova run 02-pii-compliance-governance --diagram --export png --path ./evidencia.png
+```
 
 `mova` se coloca entre "el contexto está listo" y "se envía al LLM". Para desarrolladores y agentes
 (Claude Code, Cursor, Windsurf), responde **11 preguntas de auditoría** sobre selección, gobernanza,
@@ -16,7 +32,7 @@ contexto antes de la inferencia.
 mova run 02-pii-compliance-governance --diagram --export png --path ./evidencia.png
 ```
 
-Ver `examples/` — 3 ejemplos, cada uno 1 comando / 15 segundos para entender.
+Ver `examples/` — 8 ejemplos, cada uno 1 comando / 15 segundos para entender.
 
 ## Matriz de Auditoría Pre-Inferencia
 
@@ -61,6 +77,9 @@ Un motor, cuatro puertas — CLI, `mova chat`, MCP (stdio/HTTP), HTTP REST — t
 | `examples/03-tokenomics-context-trace` | `focus`/`exclude` (AST)/`task`, presupuesto, Context Trace |
 | `examples/04-output-mova-trace-fastApi` | Validación de `mova context-trace` sobre el repositorio remoto de FastAPI. Demuestra el filtrado preciso por `focus`/`exclude` mediante parsing de AST, control de presupuesto de tokens y trazabilidad de contexto en proyectos de código real. |
 | `examples/05-test-mcp-cursor` | Validación del aislamiento Air-Gap y gobernanza de egresos sobre el proyecto `02-pii-compliance-governance`. Demuestra la interceptación de `chat_completion` bajo `dry_run: true`, sanitización de PII y evidencia de auditoría consumida desde un cliente MCP.|
+| `examples/06-nebula-delivery-graph-memory` | Dos tareas encadenadas (analizar → agregar columnas) con memoria, grafo AST y egress auditado (proyecto `04-nebula-delivery`) |
+| `examples/07-nebula-multiagente-flota` | Grupo de 3 agentes con memoria compartida (proyecto `05-nebula-flota`) |
+| `examples/08-nebula-release-gate` | Multiagente sin LLM propio: un agente anfitrión orquesta vía MCP/HTTP con `run_agent` + `save_memory` |
 
 ## Límites honestos del "Air-Gap" (`dry_run`) — en 15 segundos
 
@@ -77,7 +96,7 @@ proceso externo con el texto que recibe. No se ofrece esto como una garantía ab
 ## Instalación
 
 ```bash
-git clone <este-repo> && cd mova/src && make install
+git clone <este-repo> && cd mova && make install
 ```
 
 ## Conectar un agente MCP
@@ -94,8 +113,8 @@ git clone <este-repo> && cd mova/src && make install
 - [`docs/i18n/es/CONTEXT-TRACE.md`](../es/CONTEXT-TRACE.md) — cómo se toma la decisión de contexto
 - [`docs/i18n/es/ARTIFACTS.md`](../es/ARTIFACTS.md) — qué es cada archivo que Mova genera
 - [`docs/i18n/es/GOVERNANCE_CONTROLS.md`](../es/GOVERNANCE_CONTROLS.md) — `debug`, `policies`, `on_exceed`, `dry_run`: qué corta el proceso y qué solo explica
-- [`docs/i18n/es/MCP_HTTP_TOOLS.md`](../es/MCP_HTTP_TOOLS.md) — todas las herramientas MCP y endpoints HTTP, copiar-pegar
-- [`docs/i18n/es/source.md`](../es/source.md) — referencia técnica de arquitectura
+- [`docs/i18n/es/FUNCTIONS.md`](../es/FUNCTIONS.md) — todas las funciones y argumentos, por canal (MCP · HTTP · Chat/CLI)
+- [`docs/i18n/es/SOURCE.md`](../es/SOURCE.md) — referencia técnica de arquitectura
 - [`docs/i18n/es/FAQ.md`](../es/FAQ.md)
 
 **Nota técnica:** el enmascarado de PII es una mitigación heurística, no una garantía de cumplimiento legal.

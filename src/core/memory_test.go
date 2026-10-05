@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-const memBlock = "```memory\n## YYYY-MM-DD — session\n**Tarea:** analizar\n**Realizado:** análisis de ACT/SCT\n**Hallazgos:** `Programacion.js::_mapVueloHistorialCobros` — ONB_ACT — se pierde — _processVuelo reconstruye el objeto\n**Datos clave:** TDN_ACT, ONB_ACT, OFB_ACT, TKO_ACT\n```"
+const memBlock = "```memory\n## YYYY-MM-DD — session\n**Tarea:** analizar\n**Realizado:** análisis de ETA\n**Hallazgos:** `planner.js::_mapOrderHistory` — FIELD_B — se pierde — _processOrder reconstruye el objeto\n**Datos clave:** FIELD_D, FIELD_B, OFB_ACT, TKO_ACT\n```"
 
 func writeProj(t *testing.T, root, extra string) {
 	t.Helper()
@@ -25,7 +25,7 @@ func writeProj(t *testing.T, root, extra string) {
 }
 
 func longReply(block string) string {
-	return "Informe técnico del análisis. " + strings.Repeat("Detalle del recorrido ACT/SCT. ", 12) + "\n\n" + block
+	return "Informe técnico del análisis. " + strings.Repeat("Detalle del recorrido ETA. ", 12) + "\n\n" + block
 }
 
 func TestMemorySettingValues(t *testing.T) {
@@ -113,7 +113,7 @@ func TestRecordMemoryFormatDedupeAndBlocks(t *testing.T) {
 		t.Fatalf("identical synthesis must be skipped, got %+v", r)
 	}
 	mem, _ := ad.GetMemory("p")
-	if strings.Count(mem, "sha=") != 1 || !strings.Contains(mem, "— tarea: analizar") || !strings.Contains(mem, "_mapVueloHistorialCobros") {
+	if strings.Count(mem, "sha=") != 1 || !strings.Contains(mem, "— tarea: analizar") || !strings.Contains(mem, "_mapOrderHistory") {
 		t.Fatalf("bad memory format:\n%s", mem)
 	}
 	if strings.Contains(mem, "YYYY-MM-DD") {
@@ -138,12 +138,12 @@ func TestRecordMemoryFallbackAndShort(t *testing.T) {
 	if r, _ := RecordMemory(ad, root, "p", "analizar", "ok listo", RecordOptions{}); !r.Short || r.Saved != 0 {
 		t.Fatalf("short reply must not be recorded: %+v", r)
 	}
-	plain := "# Hallazgos\nTexto de relleno " + strings.Repeat("x", 250) + "\n- `Programacion.js::saveAtencion` descarta TDN_SCT al guardar\nOtra frase sin datos técnicos.\n"
+	plain := "# Hallazgos\nTexto de relleno " + strings.Repeat("x", 250) + "\n- `planner.js::saveOrder` descarta FIELD_C al guardar\nOtra frase sin datos técnicos.\n"
 	if r, _ := RecordMemory(ad, root, "p", "analizar", plain, RecordOptions{}); r.Saved != 1 {
 		t.Fatalf("no block → automatic digest: %+v", r)
 	}
 	mem, _ := ad.GetMemory("p")
-	if !strings.Contains(mem, "Resumen automático") || !strings.Contains(mem, "saveAtencion") || strings.Contains(mem, "Otra frase sin datos") {
+	if !strings.Contains(mem, "Resumen automático") || !strings.Contains(mem, "saveOrder") || strings.Contains(mem, "Otra frase sin datos") {
 		t.Fatalf("digest should keep technical lines only:\n%s", mem)
 	}
 }
@@ -160,7 +160,7 @@ func TestMemoryFlowsToOtherTasksAcrossSessions(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(s.Memory, "## MEMORY") || !strings.Contains(s.Memory, "ONB_ACT — se pierde") {
+		if !strings.Contains(s.Memory, "## MEMORY") || !strings.Contains(s.Memory, "FIELD_B — se pierde") {
 			t.Fatalf("task %q does not see the saved synthesis:\n%s", task, s.Memory)
 		}
 	}
@@ -230,7 +230,7 @@ func TestFormatMemoryForContext(t *testing.T) {
 	for d := 40; d >= 2; d-- {
 		parts = append(parts, entryFor("chat", d, strings.Repeat("ruido ", 100)))
 	}
-	parts = append(parts, entryFor("analizar", 1, "HALLAZGO-CRITICO: ONB_ACT se pierde en _processVuelo"))
+	parts = append(parts, entryFor("analizar", 1, "HALLAZGO-CRITICO: FIELD_B se pierde en _processOrder"))
 	mem := strings.Join(parts, memorySep)
 	out := FormatMemoryForContext(mem, 4000)
 	if !strings.Contains(out, "HALLAZGO-CRITICO") {

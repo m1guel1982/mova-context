@@ -35,6 +35,9 @@ func TestMain(m *testing.M) {
 				langDir := filepath.Join(tmp, "config", "lang")
 				_ = os.MkdirAll(langDir, 0o755)
 				_ = os.WriteFile(filepath.Join(langDir, "en.json"), enData, 0o644)
+				if esData, err := os.ReadFile(filepath.Join(realConfigLang, "es.json")); err == nil {
+					_ = os.WriteFile(filepath.Join(langDir, "es.json"), esData, 0o644) // proyectos con "lang":"es"
+				}
 				_ = os.WriteFile(filepath.Join(langDir, "lang_active.json"), []byte(`{"lang":"en"}`), 0o644)
 				_ = i18n.Init(tmp)
 			}

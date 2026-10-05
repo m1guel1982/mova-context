@@ -1,0 +1,23 @@
+name: ci
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.24.x', cache-dependency-path: src/go.sum }
+      - run: make build
+      - run: make test
+      - name: Smoke (reproduces the headline numbers)
+        run: |
+          export MOVA_PROJECT_ROOT=$PWD PATH=$PWD/dist:$PATH
+          mova run --count 02-pii-compliance-governance | head -1   # expect 7153 tokens
+          mova run --count 08-nebula-release-gate | tail -n +1 | head -8
+          PORT=3011 bash examples/08-nebula-release-gate/run-demo.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: "mova-${{ matrix.os }}", path: dist/mova }

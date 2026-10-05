@@ -10,7 +10,7 @@ import (
 type excludeMatcher struct {
 	bareNames map[string]bool
 	absPaths  []string
-	relPaths  []string // ruta relativa/parcial ("programacion/Gantt.js"): coincide en cualquier carpeta del repo
+	relPaths  []string // ruta relativa/parcial ("schedule/Gantt.js"): coincide en cualquier carpeta del repo
 	globs     []string
 }
 
@@ -86,7 +86,7 @@ func (m *excludeMatcher) excludesPath(absPath string) bool {
 	}
 
 	// 3. Coincidencia por ruta relativa o parcial ("frontend/node_modules",
-	// "programacion/Gantt.js") en cualquier carpeta del repo, en límite de segmento.
+	// "schedule/Gantt.js") en cualquier carpeta del repo, en límite de segmento.
 	for _, p := range m.relPaths {
 		if strings.HasSuffix(norm, "/"+p) || strings.Contains(norm, "/"+p+"/") {
 			return true
