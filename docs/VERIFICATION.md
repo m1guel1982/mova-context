@@ -14,13 +14,16 @@ Date: 2026-10-05 · Host: Linux amd64 sandbox · Go 1.24.13 · dependencies reso
 | MCP stdio `tools/list` | 26 tools; all documented in `FUNCTIONS.md` |
 | HTTP+MCP flow `examples/08/run-demo.sh` | OK; shared memory written/read; output in `examples/08-*/evidence/` |
 | `mova context-trace --repo <local path>` and `<GitHub URL>` | OK; asks `[Y/n]` on stdin (use `< /dev/null`) |
+| MCP stdio handshake as Claude Code does it (`initialize` → `tools/list` → `tools/call`) | server `mova-context`, protocol 2024-11-05, 26 tools; `get_full_context` ex.02: `dry_run:true` → 555 B notice; `dry_run:false` → 23,463 B, 171 `[PII_…]`, 0 raw e-mails |
+| `uninstallers/linux/uninstall.sh` in an isolated HOME (install → uninstall) | `.bashrc` byte-identical to the original; shared bin folder keeps PATH; refuses folders without `workflow.md`+`src/` |
+| `mova run 04-nebula-delivery <task>` from scratch | creates both PNG graphs, `egress_sanitized.md`, caches; does **not** create `memory.md` (written by chat/`save_memory`) |
 | `mova trace 03-…`, `memory-read`, `show config nebula-demo` | OK |
 
 ## Built but NOT executed
 `linux-arm64`, `macos-amd64`, `macos-arm64` (Mach-O), `windows-amd64.exe` (PE32+): compile cleanly with `CGO_ENABLED=0`; no machine available to run them. Do not claim support until `ci.yml` is green on those runners.
 
 ## Not verified
-`mova chat` against a real model · `/save` `/delete` `/diagram` HTTP routes · `chat_completion` · `release.yml` and `ci.yml` on GitHub · PII precision/recall · Windows installers.
+`uninstallers` on Windows/macOS · a live Claude Code session · `mova chat` against a real model · `/save` `/delete` `/diagram` HTTP routes · `chat_completion` · `release.yml` and `ci.yml` on GitHub · PII precision/recall · Windows installers.
 
 ## Defects found and fixed
 1. `COMMANDS` docs described `is_group`/`members`; code uses `projects/<group>/config.json` (`group`,`agents`).

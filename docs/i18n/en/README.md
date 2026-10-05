@@ -1,37 +1,46 @@
-
+![mova in action: real outputs of 3 commands](../../assets/mova-demo.gif)
 
 # mova — context sovereignty before inference
 
 > **You decide what context may reach the AI. mova leaves evidence of that decision.**
+> *Tú decides qué contexto puede llegar a la IA. mova deja evidencia de esa decisión.*
+
+[Español](../es/README.md) · [English](README.md) · [Back to root](../../../README.md)
 
 | You decide | You block | You verify |
 |---|---|---|
-| What goes in: Focus/AST, Exclude, task | What must not leave: masked PII, token cap, `dry_run` | What the model received: report, PII audit, `egress_sanitized.md`, diagram |
+| **What goes in:** `focus`/`exclude` (AST: functions, not whole files), task | **What must not leave:** PII masking (opt-in), token cap (`max_tokens`), `dry_run` | **What the model received:** `context-report.md`, `pii-audit-log.json`, `egress_sanitized.md`, diagram |
 
-**What it is:** a local binary that runs *before* the model call (CLI, `mova chat`, MCP, HTTP). **Honest scope:** it governs the context that passes through mova; it cannot see what an IDE or agent sends on its own, and PII masking is heuristic, not a compliance guarantee.
+`mova` is a local binary that runs **before** the model call (CLI · `mova chat` · MCP · HTTP). It works with Claude Code, Cursor, Windsurf, Ollama and any MCP client.
 
-**Try it in 2 minutes, no API key, no model calls:**
+**Honest scope:** "you decide" applies to the context that passes **through mova**. It cannot see what an IDE or agent sends on its own, and PII masking is heuristic — evidence and mitigation, not a compliance guarantee. It is not a gateway, an IDE, a RAG or a platform.
 
-```bash
-git clone <this-repo> && cd mova && make install     # needs Go ≥ 1.24
-mova run --count 02-pii-compliance-governance         # → 7153 tokens (before: 20,014, −64%)
-mova run 02-pii-compliance-governance --diagram --export png --path ./evidence.png
-```
-
-`mova` sits between "context is ready" and "send it to the LLM". For developers and agents (Claude Code,
-Cursor, Windsurf), it answers **11 audit questions** about selection, governance, security, traceability,
-and cost of the context — with evidence, before a single real token is spent.
-
-**Scope:** `mova` is not a full AI Security platform. Its scope is the context an application or agent
-intends to hand to an LLM, and the evidence of the decisions made about that context before inference.
-
-## Get started in 1 command
+## Try it (what the GIF above shows — all real outputs)
 
 ```bash
-mova run 02-pii-compliance-governance --diagram --export png --path ./evidence.png
+# 1) Governed context, token savings, PII and an evidence image (no API key, no model call)
+mova run 02-pii-compliance-governance --diagram --export png
+#    → 02-pii-compliance-governance.png   (20,014 tok before → 7,153 tok after; 171 of 1,694 tokens pseudonymized)
+
+# 2) Audit ANY repo before sending it to an AI — nothing is sent (add "< /dev/null" in scripts: it asks [Y/n] at the end)
+mova context-trace --repo https://github.com/fastapi/fastapi --export pdf \
+  --task "solve_dependencies get_dependant in fastapi/dependencies/utils.py" --prune-docstrings \
+  --ignore "docs/**, tests/**, *.lock, docs_src/**, .github/**, docs/en/**"
+#    → context-report.pdf · context-diagram.png · pii-audit-log.json
+
+# 3) Dependency graphs + sanitized egress record, no LLM call (example 04 has "memory": true and "dry_run": false)
+mova run 04-nebula-delivery analizar-trazabilidad
+mova run 04-nebula-delivery agregar-columnas
+#    → analizar.png · agregar-columnas.png · egress_sanitized.md   (memory.md is written by `mova chat` / `save_memory`)
 ```
 
-See `examples/` — 8 examples, each 1 command / 15 seconds to understand.
+Install: `make install` (needs Go ≥ 1.24) or double-click `installers/<your OS>/…`. Uninstall: [`uninstallers/`](../../../uninstallers/README.md). Costs shown are theoretical input-token estimates (`config/prices.json`).
+
+## Use it with Claude Code
+`claude mcp add --transport stdio --scope project --env MOVA_PROJECT_ROOT=<path to mova> mova-context -- mova mcp start --stdio` → [full guide, limits and permissions](../en/MCP_INTEGRATION.md). Claude Code stays the model; mova governs the context it asks for.
+
+## Where it has been verified
+Windows: the author's sessions (steps 1–2 in the GIF). Linux amd64: build, 21 test packages, MCP stdio and example 08 (see [VERIFICATION](../../VERIFICATION.md)). macOS and Linux arm64: cross-compiled, **not executed**.
 
 ## Pre-Inference Audit Matrix
 
@@ -92,18 +101,6 @@ directive (see `GOVERNANCE_CONTROLS.md § dry_run`), but whether that directive 
 depends on the host, not on Mova — Mova does not control, and cannot control, what an external
 process does with the text it receives. I don't present this as an absolute guarantee, because it isn't one.
 
-## Install
-
-```bash
-git clone <this-repo> && cd mova && make install
-```
-
-## Connect an MCP agent
-
-```json
-{ "mcpServers": { "mova": { "command": "mova", "args": ["mcp", "start", "--stdio"] } } }
-```
-
 ## Documentation
 
 - [`docs/i18n/en/COMMANDS.md`](../en/COMMANDS.md) — commands (MAN page style)
@@ -112,6 +109,10 @@ git clone <this-repo> && cd mova && make install
 - [`docs/i18n/en/CONTEXT-TRACE.md`](../en/CONTEXT-TRACE.md) — how the context decision is made
 - [`docs/i18n/en/ARTIFACTS.md`](../en/ARTIFACTS.md) — what every file Mova generates is for
 - [`docs/i18n/en/GOVERNANCE_CONTROLS.md`](../en/GOVERNANCE_CONTROLS.md) — `debug`, `policies`, `on_exceed`, `dry_run`: what stops the process vs. what just explains it
+- [`docs/i18n/en/MCP_INTEGRATION.md`](../en/MCP_INTEGRATION.md) — **use mova with Claude Code** (MCP, permissions, limits)
+- [`docs/i18n/en/POSITIONING.md`](../en/POSITIONING.md) — what mova is, what it is not
+- [`docs/VERIFICATION.md`](../../VERIFICATION.md) — what was actually run, and where
+- [`uninstallers/`](../../../uninstallers/README.md) — remove mova (binary, PATH, `MOVA_PROJECT_ROOT`) without leftovers
 - [`docs/i18n/en/FUNCTIONS.md`](../en/FUNCTIONS.md) — every function and argument, by channel (MCP · HTTP · Chat/CLI)
 - [`docs/i18n/en/SOURCE.md`](../en/SOURCE.md) — technical architecture reference
 - [`docs/i18n/en/FAQ.md`](../en/FAQ.md)

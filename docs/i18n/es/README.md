@@ -1,38 +1,46 @@
-
+![mova en acción: salidas reales de 3 comandos](../../assets/mova-demo.gif)
 
 # mova — soberanía del contexto antes de la inferencia
 
 > **Tú decides qué contexto puede llegar a la IA. mova deja evidencia de esa decisión.**
+> *You decide what context may reach the AI. mova leaves evidence of that decision.*
 
-| Decides | Bloqueas | Compruebas |
+[Español](README.md) · [English](../en/README.md) · [Volver a la raíz](../../../README.md)
+
+| Tú decides | Tú bloqueas | Tú compruebas |
 |---|---|---|
-| Qué entra: Focus/AST, Exclude, tarea | Lo que no debe salir: PII enmascarado, tope de tokens, `dry_run` | Qué recibió el modelo: informe, auditoría PII, `egress_sanitized.md`, diagrama |
+| **Qué entra:** `focus`/`exclude` (AST: funciones, no archivos enteros), tarea | **Qué no debe salir:** enmascarado PII (opt-in), tope de tokens (`max_tokens`), `dry_run` | **Qué recibió el modelo:** `context-report.md`, `pii-audit-log.json`, `egress_sanitized.md`, diagrama |
 
-**Qué es:** un binario local que corre *antes* de la llamada al modelo (CLI, `mova chat`, MCP, HTTP). **Alcance honesto:** gobierna el contexto que pasa por mova; no puede ver lo que un IDE o agente envíe por su cuenta, y el enmascarado de PII es heurístico, no una garantía de cumplimiento.
+`mova` es un binario local que corre **antes** de la llamada al modelo (CLI · `mova chat` · MCP · HTTP). Funciona con Claude Code, Cursor, Windsurf, Ollama y cualquier cliente MCP.
 
-**Pruébalo en 2 minutos, sin API key ni llamadas al modelo:**
+**Alcance honesto:** «tú decides» aplica al contexto que pasa **a través de mova**. No puede ver lo que un IDE o agente envíe por su cuenta, y el enmascarado PII es heurístico: evidencia y mitigación, no garantía de cumplimiento. No es un gateway, un IDE, un RAG ni una plataforma.
 
-```bash
-git clone <este-repo> && cd mova && make install     # requiere Go ≥ 1.24
-mova run --count 02-pii-compliance-governance         # → 7153 tokens (antes: 20 014, −64 %)
-mova run 02-pii-compliance-governance --diagram --export png --path ./evidencia.png
-```
-
-`mova` se coloca entre "el contexto está listo" y "se envía al LLM". Para desarrolladores y agentes
-(Claude Code, Cursor, Windsurf), responde **11 preguntas de auditoría** sobre selección, gobernanza,
-seguridad, trazabilidad y costo del contexto — con evidencia, antes de gastar un solo token real.
-
-**Alcance:** `mova` no es una plataforma de AI Security completa. Su alcance es el contexto que una
-aplicación o agente pretende entregar a un LLM, y la evidencia de las decisiones tomadas sobre ese
-contexto antes de la inferencia.
-
-## Empezar en 1 comando
+## Pruébalo (lo que muestra el GIF — todo salida real)
 
 ```bash
-mova run 02-pii-compliance-governance --diagram --export png --path ./evidencia.png
+# 1) Contexto gobernado, ahorro de tokens, PII e imagen de evidencia (sin API key, sin llamar a un modelo)
+mova run 02-pii-compliance-governance --diagram --export png
+#    → 02-pii-compliance-governance.png   (20.014 tok antes → 7.153 tok después; 171 de 1.694 tokens pseudonimizados)
+
+# 2) Audita CUALQUIER repo antes de enviarlo a una IA — no se envía nada (en scripts añade "< /dev/null": pregunta [Y/n] al final)
+mova context-trace --repo https://github.com/fastapi/fastapi --export pdf \
+  --task "solve_dependencies get_dependant in fastapi/dependencies/utils.py" --prune-docstrings \
+  --ignore "docs/**, tests/**, *.lock, docs_src/**, .github/**, docs/en/**"
+#    → context-report.pdf · context-diagram.png · pii-audit-log.json
+
+# 3) Grafos de dependencias + registro de egreso sanitizado, sin llamar a un LLM (el ejemplo 04 tiene "memory": true y "dry_run": false)
+mova run 04-nebula-delivery analizar-trazabilidad
+mova run 04-nebula-delivery agregar-columnas
+#    → analizar.png · agregar-columnas.png · egress_sanitized.md   (memory.md lo escribe `mova chat` / `save_memory`)
 ```
 
-Ver `examples/` — 8 ejemplos, cada uno 1 comando / 15 segundos para entender.
+Instalar: `make install` (requiere Go ≥ 1.24) o doble clic en `installers/<tu SO>/…`. Desinstalar: [`uninstallers/`](../../../uninstallers/README.md). Los costos mostrados son estimaciones teóricas de tokens de entrada (`config/prices.json`).
+
+## Úsalo con Claude Code
+`claude mcp add --transport stdio --scope project --env MOVA_PROJECT_ROOT=<ruta de mova> mova-context -- mova mcp start --stdio` → [guía completa, límites y permisos](../es/MCP_INTEGRATION.md). Claude Code sigue siendo el modelo; mova gobierna el contexto que pide.
+
+## Dónde se ha verificado
+Windows: sesiones del autor (pasos 1–2 del GIF). Linux amd64: compilación, 21 paquetes de tests, MCP stdio y ejemplo 08 (ver [VERIFICATION](../../VERIFICATION.md)). macOS y Linux arm64: compilados, **no ejecutados**.
 
 ## Matriz de Auditoría Pre-Inferencia
 
@@ -93,18 +101,6 @@ explícita anti-elusión (ver `GOVERNANCE_CONTROLS.md § dry_run`), pero el cump
 directiva depende del anfitrión, no de Mova — Mova no controla, ni puede controlar, qué hace un
 proceso externo con el texto que recibe. No se ofrece esto como una garantía absoluta porque no lo es.
 
-## Instalación
-
-```bash
-git clone <este-repo> && cd mova && make install
-```
-
-## Conectar un agente MCP
-
-```json
-{ "mcpServers": { "mova": { "command": "mova", "args": ["mcp", "start", "--stdio"] } } }
-```
-
 ## Documentación
 
 - [`docs/i18n/es/COMMANDS.md`](../es/COMMANDS.md) — comandos (estilo MAN page)
@@ -113,6 +109,10 @@ git clone <este-repo> && cd mova && make install
 - [`docs/i18n/es/CONTEXT-TRACE.md`](../es/CONTEXT-TRACE.md) — cómo se toma la decisión de contexto
 - [`docs/i18n/es/ARTIFACTS.md`](../es/ARTIFACTS.md) — qué es cada archivo que Mova genera
 - [`docs/i18n/es/GOVERNANCE_CONTROLS.md`](../es/GOVERNANCE_CONTROLS.md) — `debug`, `policies`, `on_exceed`, `dry_run`: qué corta el proceso y qué solo explica
+- [`docs/i18n/es/MCP_INTEGRATION.md`](../es/MCP_INTEGRATION.md) — **usar mova con Claude Code** (MCP, permisos, límites)
+- [`docs/i18n/es/POSITIONING.md`](../es/POSITIONING.md) — qué es mova y qué no es
+- [`docs/VERIFICATION.md`](../../VERIFICATION.md) — qué se ejecutó realmente y dónde
+- [`uninstallers/`](../../../uninstallers/README.md) — quitar mova (binario, PATH, `MOVA_PROJECT_ROOT`) sin dejar rastros
 - [`docs/i18n/es/FUNCTIONS.md`](../es/FUNCTIONS.md) — todas las funciones y argumentos, por canal (MCP · HTTP · Chat/CLI)
 - [`docs/i18n/es/SOURCE.md`](../es/SOURCE.md) — referencia técnica de arquitectura
 - [`docs/i18n/es/FAQ.md`](../es/FAQ.md)

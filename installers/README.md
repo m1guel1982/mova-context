@@ -138,3 +138,7 @@ prebuilt binaries in `dist/`:
 In short: **regenerate `dist/` with `make build-all` before a release
 if you want prebuilt binaries; the installer scripts themselves never
 need to change.**
+
+## Uninstalling
+
+See [`../uninstallers/README.md`](../uninstallers/README.md): removes the binary, the `PATH` entry and `MOVA_PROJECT_ROOT` this installer added (Linux tested; macOS/Windows not yet run).
