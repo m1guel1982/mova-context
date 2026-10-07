@@ -10,7 +10,6 @@ package core
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	focusrender "mova.local/core/focus/render"
 )
@@ -76,8 +75,11 @@ func (e *buildEnv) header() string {
 	if IsAllTasks(e.taskName) {
 		scope = "todas las tareas (" + strings.Join(e.tasks, ", ") + ")"
 	}
-	return fmt.Sprintf("# Mova Context — %s / %s\nGenerated: %s | Repo: %s | Lang: %s | LLM: %s | Profile: %s\n",
-		e.proj.Project, scope, time.Now().Format("2006-01-02 15:04"), e.proj.Repo,
+	// No timestamp here: the released bytes must be a pure function of
+	// (repo, project.json, policies, memory) so their sha256 in the run
+	// evidence is comparable across runs. The time lives in manifest.json.
+	return fmt.Sprintf("# Mova Context — %s / %s\nRepo: %s | Lang: %s | LLM: %s | Profile: %s\n",
+		e.proj.Project, scope, e.proj.Repo,
 		orDefault(e.lang, "legacy"), orDefault(e.proj.LLM, "not set"), profileLabel(e.profile))
 }
 

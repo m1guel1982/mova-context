@@ -65,14 +65,14 @@ la tool MCP `context_trace`, y `POST /api/v1/context-trace` (HTTP).
 - **Modo discovery** (`AnalyzeRemote`, repo remoto sin `project.json`) — cuenta tokens archivo por archivo
   para poder armar el desglose "tokens por directorio".
 
-**Identidad de auditoría** (nuevo — responde las preguntas #3, #10, #11 de la Matriz, ver `README.md`):
-`Data.AgentClient` / `Data.TargetModel` / `Data.PolicyAuthor`, calculados en `trace.applyAuditIdentity` y
-`core.ResolvePolicyAuthor`/`core.TargetModelFor`. Nunca quedan vacíos — ver `docs/i18n/es/ARTIFACTS.md`.
+**Evidencia** (`src/evidence`, `budget/run_evidence.go`): cada liberación de contexto escribe `runs/<run_id>/` con `context.txt` y `manifest.json` (de escritura única) y `events.jsonl` (solo anexado). Agente, modelo y autor llevan su fuente (`declared`, `observed`, `not_observable`) — ver `ARTIFACTS.md`.
+
+**Política de lectura** (`core/access_policy.go`): `CheckRead`/`GovernedRead` es la única puerta de lectura para las tools MCP, los loops de `mova chat`/`chat_completion` (`mcp.RunLoopTool`) y los hooks (`mcp/hook_tools.go`). **Cierre de dependencias**: `graph/closure.go`, registrado en `core.ClosureHook` y ejecutado como gate en `budget.BuildGatedContext`. **Sanitización por bloque**: `sanitize/govern.go`.
 
 ## 5. Transportes — mismo motor, distinta puerta
 
 CLI, Chat, MCP (stdio/HTTP) y HTTP REST llaman todos a `mcp.Process()` o a las mismas funciones de `core`/
-`trace`/`budget`. La única diferencia entre puertas es **quién** llama — ver `AgentClient` arriba.
+`trace`/`budget`. Las puertas difieren en quién llama y en adónde va el contexto (`manifest.door`). Las tools propias de un host MCP quedan fuera de Mova salvo vía hooks.
 
 ## 6. Diagramas
 

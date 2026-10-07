@@ -18,6 +18,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"mova.local/evidence"
 	"strings"
 
 	"mova.local/budget"
@@ -101,6 +102,17 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		if gated.CircuitBreaker.Message != "" {
 			statusLog.WriteString("[Circuit Breaker] " + gated.CircuitBreaker.Message + "\n")
 		}
+		dryRunCfg, _ := core.ResolveEgressAudit(root, project, proj)
+		door, model := "chat:provider", evidence.Attr{Value: sess.Provider + "/" + sess.Model, Source: "observed:sesión de Mova (Mova llama al proveedor)"}
+		if proj.LLMProfile == nil || proj.LLMProfile.Config == "" {
+			door, model = "mcp:chat_completion(host)", hostModelAttr(proj)
+		}
+		run, rerr := budget.RecordRun(root, project, taskName, proj, gated, budget.RunInfo{Door: door, Agent: agentAttr(), Model: model}, dryRunCfg)
+		if rerr != nil {
+			return "", fmt.Errorf("evidence: no se pudo escribir la evidencia, no se libera contexto: %w", rerr)
+		}
+		sess.Run, sess.ProjectName, sess.TaskName = run, project, taskName
+		statusLog.WriteString("[Evidence] run " + run.ID + "\n")
 		if gated.Err != nil {
 			return "", gated.Err
 		}
@@ -117,7 +129,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		}
 		sess.SetSystem(systemText + ToolsSystemPrompt(proj.Tools))
 		sess.CacheBoundary = boundary
-		sess.EgressAuditDryRun, sess.EgressAuditOutputFile = core.ResolveEgressAudit(root, project, proj)
+		sess.EgressAuditDryRun = dryRunCfg
 		if core.ToolsEnabled(proj.Tools) {
 			statusLog.WriteString("[Tools] Enabled for this call — the model may create/write files and directories (see project.json's \"tools\").\n")
 		}
@@ -138,7 +150,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		// language intents all need a model call too, and none of
 		// them run once this returns).
 		if sess.EgressAuditDryRun {
-			gateResult, gerr := models.EgressGate(true, sess.EgressAuditOutputFile, sess.System, sess.Model)
+			gateResult, gerr := models.EgressGate(true, sess.System, sess.Model)
 			if gerr != nil {
 				return "", gerr
 			}
@@ -154,26 +166,9 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 		// dry_run branch above: it all requires a model Mova isn't
 		// configured to call.
 		if proj.LLMProfile == nil || proj.LLMProfile.Config == "" {
-			// This branch is ALSO an egress event — sess.System (the
-			// fully governed/masked context) is about to leave Mova
-			// in the tool result, for the MCP host to send onward —
-			// so it must be logged exactly like Send/SendStream's own
-			// applyEgressAudit() logs every provider call, and exactly
-			// like get_full_context's EgressGate always does
-			// regardless of dry_run. Before this fix, ONLY the
-			// dry_run:true branch above and an actual provider call
-			// ever wrote evidence; a project with dry_run:false and no
-			// llm_profile (exactly the common "delegate to Cursor/
-			// Grok/Claude Code" setup) left this specific egress path
-			// completely unaudited even with egress_audit.output_file
-			// configured — the same "evidence must exist before
-			// anything leaves" rule WriteEgressAuditLog's own doc
-			// comment states, just not yet applied to this one door.
-			if sess.EgressAuditOutputFile != "" {
-				if werr := models.WriteEgressAuditLog(sess.EgressAuditOutputFile, sess.System); werr != nil {
-					return "", fmt.Errorf("egress_audit: could not write %s: %w", sess.EgressAuditOutputFile, werr)
-				}
-			}
+			// Also an egress event: the governed context leaves Mova in the
+			// tool result for the MCP host. Its evidence is the run
+			// recorded above (door "mcp:chat_completion(host)").
 			hint := ""
 			if core.MemoryEnabled(proj) { // Mova no ve la respuesta del anfitrión: que registre él su síntesis
 				hint = "\n\n---\n[Memory] memory está activo en este proyecto: al terminar, llama a la herramienta save_memory con project=\"" + project + "\", task=\"" + taskName + "\" y tu bloque ```memory como entry, para que las demás tareas lo lean."
@@ -274,7 +269,7 @@ func chatCompletionTool(adapter core.Adapter, root string, args map[string]any) 
 			// Misma regla que el chat: solo si project.json tiene "memory"
 			// activo. Cada llamada MCP/HTTP es una sesión nueva; memory.md
 			// es lo que une una tarea con la siguiente.
-			res, merr := core.RecordMemory(adapter, root, project, savedTask, reply, core.RecordOptions{})
+			res, merr := core.RecordMemory(adapter, root, project, savedTask, reply, core.RecordOptions{Source: "observed", RunID: runIDOf(sess)})
 			switch {
 			case merr != nil:
 				statusLog.WriteString("[Memory] no se pudo guardar: " + merr.Error() + "\n")

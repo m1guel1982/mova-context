@@ -18,7 +18,7 @@ mova run 03-tokenomics-context-trace --diagram --export png --path ./evidencia.p
 | AST exclude | `exclude: ["checkout.js::func=procesarPagoLegacy"]` — el archivo se analiza completo, solo el cuerpo de esa función desaparece |
 | Sanitizer | 48 líneas idénticas de `server.log` colapsadas en `[×48 repeticiones idénticas omitidas]` |
 | Presupuesto | `max_tokens_per_run: 5000` + `max_monthly_usd: 5.0`, `on_exceed: warn` (circuit breaker) |
-| Evidencia | `evidencia.png` (pipeline de reducción por archivo) + `context-report.md` |
+| Evidencia | `projects/<proyecto>/runs/<run_id>/` (`context.txt` + `manifest.json`). El PNG y `context-report.md` son reportes para leer, no evidencia de egreso |
 
 `evidencia-ejemplo.png` en esta carpeta es una muestra ya generada. Para ver el `exclude` AST
 en acción directamente en el contexto ensamblado:

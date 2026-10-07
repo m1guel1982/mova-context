@@ -99,6 +99,16 @@ func ambiguousDirLabel(requested string) string {
 	return cleaned
 }
 
+// requireProject resolves the mandatory "project" argument of every file
+// tool.
+func requireProject(adapter core.Adapter, args map[string]any) (*core.Project, error) {
+	name := str(args, "project")
+	if name == "" {
+		return nil, fmt.Errorf("\"project\" es obligatorio: sin proyecto no hay repo ni política que aplicar")
+	}
+	return adapter.GetProject(name)
+}
+
 func repoFor(adapter core.Adapter, args map[string]any) string {
 	repo := "."
 	if project := str(args, "project"); project != "" {

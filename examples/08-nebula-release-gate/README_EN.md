@@ -20,5 +20,5 @@ bash examples/08-nebula-release-gate/run-demo.sh   # MCP/HTTP orchestration
 ## Honest notes
 - With no `llm_profile`, Mova never calls a model; the host reasons and records via `save_memory`. The script's findings are **hand-written** (consistent with the code), not model output.
 - `mova agents run` writes no memory. Order is imposed by whoever orchestrates.
-- **Executed** with the real Linux amd64 binary; output and resulting memory are in `evidence/`. `evidence/guardian-pii.egress_sanitized.md` shows 8 `[PII_…]` occurrences (pseudonyms of fictional data).
+- **Executed** with the Linux amd64 binary: output in `evidence/run-demo.output.txt` and resulting memory in `evidence/memory.after-run.md` (each entry marked `source=host`: the script wrote it, Mova saw no model). Each `get_full_context`/`run_agent` leaves its run in `projects/08-nebula-release-gate/<agent>/runs/`.
 - Verified on Linux amd64 only.

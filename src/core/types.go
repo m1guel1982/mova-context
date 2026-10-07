@@ -40,8 +40,17 @@ type Project struct {
 	// explícito de "focus", ni al recorrer un directorio/glob — y por
 	// lo tanto nunca se agrega a mova-context-cache.json. Ver
 	// core.ResolveExclude / core/focus/resolvers/exclude.go.
-	Exclude []string      `json:"exclude"`
-	Budget  *BudgetConfig `json:"budget"` // optional: token ceiling for `mova budget` (see BudgetConfig)
+	Exclude []string `json:"exclude"`
+	// ReadScope: what Mova's own read tools (read_file, read_document_layer,
+	// the tool loop of `mova chat`/chat_completion, and the check_read hook
+	// tool) may return. "focus" = only files/symbols in the task's focus;
+	// "repo" = anything inside "repo" not excluded. Empty → "focus" when the
+	// task scope has a focus, "repo" otherwise. Exclude and the repo
+	// boundary apply in both modes. See core.CheckRead.
+	ReadScope string `json:"read_scope,omitempty"`
+	// DependencyPolicy: default for every task (see Task.DependencyPolicy).
+	DependencyPolicy string        `json:"dependency_policy,omitempty"`
+	Budget           *BudgetConfig `json:"budget"` // optional: token ceiling for `mova budget` (see BudgetConfig)
 	// WorkflowPath: where workflow.md lives for this project (see "5./6.
 	// workflow.md" in the spec). A single path — once configured, that
 	// file is always used: Mova never searches for another workflow.md.
@@ -194,10 +203,9 @@ type EgressAuditConfig struct {
 	// but the LLM provider is never called — Send/SendStream return a
 	// confirmation reply instead. Defaults to false.
 	DryRun bool `json:"dry_run,omitempty"`
-	// OutputFile: where to append the sanitized-context audit log.
-	// Relative paths resolve under projects/<project>/ (NOT the
-	// working directory). "" (the default) disables audit logging
-	// entirely, independent of DryRun.
+	// OutputFile: DEPRECATED and ignored. Evidence is always written to
+	// projects/<project>/runs/<run_id>/ (mova.local/evidence). Kept only so
+	// existing project.json files still parse.
 	OutputFile string `json:"output_file,omitempty"`
 }
 

@@ -7,8 +7,7 @@
   "adapter": "file",
   "default_task": "analizar",
   "egress_audit": {
-  "dry_run": true,
-  "output_file": "egress_sanitized.md"
+  "dry_run": true
   },
   "agents": {
     "domain": "base",

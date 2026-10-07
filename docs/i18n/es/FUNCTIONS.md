@@ -11,7 +11,7 @@ envoltorio delgado que reemite un `tools/call` MCP, por lo que HTTP ≡ MCP por 
 ```
 ```bash
 echo '<json>' | mova mcp start --stdio                      # stdio
-curl -s localhost:3000/mcp -H 'Content-Type: application/json' -d '<json>'   # HTTP (mova mcp start --port 3000)
+curl -s localhost:3000/mcp -H 'Content-Type: application/json' -d '<json>'   # HTTP (mova mcp start --http --port 3000)
 ```
 
 ## 1. Núcleo — gobernanza pre-inferencia (el producto)
@@ -68,7 +68,7 @@ curl -s localhost:3000/mcp -H 'Content-Type: application/json' -d '<json>'   # H
 | Edición quirúrgica | `patch_file` · `filename`R `search`R `replace`R `project`o | `/mcp` | lenguaje natural («corrige X en archivo») |
 | Crear directorio | `create_directory` · `path`o `project`o | `/mcp` | lenguaje natural |
 | Aplicar cambios propuestos por el modelo | `chat_completion` · `apply_edits:"true"` | `/mcp` | prompt interactivo `[s]/[1..N]/[n]` (`"apply"` en `project.json`) |
-| Legado (preferir `save`) | `write_file` · `generate_word_contract` · `generate_pdf_document` · `generate_vector_graphic` · `generate_excel_report` · `trigger_diffusion_image` | `/mcp` | — |
+| Hooks (Claude Code `mcp_tool`) | `check_read` (PreToolUse: deny/no-decision) · `sanitize_tool_output` (PostToolUse: `updatedToolOutput`) — ver [MCP_INTEGRATION](MCP_INTEGRATION.md) |
 
 Formatos de escritura: texto/config (`.txt .md .json .yml .xml .csv .toml .ini .env .log`), código
 (`.js .ts .py .go .cs .java .php .rb .rs .c .cpp .h .kt .swift .sh`), web (`.html .css .sql`),
@@ -91,5 +91,5 @@ office (`.docx .xlsx .pdf`), media (`.svg .png`). Otro formato devuelve `Unsuppo
 
 - Archivar/borrar/configurar memoria: solo CLI. Administración de modelos e `init`: solo CLI (administrativo).
 - `get_knowledge`, `get_memory*`, `list_projects`: sin comando slash en chat (usar CLI o lenguaje natural).
-- Tools MCP heredadas (`write_file`, `generate_*`, `trigger_diffusion_image`) duplican `save` y quedan fuera del
+- Las tools heredadas (`write_file`, `generate_*`, `trigger_diffusion_image`) se eliminaron: `save` cubre esos formatos. Toda tool de archivos exige `project` y queda confinada al repo; las de lectura aplican `exclude`, `read_scope` y sanitización.
   propósito de gobernanza; candidatas a eliminación (ver informe estratégico).

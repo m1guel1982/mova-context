@@ -1,57 +1,61 @@
-# mova + Claude Code (MCP)
+# Mova with Claude Code, Codex and HTTP
 
-Claude Code is the model; mova is a **local MCP tool server** it can call (`mova mcp start --stdio`). mova does not replace Claude Code: it prepares, trims, masks, prices and records the context Claude receives *through mova*.
+[README](README.md) · [Español](../es/MCP_INTEGRATION.md)
 
-## 1. Connect (2 minutes)
-Prerequisite: `mova` on PATH and `MOVA_PROJECT_ROOT` = the mova folder (the installer sets both).
+## 1. Register Mova (stdio)
 
 ```bash
-# from your WORK repo; --scope project writes .mcp.json (shareable with the team)
-claude mcp add --transport stdio --scope project \
-  --env MOVA_PROJECT_ROOT=/abs/path/to/mova-context \
-  mova-context -- mova mcp start --stdio
-claude mcp list            # mova-context should be listed
+claude mcp add --transport stdio --scope project --env MOVA_PROJECT_ROOT=<mova path> mova-context -- mova mcp start
 ```
-Options go **before** the server name (Claude Code docs). Equivalent file: copy `config/mcp_clients/claude_code.json` to `.mcp.json` and edit the path (Windows: `"C:\\appMovaContext"`). On first use Claude Code asks you to approve a project-scoped server. Tools appear as `mcp__mova-context__<tool>`. Remove: `claude mcp remove mova-context -s project`.
 
-## 2. What to use from Claude Code
-| Goal | Tool | Note |
-|---|---|---|
-| See projects | `list_projects` | |
-| Price the context first | `estimate_budget` | local, no model call |
-| Get governed context | `get_full_context` | Focus/AST + sanitizer + PII masking + budget |
-| Audit a repo without a project | `context_trace` (`repo` or `project`) | report + diagram + `pii-audit-log.json` |
-| Evidence image | `generate_diagram` | |
-| Remember across sessions | `save_memory` / `get_memory` | shared by CLI/chat/MCP |
-| Several roles | `list_agents` / `run_agent` | example 08 |
-Do **not** use `chat_completion` here: it calls *another* model through mova. Claude Code already is the model.
+`mova mcp start` defaults to stdio. With this, the agent **may** call `get_full_context`, `read_file`, `estimate_budget`… but nothing forces it to: its own tools (Read, Bash, Grep) stay outside Mova.
 
-## 3. Verified vs not (honest)
-Verified (Linux, real binary, a stdio client speaking JSON-RPC like Claude Code): `initialize` → server `mova-context`, protocol `2024-11-05`; `tools/list` → 26 tools; `estimate_budget` on example 02 → 7153 tokens.
-Verified behaviour of `get_full_context` on example 02:
-- `dry_run: true` → Claude receives only an audit notice (555 bytes, `tokens_sent: 0`). Use it to **prove** nothing is handed over.
-- `dry_run: false` → Claude receives the governed context: 23,463 bytes, **171 `[PII_xxxxxxxx]` pseudonyms, 0 raw e-mails**.
-**Not verified:** a live Claude Code session (no Claude Code available to the author), Windows/macOS MCP runs.
+## 2. Extend the perimeter with hooks (Claude Code)
 
-## 4. Limits you must know (read before using at work)
-- mova governs only what passes **through mova**. Claude Code can still read files itself (`Read`, `Bash`) and send them to the provider. mova cannot see or stop that; with `dry_run` a determined host may try to reconstruct context from local files (documented in the README).
-- PII masking is heuristic; recall/precision not measured. It is evidence and mitigation, not compliance certification.
-- Ask your security/legal team about Claude Code's data terms for your organisation; mova does not change them.
+Claude Code supports `mcp_tool` hooks on `PreToolUse` and `PostToolUse`. Mova exposes two tools for that, sharing exactly the same policy as `read_file`:
 
-## 5. Make Claude Code actually go through mova
-1. **CLAUDE.md** in the work repo:
-   ```
-   Before reading source files for a task: call mcp__mova-context__estimate_budget, then get_full_context for project <name>.
-   Do not open files listed in project.json "exclude". After finishing, call save_memory with findings.
-   ```
-2. **`.claude/settings.json`** — allow the mova tools, deny direct reads of what must not leave (syntax per Claude Code permissions docs; `Read` rules do not cover shell commands, so also restrict `Bash` or use its sandbox):
-   ```json
-   { "permissions": {
-       "allow": ["mcp__mova-context__estimate_budget","mcp__mova-context__get_full_context","mcp__mova-context__context_trace"],
-       "deny":  ["Read(./.env)","Read(./secrets/**)","Read(./data/customers*.json)"] } }
-   ```
-3. **project.json** for the work repo: `mova init <name>` (or `mova context-trace --repo <path> < /dev/null`, then answer `Y` to generate one), set `"repo"` to the absolute path, `focus` / `exclude`, `budget.pii_masking.enabled: true`, `budget.max_tokens`, `"memory": true`, and `egress_audit.dry_run: false` (so Claude can read the *governed* context).
-4. Check the evidence: `egress_sanitized.md`, `context-report.md`, `pii-audit-log.json` in the project folder.
+- `check_read` (PreToolUse): returns `permissionDecision: "deny"`, with the reason, for paths outside the repo, excluded, or outside focus (`read_scope: focus`). When the read is allowed it returns `{}`: Mova never auto-approves, so the normal permission flow is kept.
+- `sanitize_tool_output` (PostToolUse): for `Read`, replaces the output with the governed view (focused symbols only, excluded symbols stripped, secrets and PII sanitized) via `updatedToolOutput`. For other tools (Bash, Grep), it sanitizes the text.
 
-## 6. Troubleshooting
-`claude mcp list` shows it failed → run `mova mcp start --stdio` by hand; if root is not found, `MOVA_PROJECT_ROOT` is missing in `env`. Tool answers a "blocked" notice → `dry_run: true`. Server not asked for approval in `claude -p` (non-interactive loads project servers without asking).
+Example `.claude/settings.json`. Adjust field names to the `mcp_tool` hook syntax of your Claude Code version:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{ "matcher": "Read|Grep|Glob", "hooks": [{
+      "type": "mcp_tool", "server": "mova-context", "tool": "check_read",
+      "input": { "project": "04-nebula-delivery", "tool_name": "${tool_name}", "tool_input": "${tool_input}" } }] }],
+    "PostToolUse": [{ "matcher": "Read|Bash", "hooks": [{
+      "type": "mcp_tool", "server": "mova-context", "tool": "sanitize_tool_output",
+      "input": { "project": "04-nebula-delivery", "tool_name": "${tool_name}", "tool_input": "${tool_input}", "tool_response": "${tool_response}" } }] }]
+  }
+}
+```
+
+Every decision is recorded in `projects/<p>/runs/<session run>/events.jsonl`.
+
+**Limits:**
+- @-mentions inject content without a tool call: use Claude Code permission `deny` rules for those too.
+- Grep and Glob are checked at directory level only.
+- A host that does not run hooks is not governed.
+
+**Verification status:** the responses of both tools are covered by Mova tests. The end-to-end integration inside Claude Code is **not** verified yet.
+
+## 3. Codex
+
+Codex hooks can deny in PreToolUse and, in PostToolUse, replace a tool result with a block message. They cannot yet replace an MCP tool output with a sanitized version. Codex also reads files through shell commands, so enforcing `read_scope` would require interpreting commands, which Mova does not do.
+
+In Codex, Mova is useful to build and validate the spec (`mova run`, closure check, evidence) and for the context the agent requests over MCP. It does not govern Codex's own reads.
+
+## 4. HTTP
+
+```bash
+mova mcp start --http --port 3000                          # listens on 127.0.0.1
+MOVA_HTTP_TOKEN=… mova mcp start --http --bind 0.0.0.0     # non-loopback: token required
+```
+
+- Without `MOVA_HTTP_TOKEN`, a non-loopback bind refuses to start.
+- With a token, every request must send `Authorization: Bearer <token>`.
+- Non-localhost `Origin` headers are rejected.
+
+The server exposes reads **and writes** of the project repo: do not publish it on a network without a token.

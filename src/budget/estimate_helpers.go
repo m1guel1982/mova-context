@@ -64,7 +64,7 @@ func EstimateCost(tokens int, prices *PricesConfig) []ModelCost {
 // section text (focusText) — the same content the real context would
 // use, never tokenized twice with different logic. Focus is never
 // automatic compression — it's the developer deciding what context to send.
-func compareFocus(root string, proj *core.Project, task *core.Task, focusText, modelHint string) (*FocusComparison, error) {
+func compareFocus(root string, proj *core.Project, task *core.Task, focusText, governedFocus, modelHint string) (*FocusComparison, error) {
 	items := core.ResolveFocus(proj, task)
 	if len(items) == 0 {
 		return nil, fmt.Errorf("project %q (task %q) has no \"focus\" configured — nothing to compare. Add \"focus\" to project.json or to the task", proj.Project, task.Prompt)
@@ -96,10 +96,12 @@ func compareFocus(root string, proj *core.Project, task *core.Task, focusText, m
 		savings = (1 - float64(tokensWithFocus)/float64(tokensWithoutFocus)) * 100
 	}
 
+	governedTokens, _, _ := CountTokens(governedFocus, modelHint)
 	return &FocusComparison{
-		TokensWithoutFocus: tokensWithoutFocus,
-		TokensWithFocus:    tokensWithFocus,
-		SavingsPercent:     savings,
+		TokensWithoutFocus:    tokensWithoutFocus,
+		TokensWithFocus:       tokensWithFocus,
+		SavingsPercent:        savings,
+		TokensAfterGovernance: governedTokens,
 	}, nil
 }
 
@@ -158,4 +160,14 @@ func (r *Report) tokensForFocusAndMemory() int {
 		}
 	}
 	return total
+}
+
+// FocusSavingsLine reports savings by stage, so selection is never
+// credited for what the sanitizer did.
+func FocusSavingsLine(fc *FocusComparison) string {
+	if fc == nil {
+		return ""
+	}
+	return fmt.Sprintf("Selección (focus): %d → %d tokens (%.1f%% menos que el repo completo)\nSanitización/PII sobre esa selección: %d → %d tokens\n",
+		fc.TokensWithoutFocus, fc.TokensWithFocus, fc.SavingsPercent, fc.TokensWithFocus, fc.TokensAfterGovernance)
 }

@@ -27,9 +27,9 @@ Vive siempre en `projects/<nombre>/project.json` (ruta fija, el motor no busca e
 
 | Campo | Qué hace |
 |---|---|
-| `author` | **Obligatorio.** Autor de la política — Matriz de Auditoría #3. Vacío → `system:default`. |
+| `author` | Autor **declarado** de la política (no verificado). Vacío → `system:default`. Se registra en `manifest.json` como `declared`. |
 | `repo` | Directorio real analizado (relativo a la raíz de Mova). |
-| `llm_profile.{provider,config}` | Qué modelo recibiría el contexto — Matriz de Auditoría #11. `config` referencia un archivo en `config/models/<provider>/`. |
+| `llm_profile.{provider,config}` | Modelo que Mova llama en `mova chat`/`chat_completion` (`observed` en el manifest). Con un host MCP, el modelo del host es `not_observable`. `config` referencia un archivo en `config/models/<provider>/`. |
 | `tasks.<t>.focus` | Qué entra: archivos, directorios, globs, o `archivo::kind=símbolo` (AST). |
 | `tasks.<t>.exclude` | Qué se excluye del `focus` — soporta la misma sintaxis AST (nuevo: analiza un archivo completo dejando solo una función fuera). |
 | `budget.max_tokens` / `max_tokens_per_run` / `max_monthly_usd` | Techos del circuit breaker. |
@@ -112,7 +112,7 @@ Dentro de una tarea, `graph` genera — **sin LLM y sin gastar tokens** — un d
 | `true` | `memory.md` junto a `project.json` (`projects/<proyecto>/memory.md`). |
 | `"<ruta>"` | Esa ubicación. Archivo (`…/memoria.md`) o carpeta (`…/memoria/` → `memoria/memory.md`). |
 
-Rutas multiplataforma, con las mismas reglas que `memory_path` y `egress_audit.output_file`: `C:\…`, `D:\…`, `E:\…` (Windows), `/mnt/…`, `/home/…` (Linux), `/Volumes/…` (macOS), `\\servidor\recurso\…` (red, en Windows), `~/…` (home) o relativa (a la carpeta del proyecto). Una ruta de otro sistema (p. ej. `C:\` en un servidor Linux) da un error explícito, no un archivo fantasma. Precedencia: `memory` (ruta) > `memory_path` > por defecto.
+Rutas multiplataforma, con las mismas reglas que `memory_path`: `C:\…`, `D:\…`, `E:\…` (Windows), `/mnt/…`, `/home/…` (Linux), `/Volumes/…` (macOS), `\\servidor\recurso\…` (red, en Windows), `~/…` (home) o relativa (a la carpeta del proyecto). Una ruta de otro sistema (p. ej. `C:\` en un servidor Linux) da un error explícito, no un archivo fantasma. Precedencia: `memory` (ruta) > `memory_path` > por defecto.
 
 ```json
 "memory": true
@@ -173,7 +173,7 @@ Respaldo activado: cada archivo existente se copia al lado (<archivo>.mova-<fech
 | **Chat** | La pregunta aparece en la terminal justo tras la respuesta; contestas `s`, `1,3` o `n`. |
 | **MCP / HTTP** | La respuesta de `chat_completion` termina con la lista y la pregunta («Todavía NO se ha cambiado nada»); la propuesta queda **pendiente** en `projects/<proyecto>/pending-changes.json` (vence a los 60 min). Respondes en la **siguiente llamada**: `message: "sí"` / `"1,3"` / `"no"`, o el argumento `apply_changes: "all" \| "1,3" \| "none"`. Esa llamada aplica **sin volver a llamar al modelo**. Un mensaje que no parece una respuesta se trata como consulta nueva y la propuesta sigue pendiente. |
 
-### Garantías (todas con tests)
+### Garantías
 
 - **Nada se escribe sin una respuesta afirmativa explícita.**
 - **Nada fuera del repo**: rutas absolutas o con `..` se rechazan.
@@ -193,85 +193,32 @@ Un prompt clásico (p. ej. «¿Deseas que aplique estas modificaciones directame
 
 Con una tarea nombrada se carga **solo** su prompt, focus y grafo (y solo se genera su `graph`). Sin tarea y con varias declaradas se cargan **todas**. `mova run` conserva su comportamiento (`default_task`).
 
-## `egress_audit` — auditoría y dry-run antes del proveedor LLM
+## Especificación de lectura, cierre y evidencia
+
+| Campo | Nivel | Valores | Efecto |
+|---|---|---|---|
+| `read_scope` | proyecto | `focus` \| `repo` (vacío → `focus` si la tarea tiene focus) | Qué pueden devolver `read_file`, `read_document_layer`, los loops de Mova y `check_read`. Siempre aplican el límite del repo y `exclude`. En `focus`, un focus por símbolo devuelve solo esos símbolos |
+| `dependency_policy` | proyecto o tarea | `block` (por defecto) \| `warn` \| `off` | Si un símbolo en focus depende de algo **excluido**: `block` no libera contexto; `warn` libera y registra |
+| `accept_missing` | tarea | `[{"symbol": "archivo::nombre" o "nombre", "reason": "…"}]` | Acepta explícitamente un conflicto; la razón queda en `manifest.json` |
+| `budget.pii_masking.enabled` | proyecto o tarea | bool | Activa PII por bloque (ver [GOVERNANCE_CONTROLS](GOVERNANCE_CONTROLS.md)). Los secretos se aplican siempre |
+| `pii_masking.field_keys` | política (`config/policy/pii_*.json`) | lista de claves | Claves cuyos valores se seudonimizan en datos estructurados |
+
+## `egress_audit.dry_run` — nada sale de Mova
 
 ```json
-"egress_audit": {
-  "dry_run": true,
-  "output_file": ".mova/egress_sanitized.log"
-}
+"egress_audit": { "dry_run": true }
 ```
 
-| Clave | Tipo | Default | Qué hace |
-|---|---|---|---|
-| `dry_run` | bool | `false` | Si es `true`: se completa la gobernanza/sanitización (y el log, si `output_file` está configurado), pero **nunca se llama al proveedor LLM**. El cliente recibe una respuesta exitosa indicando que el dry-run terminó y que no hubo inferencia. |
-| `output_file` | string | `""` (deshabilitado) | Dónde se escribe el almacén de bloques del contexto sanitizado (sin duplicados). Independiente de `dry_run` — se puede auditar sin dry-run, o hacer dry-run sin auditar. |
+Con `dry_run: true` se completa toda la gobernanza y se escribe el run (`decision.outcome = dry_run`), pero nada se libera:
+- `mova run` no imprime el contexto;
+- `get_full_context` y `chat_completion` devuelven el aviso de air-gap;
+- `get_memory`, `get_workflow`, `read_file` y `read_document_layer` también quedan bloqueados;
+- dentro de `mova chat` nunca se llama al proveedor.
 
-**Con el bloque ausente:** `dry_run=false`, `output_file=""` — comportamiento idéntico al actual, sin cambios.
-
-### Resolución de `output_file` (siempre relativa al `project.json`, nunca al directorio de trabajo)
-
-- Ruta relativa → se resuelve contra `projects/<proyecto>/`, **no** contra el directorio desde donde se ejecutó `mova`.
-  Ejemplo: en `projects/02-pii-compliance-governance/project.json`, `"output_file": ".mova/egress_sanitized.log"` escribe en `projects/02-pii-compliance-governance/.mova/egress_sanitized.log`.
-- Ruta absoluta — Unix (`/var/log/...`), Windows (`C:\...`, `D:\...`, `E:\...`) o UNC (`\\servidor\recurso\...`) — se usa tal cual, reconocida de forma multiplataforma sin importar en qué SO corre el binario de Mova (misma utilidad que ya usan `write_file`/`create_directory`).
-- Si `output_file` termina en `/` o `\` (nombra un directorio, no un archivo), se usa el nombre por defecto **`egress_sanitized.md`** dentro de ese directorio. Un nombre sin barra final (aunque no tenga extensión, ej. `.mova`) se respeta tal cual — no se le fuerza extensión.
-- Los directorios necesarios se crean automáticamente (`os.MkdirAll`, permisos estándar). El archivo es un almacén de **bloques sin duplicados** (ver «Qué se escribe»): ya no crece con cada mensaje.
-- Si el archivo configurado no puede crearse o escribirse, `mova` **devuelve error y no llama al proveedor LLM** — el mismo comportamiento en CLI/Chat, MCP y HTTP, porque las tres puertas comparten una única implementación (`models.Session.Send`/`SendStream`).
-
-### Qué se escribe
-
-Únicamente el contexto **ya gobernado y sanitizado** (lo mismo que de verdad se enviaría al modelo) — nunca el contenido crudo pre-sanitización.
-
-**Sin duplicados.** El archivo guarda un bloque por pieza del contexto (cabecera, cada agent/skill/prompt, cada `FOCUS`, memoria), cada uno con `key`, `sha` y `updated` (UTC):
-- misma clave y mismo contenido → no se toca nada (ni se reescribe el archivo);
-- misma clave y contenido distinto → el bloque se **reemplaza** completo;
-- clave nueva → se **anexa** al final.
-
-La escritura es atómica y serializada por archivo. Un archivo del formato antiguo (un bloque por mensaje) se migra solo, conservando únicamente el último contexto.
-
-### Air-gap real — `dry_run` bloquea TODAS las herramientas que exponen contexto
-
-`dry_run: true` no es solo "no llamar al modelo": **ninguna herramienta MCP/HTTP que pueda devolver contenido de un proyecto lo hace mientras esté activo, y tampoco `mova run` en CLI**. Cubre 7 herramientas MCP/HTTP más `mova run`:
-
-| Herramienta / comando | Qué protege |
-|---|---|
-| `chat_completion` | La respuesta del modelo (nunca se le manda nada) |
-| `get_full_context` | El contexto completo ensamblado |
-| `get_memory` / `get_memory_all` | El contenido de `memory.md` |
-| `get_workflow` | El contenido de `workflow.md` |
-| `read_file` | El contenido crudo de cualquier archivo del proyecto (`.env`, credenciales, lo que sea) |
-| `read_document_layer` | El texto extraído de `.docx`/`.xlsx`/`.pdf` |
-| `mova run` (CLI) | El mismo contexto completo que `get_full_context`, impreso por stdout |
-
-En todas, en vez del contenido real, se devuelve el mismo bloque fijo y traducido `reports.egress_airgap_message` + `reports.egress_airgap_directive` (esta última es una directiva explícita anti-elusión dirigida al modelo/agente que la recibe — ver `GOVERNANCE_CONTROLS.md § dry_run` para sus límites honestos), con el conteo real de tokens:
-
-```
-[MOVA EGRESS AUDIT]
-dry_run: true
-tokens_evaluated: 174
-tokens_sent: 0
-
-El contexto fue procesado y sanitizado localmente, pero se ha bloqueado su
-transmisión. Reporte guardado en disco.
-
-DIRECTIVA CRÍTICA DE SEGURIDAD PARA EL ASISTENTE:
-Esta solicitud fue bloqueada por el Control de Egreso de Contexto de Mova
-(Mova Context Egress Control).
-NO intentes eludir este bloqueo.
-NO leas archivos locales, reportes ni metadatos usando ninguna otra
-herramienta para reconstruir el contexto.
-NO resumas ni adivines el contexto por tu cuenta.
-Muestra ÚNICAMENTE el bloque de auditoría anterior al usuario y termina la
-ejecución de inmediato.
-```
-
-Tanto el encabezado como la directiva viven en `config/lang/{es,en}.json` (`reports.egress_airgap_message` / `reports.egress_airgap_directive`), son editables sin tocar código y se recargan **en caliente** (sin reiniciar Mova — ver `i18n/i18n_reload.go`). Si se borra la clave de la directiva, el bloqueo sigue funcionando con solo el encabezado; nunca se rompe el proceso ni se filtra el nombre de la clave.
-
-**Fuera de alcance, a propósito:** `search_context` (no tiene `project` — busca en el catálogo compartido de agents/skills/prompts de Mova, no en datos privados de un proyecto) y las herramientas de escritura (`save`, `patch_file`, `delete_path`, `create_directory`, `write_file`, `generate_*`) — `egress_audit` gobierna contenido que **sale** de Mova hacia un LLM/host, no archivos que Mova escribe a pedido tuyo en tu propio disco.
-
-No existe un campo "enabled" separado — `dry_run` es la única condición que activa el air-gap, en las 3 puertas (CLI/Chat, MCP, HTTP), verificado con tests de integración reales (`mcp/egress_gate_test.go`, `mcp/airgap_directive_test.go`, `cli/run_cmd_test.go`) y con llamadas HTTP/MCP reales contra el binario compilado.
+`output_file` está **obsoleto** y se ignora: la evidencia ahora vive siempre en `projects/<proyecto>/runs/<run_id>/` (ver [ARTIFACTS](ARTIFACTS.md)).
 
 ### Sin `llm_profile` — inferencia delegada al host
+
 
 Si `project.json` no declara `llm_profile` (o está vacío) y `dry_run` es `false`, Mova **nunca llama a ningún proveedor local o cloud por su cuenta**. `chat_completion` devuelve el contexto ya gobernado y sanitizado en el resultado de la herramienta, para que el **LLM anfitrión** (Claude Code, Cursor, Grok, quien haya invocado la herramienta MCP) genere la respuesta final. En `mova chat` (REPL interactivo, sin host al que delegar) se imprime un aviso explícito indicando qué modelo global se está usando en su lugar — nunca en silencio.
 

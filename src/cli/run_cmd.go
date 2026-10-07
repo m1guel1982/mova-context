@@ -34,6 +34,7 @@ package main
 
 import (
 	"fmt"
+	"mova.local/evidence"
 
 	"mova.local/budget"
 	"mova.local/core"
@@ -77,25 +78,30 @@ func runProject(root string, adapter core.Adapter, project, task string) {
 	if gated.Sections != nil {
 		printContextSummary(gated.Sections, proj)
 	}
+	dryRun, _ := core.ResolveEgressAudit(root, project, proj)
+
+	// Evidence first: every outcome (blocked, dry_run, released) leaves
+	// one immutable runs/<run_id>/ — see mova.local/evidence.
+	run, rerr := budget.RecordRun(root, project, task, proj, gated, budget.RunInfo{
+		Door:  "cli:run",
+		Agent: evidence.Attr{Value: "mova-cli", Source: "observed:cli"},
+		Model: declaredModel(proj),
+	}, dryRun)
+	if rerr != nil {
+		consolePrint("\n[Evidence] ERROR: no se pudo escribir la evidencia, no se libera contexto: " + rerr.Error() + "\n")
+		return
+	}
+	consolePrint(fmt.Sprintf("[Evidence] run %s → %s\n", run.ID, run.Dir))
+
 	if gated.Err != nil {
 		consolePrint("\n" + gated.Err.Error() + "\n")
 		return
 	}
 
-	// Egress air-gap gate — this is ALSO a door that hands finished
-	// (governed, PII-masked) context straight to whatever the terminal
-	// is piped into, exactly like MCP's get_full_context/chat_completion
-	// do for an MCP host. It must honor "egress_audit": {"dry_run":
-	// true} the same way — models/egress_audit.go's own package
-	// comment already documented `mova run` as one of the doors
-	// sharing this ONE implementation; this call is what actually
-	// makes that true, instead of `mova run` silently printing the
-	// real context regardless of dry_run. See models.EgressGate for
-	// the on-disk evidence write (egress_audit.output_file), which
-	// also always happens here, independent of dry_run, exactly like
-	// every other door.
-	dryRun, outputFile := core.ResolveEgressAudit(root, project, proj)
-	gateResult, gerr := models.EgressGate(dryRun, outputFile, gated.Text, modelHint)
+	// Egress air-gap: `mova run` hands governed context to whatever the
+	// terminal is piped into, so it honors egress_audit.dry_run exactly
+	// like get_full_context/chat_completion.
+	gateResult, gerr := models.EgressGate(dryRun, gated.Text, modelHint)
 	if gerr != nil {
 		consolePrint("\n" + gerr.Error() + "\n")
 		return
@@ -106,6 +112,16 @@ func runProject(root string, adapter core.Adapter, project, task string) {
 	}
 
 	consolePrint(gated.Text)
+}
+
+// declaredModel is the model declared in project.json's llm_profile —
+// only "declared": `mova run` never calls a model, and whatever reads its
+// stdout is outside Mova's perimeter.
+func declaredModel(proj *core.Project) evidence.Attr {
+	if proj != nil && proj.LLMProfile != nil && proj.LLMProfile.Config != "" {
+		return evidence.Attr{Value: proj.LLMProfile.Provider + "/" + proj.LLMProfile.Config, Source: "declared:project.json llm_profile (no observado)"}
+	}
+	return evidence.Attr{Value: "unknown", Source: "not_observable: el contexto sale por stdout"}
 }
 
 // runProjectCount implements `mova run --count <project> [task]
@@ -148,8 +164,7 @@ func printCountReport(project string, report *budget.Report) {
 		consolePrint(fmt.Sprintf("  %s/%s: $%.4f %s\n", c.Provider, c.Model, c.USD, report.Currency))
 	}
 	if report.Focus != nil {
-		consolePrint(fmt.Sprintf("Focus savings: %.1f%% fewer tokens (%d → %d)\n",
-			report.Focus.SavingsPercent, report.Focus.TokensWithoutFocus, report.Focus.TokensWithFocus))
+		consolePrint(budget.FocusSavingsLine(report.Focus))
 	}
 	consolePrint("\nLocal estimate (tiktoken-go) — no model was called. Run `mova budget " + project + "` for the same estimate saved to a report file.\n")
 }

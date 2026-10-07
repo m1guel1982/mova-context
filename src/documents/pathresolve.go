@@ -3,11 +3,10 @@
 // generate_word_contract, generate_excel_report, generate_pdf_document,
 // generate_vector_graphic, trigger_diffusion_image):
 //
-//  1. An absolute path (Unix `/...` or Windows `C:\...` / `C:/...` / UNC
-//     `\\server\share`) is honored exactly as given, regardless of which OS
-//     Mova Context itself is running on — chat/MCP/HTTP all go through this
-//     same code, so "create it at C:/carpeta/archivo.txt" behaves
-//     identically no matter which transport asked for it.
+//  1. An absolute path (Unix or Windows style) is accepted ONLY if it lies
+//     inside the project's repo (see confine/WithinRepo). Anything outside —
+//     absolute, "../" traversal, or a symlink escaping the repo — is
+//     rejected with ErrOutsideRepo, on every door (chat/MCP/HTTP).
 //  2. No path given → the project's `repo` (from project.json), same
 //     default as before.
 //  3. A bare directory name with no path separators ("config", "reportes")
@@ -85,14 +84,18 @@ func ResolveDirectoryPath(root, repo, requested string) (resolved string, ambigu
 		if err != nil {
 			return "", nil, err
 		}
-		return normalized, nil, nil
+		return confine(repoDir, normalized)
 	}
 
 	cleaned := toSlash(requested)
 	if !strings.Contains(cleaned, "/") {
-		return searchOrPlaceUnder(repoDir, cleaned)
+		resolved, ambiguous, err := searchOrPlaceUnder(repoDir, cleaned)
+		if err != nil || len(ambiguous) > 0 {
+			return resolved, ambiguous, err
+		}
+		return confine(repoDir, resolved)
 	}
-	return filepath.Join(repoDir, filepath.FromSlash(cleaned)), nil, nil
+	return confine(repoDir, filepath.Join(repoDir, filepath.FromSlash(cleaned)))
 }
 
 // ResolveFilePath resolves requested as a file: only the directory portion
@@ -112,7 +115,7 @@ func ResolveFilePath(root, repo, requested string) (resolved string, ambiguous [
 		if err != nil {
 			return "", nil, err
 		}
-		return normalized, nil, nil
+		return confine(repoDir, normalized)
 	}
 
 	cleaned := toSlash(requested)
@@ -121,15 +124,71 @@ func ResolveFilePath(root, repo, requested string) (resolved string, ambiguous [
 
 	switch {
 	case dir == "":
-		return filepath.Join(repoDir, base), nil, nil
+		return confine(repoDir, filepath.Join(repoDir, base))
 	case !strings.Contains(dir, "/"):
 		resolvedDir, ambiguous, err := searchOrPlaceUnder(repoDir, dir)
 		if err != nil || len(ambiguous) > 0 {
 			return "", ambiguous, err
 		}
-		return filepath.Join(resolvedDir, base), nil, nil
+		return confine(repoDir, filepath.Join(resolvedDir, base))
 	default:
-		return filepath.Join(repoDir, filepath.FromSlash(dir), base), nil, nil
+		return confine(repoDir, filepath.Join(repoDir, filepath.FromSlash(dir), base))
+	}
+}
+
+// ErrOutsideRepo is returned when a requested path resolves outside the
+// project's repo (absolute path elsewhere, "../" traversal, or a symlink
+// that points out of the repo). Every file/directory tool goes through
+// ResolveFilePath/ResolveDirectoryPath, so this is the single boundary.
+var ErrOutsideRepo = fmt.Errorf("ruta fuera del repo del proyecto: denegada")
+
+// confine is the repo boundary: candidate must stay inside repoDir after
+// cleaning and after resolving symlinks of the deepest existing ancestor.
+func confine(repoDir, candidate string) (string, []string, error) {
+	if WithinRepo(repoDir, candidate) {
+		return filepath.Clean(candidate), nil, nil
+	}
+	return "", nil, fmt.Errorf("%w: %s", ErrOutsideRepo, candidate)
+}
+
+// WithinRepo reports whether candidate is inside repoDir (or is repoDir),
+// following symlinks of every existing path component.
+func WithinRepo(repoDir, candidate string) bool {
+	base := realPath(filepath.Clean(repoDir))
+	target := realPath(filepath.Clean(candidate))
+	rel, err := filepath.Rel(base, target)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+}
+
+// realPath resolves symlinks of the longest existing prefix of p and
+// re-appends the non-existing remainder (files about to be created).
+func realPath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		abs = p
+	}
+	rest := ""
+	cur := abs
+	for {
+		if r, err := filepath.EvalSymlinks(cur); err == nil {
+			if rest == "" {
+				return r
+			}
+			return filepath.Join(r, rest)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return abs
+		}
+		if rest == "" {
+			rest = filepath.Base(cur)
+		} else {
+			rest = filepath.Join(filepath.Base(cur), rest)
+		}
+		cur = parent
 	}
 }
 

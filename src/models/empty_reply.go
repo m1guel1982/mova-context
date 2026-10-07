@@ -55,6 +55,12 @@ func (u Usage) IsTruncated() bool {
 func (s *Session) finishTurn(mc *ModelConfig, model, reply string, usage Usage, err error) (string, error) {
 	s.LastUsage = usage
 	s.LastTruncated = err == nil && usage.IsTruncated() && strings.TrimSpace(reply) != ""
+	ev := map[string]any{"provider": s.Provider, "model": model, "messages": len(s.History) + 1,
+		"input_tokens_reported": usage.PromptTokens, "output_tokens_reported": usage.CompletionTokens}
+	if err != nil {
+		ev["error"] = err.Error()
+	}
+	_ = s.Run.Event("provider_call", ev)
 	if err == nil && strings.TrimSpace(reply) == "" {
 		err = &EmptyReplyError{Provider: s.Provider, Model: model, Finish: usage.FinishReason, MaxTokens: mc.ResponseMax(0), Usage: usage}
 	}

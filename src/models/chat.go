@@ -6,6 +6,8 @@ package models
 import (
 	"context"
 	"fmt"
+
+	"mova.local/evidence"
 )
 
 // maxHistoryMessages acota cuántos turnos previos se reenvían al modelo.
@@ -35,16 +37,18 @@ type Session struct {
 	// system ChatMessage built below, read only by provider_anthropic.go.
 	CacheBoundary int
 
-	// EgressAuditDryRun / EgressAuditOutputFile: this project's
-	// resolved "egress_audit" config (see core.ResolveEgressAudit,
-	// core.EgressAuditConfig). Set by each door right after SetSystem
-	// — same call-site pattern as CacheBoundary above — so Send/
-	// SendStream stay the ONE place that actually audits/dry-runs,
-	// shared by CLI/Chat, MCP, and HTTP (see egress_audit.go).
-	// Zero value ("", false) = feature fully disabled, today's
-	// behavior unchanged.
-	EgressAuditDryRun     bool
-	EgressAuditOutputFile string
+	// EgressAuditDryRun: project.json "egress_audit.dry_run" — when true,
+	// Send/SendStream never call the provider (see egress_audit.go).
+	EgressAuditDryRun bool
+	// Run: the evidence run of this session (mova.local/evidence). Every
+	// provider call, dry-run block and tool result Mova observes is
+	// appended to its events.jsonl. nil = no evidence (tests).
+	Run *evidence.Run
+	// ProjectName / TaskName: the project directory and task scope of the
+	// governed context — the tool loop forces these on every tool call so
+	// a model cannot read under another project's (or no) policy.
+	ProjectName string
+	TaskName    string
 	// LastReplyWasDryRun is true right after Send/SendStream returned
 	// because egress_audit's dry_run blocked the provider call — the
 	// one reliable way callers (cli/chat_cmd.go, mcp/chat_tool.go) tell

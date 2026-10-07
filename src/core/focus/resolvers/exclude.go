@@ -120,3 +120,24 @@ func (m *excludeMatcher) excludesPath(absPath string) bool {
 func skipDirOrExcluded(ctx focus.Context, m *excludeMatcher, name string) bool {
 	return ctx.SkipDir(name) || (m != nil && m.excludesName(name))
 }
+
+// PathExcluded reports whether absPath is excluded by a whole-file/dir
+// "exclude" entry (symbol-level "file::kind=names" entries never exclude
+// a whole file — see ApplyAstSymbolExcludes). Exported so the read
+// policy (core.CheckRead) applies EXACTLY the matcher the focus engine
+// uses, instead of a second interpretation of "exclude".
+func PathExcluded(patterns []string, absPath string) bool {
+	return newExcludeMatcher("", patterns).excludesPath(absPath)
+}
+
+// HasSymbolExcludes reports whether any "file::kind=names" exclude entry
+// targets relPath (repo-relative, slash-separated).
+func HasSymbolExcludes(patterns []string, relPath string) bool {
+	for _, e := range patterns {
+		spec, ok := parseAstSymbolTarget(e)
+		if ok && sameFileTarget(spec.file, relPath) {
+			return true
+		}
+	}
+	return false
+}

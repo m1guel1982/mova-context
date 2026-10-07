@@ -164,7 +164,7 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 			// Mismo registrador que el chat y chat_completion: formato con
 			// etiqueta de tarea, deduplicación, y respeta "memory" de
 			// project.json (false/ausente = no registra).
-			res, rerr := core.RecordMemory(adapter, root, project, str(args, "task"), entry, core.RecordOptions{Raw: true})
+			res, rerr := core.RecordMemory(adapter, root, project, str(args, "task"), entry, core.RecordOptions{Raw: true, Source: "host"})
 			switch {
 			case rerr != nil:
 				err = rerr
@@ -219,10 +219,12 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 		result, err = listAgentsTool(root, args)
 	case "run_agent":
 		result, err = runAgentTool(adapter, root, args)
-	case "read_document_layer", "generate_word_contract", "generate_pdf_document",
-		"generate_vector_graphic", "generate_excel_report", "trigger_diffusion_image",
-		"read_file", "write_file", "patch_file", "create_directory", "save", "delete_path":
+	case "read_document_layer", "read_file", "patch_file", "create_directory", "save", "delete_path":
 		result, err = documentTool(adapter, root, tool, args)
+	case "check_read":
+		result, err = checkReadHookTool(adapter, root, args)
+	case "sanitize_tool_output":
+		result, err = sanitizeOutputHookTool(adapter, root, args)
 	default:
 		return serializeError(-32602, "unknown tool: "+tool, id)
 	}
@@ -243,11 +245,17 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 	// "project" argument and searches Mova's own shared knowledge base
 	// (agents/skills/prompts), never a project's private context — see
 	// airgapGatedTools' doc comment for the exact scope line.
-	if err == nil && project != "" && airgapGatedTools[tool] {
-		if proj, perr := adapter.GetProject(project); perr == nil {
-			dryRun, outputFile := core.ResolveEgressAudit(root, project, proj)
-			if dryRun {
-				gateResult, gerr := models.EgressGate(true, outputFile, result, "")
+	if err == nil && airgapGatedTools[tool] {
+		if project == "" {
+			err = fmt.Errorf("\"project\" es obligatorio para %s", tool)
+		} else if proj, perr := adapter.GetProject(project); perr != nil {
+			err = perr
+		} else {
+			if tool == "get_memory" || tool == "get_memory_all" {
+				result, _ = budget.GovernText(root, proj, str(args, "task"), "memory.md", result)
+			}
+			if dryRun, _ := core.ResolveEgressAudit(root, project, proj); dryRun {
+				gateResult, gerr := models.EgressGate(true, result, "")
 				if gerr != nil {
 					err = gerr
 				} else {
@@ -265,7 +273,7 @@ func executeTool(adapter core.Adapter, root, tool string, args map[string]any, i
 		// returned as-is — appending "Please use 'list_projects'" on top
 		// would be misleading (it implies the PROJECT name was wrong,
 		// when a Budget error has nothing to do with that).
-		if !strings.Contains(text, "\nSuggestion:") {
+		if !strings.Contains(text, "\nSuggestion:") && !strings.Contains(text, "Mova") && !strings.Contains(text, "obligatorio") && !strings.Contains(text, "fuera del repo") {
 			text = fmt.Sprintf("Error running tool: %s. Please use 'list_projects' to see valid projects.", text)
 		}
 		return serializeResult(map[string]any{

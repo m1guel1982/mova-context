@@ -1,4 +1,4 @@
-\xef\xbb\xbf# uninstall.ps1 -- Mova Context uninstaller for Windows (undoes installers\windows\install.ps1).
+# uninstall.ps1 -- Mova Context uninstaller for Windows (undoes installers\windows\install.ps1).
 # Removes: mova.exe (+ mova.exe.old), the user PATH entry, the user variable MOVA_PROJECT_ROOT, temp leftovers.
 # The repo folder (your projects / memory) is deleted ONLY if you confirm or pass -RemoveRepo.
 # Usage: uninstall.ps1 [-InstallDir <path>] [-RemoveRepo | -KeepRepo] [-PurgePath] [-Yes] [-DryRun]

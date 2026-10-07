@@ -11,7 +11,7 @@ wrapper that re-issues an MCP `tools/call`, so HTTP ≡ MCP by construction.
 ```
 ```bash
 echo '<json>' | mova mcp start --stdio                      # stdio
-curl -s localhost:3000/mcp -H 'Content-Type: application/json' -d '<json>'   # HTTP (mova mcp start --port 3000)
+curl -s localhost:3000/mcp -H 'Content-Type: application/json' -d '<json>'   # HTTP (mova mcp start --http --port 3000)
 ```
 
 ## 1. Core — pre-inference governance (the product)
@@ -68,7 +68,7 @@ curl -s localhost:3000/mcp -H 'Content-Type: application/json' -d '<json>'   # H
 | Surgical edit | `patch_file` · `filename`R `search`R `replace`R `project`o | `/mcp` | natural language ("fix X in file") |
 | Create directory | `create_directory` · `path`o `project`o | `/mcp` | natural language |
 | Apply model-proposed changes | `chat_completion` · `apply_edits:"true"` | `/mcp` | interactive `[s]/[1..N]/[n]` prompt (`"apply"` in `project.json`) |
-| Legacy (prefer `save`) | `write_file` · `generate_word_contract` · `generate_pdf_document` · `generate_vector_graphic` · `generate_excel_report` · `trigger_diffusion_image` | `/mcp` | — |
+| Hooks (Claude Code `mcp_tool`) | `check_read` (PreToolUse: deny/no-decision) · `sanitize_tool_output` (PostToolUse: `updatedToolOutput`) — see [MCP_INTEGRATION](MCP_INTEGRATION.md) |
 
 Supported write formats: text/config (`.txt .md .json .yml .xml .csv .toml .ini .env .log`), code
 (`.js .ts .py .go .cs .java .php .rb .rs .c .cpp .h .kt .swift .sh`), web (`.html .css .sql`),
@@ -91,5 +91,5 @@ office (`.docx .xlsx .pdf`), media (`.svg .png`). Anything else returns `Unsuppo
 
 - Memory archive/clear/config: CLI only. Models admin and `init`: CLI only (administrative).
 - `get_knowledge`, `get_memory*`, `list_projects`: no chat slash command (use CLI or natural language).
-- Legacy MCP tools (`write_file`, `generate_*`, `trigger_diffusion_image`) duplicate `save` and sit outside the
+- Legacy tools (`write_file`, `generate_*`, `trigger_diffusion_image`) were removed: `save` covers those formats. Every file tool requires `project` and is confined to the repo; read tools apply `exclude`, `read_scope` and sanitization.
   governance purpose; candidates for removal (see strategic report).

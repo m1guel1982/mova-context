@@ -15,7 +15,7 @@ slip through, and which rule made each decision. It's the checkpoint between "I 
 | `BLOCKED` | Something critical (private key) — the **whole** file is left out. |
 | `EXCLUDED` | Left out for non-security reasons (binary, build output, not relevant to the task). |
 
-Nothing is ever sanitized silently: every decision is recorded with the exact rule that made it, in
+Every context-trace decision is recorded with the rule that made it (the BM25 relevance ranking is heuristic, not a guarantee the context is the right one), in
 `context-report.md` and `pii-audit-log.json`.
 
 ## Two modes

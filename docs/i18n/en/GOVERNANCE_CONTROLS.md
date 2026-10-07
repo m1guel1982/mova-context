@@ -1,79 +1,39 @@
-# Controls that stop the process — `debug`, `policies`, `on_exceed`, `dry_run`
+# Perimeter and controls
 
-Four `project.json` fields. All four work **the same in CLI, `mova chat`, MCP, and HTTP** — one implementation, four doors.
+[README](README.md) · [Español](../es/GOVERNANCE_CONTROLS.md)
 
-## `debug: true` — see the exact path of every policy
-
-```json
-"debug": true
-```
-
-This makes `mova context-trace` add one line per included/excluded policy, with its **real absolute path**:
+## Fixed order inside Mova
 
 ```
-[debug] included: security.json -> /real/path/config/policy/security.json
-[debug] excluded: pii_permissive.json -> /real/path/config/policy/pii_permissive.json (excluded by config)
+spec (project.json) → dependency closure → selection (focus/exclude, AST)
+  → sanitizer (dedup, comments) → per-block secrets & PII → circuit breaker → max_tokens
+  → evidence (runs/<run_id>/) → dry_run → release (stdout, MCP host or provider)
 ```
 
-Without `debug`, those lines don't appear — everything else in the report is identical. `debug` never changes a decision, only explains it.
+Every door (`mova run`, `mova chat`, `get_full_context`, `chat_completion`, `run_agent`) uses the same function (`budget.BuildGatedContext`) and writes a run **before** releasing. If the evidence cannot be written, nothing is released.
 
-## `policies` — which rules load
+## What stops the process
 
-```json
-"policies": { "include": ["security.json", "pii_strict.json"], "exclude": ["pii_permissive.json"] }
-```
-
-See `PROJECT_JSON.md § policies` for path resolution and the full precedence order (CLI > `project.json` > `config/policy.json`).
-
-## `budget.on_exceed` — what happens when you go over budget
-
-| Value | Effect |
-|---|---|
-| `"warn"` (default) | Warns in the console, **continues**, still calls the LLM. |
-| `"abort"` / `"block"` | **Stops before calling the LLM.** 0 tokens leave. Same stop on all 4 doors. |
-
-## `egress_audit.dry_run` — test everything without calling the LLM
-
-```json
-"egress_audit": { "dry_run": true, "output_file": "egress_sanitized.md" }
-```
-
-With `dry_run: true`: context gets assembled, sanitized, audited — and **the provider is never called, on ANY tool/command that exposes context** (`chat_completion`, `get_full_context`, `get_memory`, `get_memory_all`, `get_workflow`, `read_file`, `read_document_layer`, and `mova run` alike — see `PROJECT_JSON.md § Real air-gap`). Returns a success reply saying it was a dry run, plus an **explicit anti-bypass directive** aimed at the model/agent receiving it (see the "Honest limits" note below — that directive is a hardened instruction, not a technical guarantee). Use this to test the whole governance pipeline **without a running model** — see `MCP_HTTP_TESTING.md` to test this way, free, no GPU needed.
-
-The directive and the audit block's header are 100% customizable and multi-language — they live in
-`config/lang/{es,en}.json` (`reports.egress_airgap_message` and `reports.egress_airgap_directive`)
-and hot-reload with no restart: edit the file, the change applies within ~1 second. Deleting the
-`egress_airgap_directive` key (or blanking it out) leaves the block working exactly the same — only
-the extra directive disappears, the process never breaks and the raw key name never leaks into the
-message.
-
-### Honest limits: `dry_run` is what Mova controls, not what the host does afterward
-
-Mova guarantees its own side of the contract: while `dry_run: true` is active, the real context
-**never leaves Mova's own process** — not to the provider, not in the tool result — and every attempt
-is logged to disk. What Mova **cannot guarantee** is what the **host model/agent** (Cursor, Claude
-Code, Grok, etc.) does with the block it receives: a determined host can still try reading other local
-files (`context-report.md`, `project.json`, memory, etc.) to "reconstruct" the context on its own
-instead of stopping — this already happened in real testing. The anti-bypass directive lowers the
-odds of that (it explicitly tells the model not to) but cannot technically prevent it: Mova has no
-control over the host's own process once it decides to call other tools on its own. Treat `dry_run` as
-"Mova will never hand you the real context", not as "it's impossible for the host to get it any other
-way".
-
-## No `llm_profile` — Mova never calls a model on its own
-
-If `project.json` declares no `llm_profile`, Mova won't attempt to reach any local/cloud provider. Over MCP/HTTP, `chat_completion` returns the already-governed context so the **host LLM** (Cursor, Claude Code, etc.) can answer. In `mova chat`, an explicit notice states which global model is used instead.
-
-## Verified on all 4 doors (not just documented)
-
-| Door | `debug` | `on_exceed: block` | `dry_run: true` |
+| Control | Config | Effect | Evidence |
 |---|---|---|---|
-| CLI (`mova context-trace` / `mova chat` / `mova run`) | ✅ | ✅ stops | ✅ stops |
-| MCP (stdio) | ✅ | ✅ stops | ✅ stops |
-| HTTP (`POST /mcp`) | ✅ | ✅ stops | ✅ stops |
+| Dependency closure | `dependency_policy`: `block` (default), `warn`, `off`; `accept_missing: [{symbol, reason}]` | `block` + conflict → no context released | `manifest.json → dependency_closure`, `decision.gate = dependency_closure` |
+| Secrets | `config/policy/security.json`: `block_on_private_key`, `block_on_api_key` (true by default) | The affected block is replaced by `[MOVA: contenido omitido por política …]`. Otherwise only the literal is redacted (`[REDACTED_SECRET]`) and code syntax stays intact | `governance.changed_blocks[]` |
+| Budget | `budget.max_tokens`, `on_exceed`, circuit breaker | Context rejected. In loops Mova controls, tool results that exceed the cumulative cap are rejected too | `decision.gate = budget` / `tool_result.budget_exceeded` event |
+| `dry_run` | `egress_audit.dry_run: true` | Nothing leaves Mova: no stdout, host or provider; no memory or reads either | `decision.outcome = dry_run` / `dry_run_block` event |
+| Read policy | `read_scope`: `focus` (default when focus exists) or `repo`; `exclude`; repo boundary | Denies `read_file`/`read_document_layer`, loop reads and `check_read` | `read` / `tool_result` / `hook_check_read` events |
 
-Real example, run against `examples/02-pii-compliance-governance` (ships with all 4 fields on):
+## What only transforms
 
-```bash
-mova context-trace 02-pii-compliance-governance   # shows [debug] with real paths
-```
+- **PII** (`budget.pii_masking.enabled: true`):
+  - `field_keys`: values of those keys in structured data are pseudonymized, and the same value is masked in every other block of the context;
+  - typed detectors (email, RUT, phone);
+  - a shape/entropy score, **on data blocks only**.
+  
+  It does **not** detect names or addresses in free text that never appear as a `field_keys` value. Precision and recall have not been measured. It is mitigation, not compliance.
+- **Sanitizer:** collapses repeated lines and strips comments or blank lines. The `mova budget --focus` report separates **selection** savings from **sanitization** savings.
+
+## Outside the perimeter
+
+- Whatever an agent or IDE reads or sends on its own (its tools, @-mentions, other MCP servers). Without hooks, Mova does not see it. With hooks, it sees only what fires a hook.
+- The model an MCP host uses: the manifest marks it `not_observable`.
+- The policy author and the agent declared by the MCP client: recorded as `declared` / `observed: mcp-initialize`. There is no identity verification.

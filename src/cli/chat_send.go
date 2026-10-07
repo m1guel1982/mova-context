@@ -66,7 +66,7 @@ func sendWithTools(sess *models.Session, adapter core.Adapter, proj *core.Projec
 				terr = fmt.Errorf(`"changes" must be a non-empty array of {"action","path","content"}`)
 			}
 		} else {
-			result, terr = mcp.RunAgentTool(adapter, root, name, args, proj.Tools)
+			result, terr = mcp.RunLoopTool(adapter, root, sess, proj, name, args)
 		}
 		if terr != nil {
 			result = "ERROR: " + terr.Error()

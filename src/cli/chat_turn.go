@@ -61,7 +61,7 @@ func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project,
 	printTokenUsage(root, sess, proj)
 	recordRealUsage(root, project, proj, sess)
 	if project != "" && !sess.LastReplyWasDryRun {
-		res, err := core.RecordMemory(adapter, root, project, task, reply, core.RecordOptions{})
+		res, err := core.RecordMemory(adapter, root, project, task, reply, core.RecordOptions{Source: "observed", RunID: runID(sess)})
 		switch {
 		case err != nil:
 			consolePrint("[Memory] no se pudo guardar: " + err.Error() + "\n")
@@ -71,4 +71,12 @@ func runChatTurn(sess *models.Session, adapter core.Adapter, proj *core.Project,
 		return err == nil && res.Saved > 0
 	}
 	return false
+}
+
+// runID is the evidence run of the session ("" when none).
+func runID(sess *models.Session) string {
+	if sess == nil || sess.Run == nil {
+		return ""
+	}
+	return sess.Run.ID
 }

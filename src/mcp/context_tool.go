@@ -50,6 +50,7 @@
 package mcp
 
 import (
+	"fmt"
 	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/models"
@@ -75,28 +76,27 @@ func fullContextTool(adapter core.Adapter, root, project, task string) (string, 
 	// ever reaches the caller (Claude Console, Codex, Gemini, a
 	// script...) without every one of those checks first.
 	gated := budget.BuildGatedContext(adapter, root, project, task)
+	dryRun, _ := core.ResolveEgressAudit(root, project, proj)
+	run, rerr := budget.RecordRun(root, project, task, proj, gated, budget.RunInfo{
+		Door: "mcp:get_full_context", Agent: agentAttr(), Model: hostModelAttr(proj),
+	}, dryRun)
+	if rerr != nil {
+		return "", fmt.Errorf("evidence: no se pudo escribir la evidencia, no se libera contexto: %w", rerr)
+	}
 	if gated.Err != nil {
-		return "", gated.Err
+		return "", fmt.Errorf("%w\n\n[Evidence] run %s", gated.Err, run.ID)
 	}
 
 	modelHint := ""
 	if proj.LLMProfile != nil {
 		modelHint = proj.LLMProfile.Config
 	}
-
-	// Air-gap gate — see the package comment above. Runs AFTER every
-	// Context Governance stage, so the text it ever sees — whether it
-	// goes out to the caller or into WriteEgressAuditLog's on-disk
-	// evidence — is always the fully governed/masked gated.Text, never
-	// core.BuildContextSections' raw sections.Full() output.
-	dryRun, outputFile := core.ResolveEgressAudit(root, project, proj)
-	gateResult, gerr := models.EgressGate(dryRun, outputFile, gated.Text, modelHint)
+	gateResult, gerr := models.EgressGate(dryRun, gated.Text, modelHint)
 	if gerr != nil {
 		return "", gerr
 	}
 	if gateResult.Blocked {
-		return gateResult.Message, nil
+		return gateResult.Message + "\n\n[Evidence] run " + run.ID, nil
 	}
-
-	return gated.Text, nil
+	return gated.Text + "\n\n<!-- mova run_id: " + run.ID + " -->\n", nil
 }

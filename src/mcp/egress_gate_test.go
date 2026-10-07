@@ -231,8 +231,10 @@ func TestAirgapGatedTools_DryRun_NeverLeaksContent(t *testing.T) {
 			if strings.Contains(text, "TOP_SECRET_CONTEXT_MARKER_98213") {
 				t.Fatalf("CONTEXT LEAK in %q during dry_run:\n%s", c.tool, text)
 			}
-			if !strings.Contains(text, "MOVA EGRESS AUDIT") {
-				t.Fatalf("%q: expected the air-gap message, got: %s", c.tool, text)
+			// Either the air-gap message, or the read policy denied the
+			// file first (not in focus) — both mean nothing leaked.
+			if !strings.Contains(text, "MOVA EGRESS AUDIT") && !strings.Contains(text, "lectura denegada por Mova") {
+				t.Fatalf("%q: expected the air-gap message or a policy denial, got: %s", c.tool, text)
 			}
 		})
 	}

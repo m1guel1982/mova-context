@@ -114,8 +114,14 @@ func splitFocusBlocks(focus string) (preamble string, blocks []FileBlock) {
 func joinFocusBlocks(preamble string, blocks []FileBlock) string {
 	var b strings.Builder
 	b.WriteString(preamble)
-	for _, blk := range blocks {
+	for i, blk := range blocks {
 		b.WriteString("FOCUS:" + blk.Name + "\n" + blk.Content)
+		// A block whose content lost its trailing newline (sanitizer
+		// trimming) would glue the next "FOCUS:" marker to its last
+		// line, merging two files into one block downstream.
+		if i < len(blocks)-1 && !strings.HasSuffix(blk.Content, "\n") {
+			b.WriteString("\n")
+		}
 	}
 	return b.String()
 }

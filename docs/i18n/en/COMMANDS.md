@@ -45,7 +45,7 @@ Interactive REPL with a local/cloud model; Mova context is the system prompt.
 
 ### mcp start
 Start the MCP server (Claude Code, Cursor, Windsurf) or the HTTP server for curl/Postman.
-`mova mcp start [--stdio] [--port 3000]` — without `--stdio` it serves HTTP (default port 3000).
+`mova mcp start` — MCP over stdio (default). `mova mcp start --http [--port 3000] [--bind 127.0.0.1]` — HTTP on loopback; a non-loopback `--bind` requires `MOVA_HTTP_TOKEN` (see [MCP_INTEGRATION](MCP_INTEGRATION.md)).
 ```json
 { "mcpServers": { "mova": { "command": "mova", "args": ["mcp", "start", "--stdio"] } } }
 ```
@@ -96,7 +96,7 @@ From the repo root (needs Go ≥ 1.24): `make install` — builds the host binar
 mova list
 mova budget 03-tokenomics-context-trace --focus
 mova run --count 05-nebula-flota
-mova mcp start --port 3000 &  curl -s localhost:3000/health
+mova mcp start --http --port 3000 &  curl -s localhost:3000/health
 ```
 
 ## SEE ALSO

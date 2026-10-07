@@ -16,3 +16,9 @@ projects/*/contexto.report.json
 
 # Logs (esta sola línea cubre todas las carpetas logs)
 logs/
+
+# Evidencia por ejecución (mova.local/evidence): local, inmutable, no se versiona
+projects/**/runs/
+projects/**/graph-cache.json
+projects/**/mova-context-cache.json
+projects/*/mova-budget-report.md

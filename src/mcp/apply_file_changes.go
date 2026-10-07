@@ -87,11 +87,11 @@ func ParseApplyFileChanges(arguments map[string]any) ([]FileChange, bool) {
 func ApplyFileChange(adapter core.Adapter, root string, c FileChange) (string, error) {
 	switch c.Action {
 	case ActionDelete:
-		return documentTool(adapter, root, "delete_path", map[string]any{
+		return localFileTool(adapter, root, "delete_path", map[string]any{
 			"path": c.Path, "confirm": true,
 		})
 	default: // create, modify — both are just "write this content to this path"
-		return documentTool(adapter, root, "save", map[string]any{
+		return localFileTool(adapter, root, "save", map[string]any{
 			"path": c.Path, "content": c.Content,
 		})
 	}

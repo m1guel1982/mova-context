@@ -45,7 +45,7 @@ REPL interactivo con un modelo local/cloud; el contexto de Mova es el system pro
 
 ### mcp start
 Levanta el servidor MCP (Claude Code, Cursor, Windsurf) o el HTTP para curl/Postman.
-`mova mcp start [--stdio] [--port 3000]` — sin `--stdio` sirve HTTP (puerto por defecto 3000).
+`mova mcp start` — MCP por stdio (por defecto). `mova mcp start --http [--port 3000] [--bind 127.0.0.1]` — HTTP en loopback; un `--bind` no-loopback exige `MOVA_HTTP_TOKEN` (ver [MCP_INTEGRATION](MCP_INTEGRATION.md)).
 ```json
 { "mcpServers": { "mova": { "command": "mova", "args": ["mcp", "start", "--stdio"] } } }
 ```
@@ -96,7 +96,7 @@ Windows, Linux (amd64, arm64) y macOS (amd64, arm64). Instaladores: `installers/
 mova list
 mova budget 03-tokenomics-context-trace --focus
 mova run --count 05-nebula-flota
-mova mcp start --port 3000 &  curl -s localhost:3000/health
+mova mcp start --http --port 3000 &  curl -s localhost:3000/health
 ```
 
 ## SEE ALSO

@@ -28,7 +28,14 @@ const MinMemoryReplyChars = 200
 // con el que un LLM anfitrión (Cursor, Claude Desktop…) registra su propia
 // síntesis cuando Mova no llama al modelo (modo delegado). Respeta el
 // campo "memory" del proyecto.
-type RecordOptions struct{ Force, Raw bool }
+type RecordOptions struct {
+	Force, Raw bool
+	// RunID: the evidence run whose model reply produced this entry
+	// (observed by Mova). Empty with Source "host" means the entry was
+	// reported by an MCP host (save_memory): Mova did not see the model.
+	RunID  string
+	Source string // "observed" (Mova called the model) | "host" (save_memory) | "user" (/memory, mova memory)
+}
 
 // RecordResult describe qué pasó.
 type RecordResult struct {
@@ -165,7 +172,11 @@ func RecordMemory(adapter Adapter, root, project, task, reply string, opt Record
 			res.Skipped++
 			continue
 		}
-		entry := fmt.Sprintf("## %s — tarea: %s\n<!-- mova:entry task=%s sha=%s -->\n%s", now, tag, tag, sha, body)
+		prov := "source=" + orDefault(opt.Source, "user")
+		if opt.RunID != "" {
+			prov += " run=" + opt.RunID
+		}
+		entry := fmt.Sprintf("## %s — tarea: %s\n<!-- mova:entry task=%s sha=%s %s -->\n%s", now, tag, tag, sha, prov, body)
 		if err := adapter.AppendMemory(project, entry); err != nil {
 			return res, err
 		}

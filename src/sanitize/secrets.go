@@ -36,7 +36,7 @@ type secretPattern struct {
 // indicators, not proof" disclaimer every caller must keep attached to
 // these results.
 var secretPatterns = []secretPattern{
-	{SecretAPIKey, regexp.MustCompile(`\b(?:sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b`)},
+	{SecretAPIKey, regexp.MustCompile(`\b(?:sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b`)},
 	{SecretJWT, regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b`)},
 	{SecretPrivateKey, regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----`)},
 	{SecretGenericCred, regexp.MustCompile(`(?i)\b(?:api[_-]?key|secret|token|password|passwd)\b\s*[:=]\s*["']?[A-Za-z0-9_\-/+]{12,}["']?`)},

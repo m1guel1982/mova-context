@@ -48,9 +48,13 @@ type ComponentBreakdown struct {
 
 // FocusComparison is only present when --focus was requested.
 type FocusComparison struct {
-	TokensWithoutFocus int
-	TokensWithFocus    int
+	TokensWithoutFocus int // whole repo, raw
+	TokensWithFocus    int // focus selection, raw (before sanitization) — selection savings only
 	SavingsPercent     float64
+	// TokensAfterGovernance: the same focus after sanitizer/PII — the
+	// difference with TokensWithFocus is attributed to sanitization
+	// (e.g. collapsed log lines), never to focus.
+	TokensAfterGovernance int
 }
 
 // ProviderAccuracy is one row of the "Historical Token Accuracy" section:
@@ -241,7 +245,7 @@ func BuildReport(adapter core.Adapter, root, projectName, taskName string, withF
 	}
 
 	if withFocusComparison {
-		comparison, err := compareFocus(root, proj, &task, sections.Focus, modelHint)
+		comparison, err := compareFocus(root, proj, &task, rawFocus, sections.Focus, modelHint)
 		if err != nil {
 			return nil, err
 		}

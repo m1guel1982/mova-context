@@ -1,202 +1,140 @@
-2026-01-10 03:00:01 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:02 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:03 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:04 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:05 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:06 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:07 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:08 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:09 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:10 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:11 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:12 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:13 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:14 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:15 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:16 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:17 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:18 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:19 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:20 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:21 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:22 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:23 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:24 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:25 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:26 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:27 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:28 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:29 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:30 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:31 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:32 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:33 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:34 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:35 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:36 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:37 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:38 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:39 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:40 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:41 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:42 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:43 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:44 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:45 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:46 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:47 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:48 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:49 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:50 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:51 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:52 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:53 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:54 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:55 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:56 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:57 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:58 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:00:59 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:00 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:01 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:02 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:03 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:04 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:05 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:06 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:07 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:08 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:09 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:10 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:11 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:12 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:13 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:14 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:15 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:16 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:17 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:18 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:19 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:20 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:21 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:22 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:23 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:24 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:25 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:26 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:27 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:28 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:29 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:30 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:31 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:32 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:33 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:34 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:35 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:36 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:37 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:38 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:39 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:40 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:41 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:42 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:43 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:44 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:45 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:46 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:47 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:48 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:49 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:50 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:51 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:52 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:53 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:54 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:55 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:56 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:57 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:58 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:01:59 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:00 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:01 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:02 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:03 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:04 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:05 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:06 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:07 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:08 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:09 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:10 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:11 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:12 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:13 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:14 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:15 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:16 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:17 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:18 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:19 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:20 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:21 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:22 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:23 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:24 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:25 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:26 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:27 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:28 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:29 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:30 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:31 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:32 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:33 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:34 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:35 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:36 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:37 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:38 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:39 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:40 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:41 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:42 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:43 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:44 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:45 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:46 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:47 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:48 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:49 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:50 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:51 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:52 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:53 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:54 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:55 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:56 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:57 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:58 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:02:59 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:00 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:01 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:02 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:03 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:04 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:05 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:06 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:07 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:08 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:09 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:10 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:11 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:12 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:13 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:14 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:15 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:16 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:17 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:18 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:19 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-2026-01-10 03:03:20 sync-worker[pid:4092]: INFO [conector-crm-legado] heartbeat ACK status=200 OK latency=12ms DB_POOL=active(12/50) retry_count=0 trace_id=a8f9c1d2e3b4
-
- 
+2026-09-14T08:00:00Z WARN [reclamos] ticket=4000 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T08:07:13Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:14:26Z INFO [conector-crm-legado] sync lote=2 registros=409 status=OK
+2026-09-14T08:21:39Z INFO [conector-crm-legado] sync lote=3 registros=454 status=OK
+2026-09-14T08:28:52Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:35:05Z INFO [api-gateway] GET /v1/clientes/CLI-1001 status=200 latency=44ms
+2026-09-14T08:42:18Z INFO [notificaciones] email enviado a=camila.rojas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:49:31Z INFO [conector-crm-legado] sync lote=7 registros=353 status=OK
+2026-09-14T08:56:44Z INFO [auth] login ok usuario=matias.vera@empresa-ficticia.cl ip=10.0.1.250
+2026-09-14T08:03:57Z WARN [conector-crm-legado] retry intento=2 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T08:10:10Z INFO [api-gateway] GET /v1/clientes/CLI-1000 status=200 latency=165ms
+2026-09-14T08:17:23Z ERROR [facturacion] rechazo pago cliente_rut=15.987.654-3 motivo=fondos_insuficientes
+2026-09-14T08:24:36Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:31:49Z INFO [auth] login ok usuario=andrea.fuentes@empresa-ficticia.cl ip=10.0.2.71
+2026-09-14T08:38:02Z INFO [conector-crm-legado] sync lote=14 registros=312 status=OK
+2026-09-14T08:45:15Z INFO [api-gateway] GET /v1/clientes/CLI-1000 status=200 latency=392ms
+2026-09-14T08:52:28Z INFO [conector-crm-legado] sync lote=16 registros=301 status=OK
+2026-09-14T08:59:41Z WARN [reclamos] ticket=4017 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T08:06:54Z INFO [conector-crm-legado] sync lote=18 registros=118 status=OK
+2026-09-14T08:13:07Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:20:20Z INFO [api-gateway] GET /v1/clientes/CLI-1005 status=200 latency=236ms
+2026-09-14T08:27:33Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:34:46Z INFO [api-gateway] GET /v1/clientes/CLI-1000 status=200 latency=335ms
+2026-09-14T08:41:59Z DEBUG [sync-worker] heartbeat ACK latency=569ms DB_POOL=active(26/50)
+2026-09-14T08:48:12Z INFO [notificaciones] email enviado a=daniela.castro@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:55:25Z ERROR [facturacion] rechazo pago cliente_rut=20.111.222-7 motivo=fondos_insuficientes
+2026-09-14T08:02:38Z INFO [auth] login ok usuario=rodrigo.salinas@empresa-ficticia.cl ip=10.0.1.213
+2026-09-14T08:09:51Z INFO [notificaciones] email enviado a=daniela.castro@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T08:16:04Z WARN [reclamos] ticket=4028 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T08:23:17Z ERROR [facturacion] rechazo pago cliente_rut=12.345.678-5 motivo=fondos_insuficientes
+2026-09-14T09:30:30Z INFO [auth] login ok usuario=daniela.castro@empresa-ficticia.cl ip=10.0.8.140
+2026-09-14T09:37:43Z WARN [conector-crm-legado] retry intento=3 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T09:44:56Z ERROR [facturacion] rechazo pago cliente_rut=18.234.567-K motivo=fondos_insuficientes
+2026-09-14T09:51:09Z INFO [conector-crm-legado] sync lote=33 registros=336 status=OK
+2026-09-14T09:58:22Z DEBUG [sync-worker] heartbeat ACK latency=384ms DB_POOL=active(21/50)
+2026-09-14T09:05:35Z WARN [reclamos] ticket=4035 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T09:12:48Z INFO [notificaciones] email enviado a=rodrigo.salinas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:19:01Z INFO [conector-crm-legado] sync lote=37 registros=434 status=OK
+2026-09-14T09:26:14Z WARN [conector-crm-legado] retry intento=3 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T09:33:27Z DEBUG [sync-worker] heartbeat ACK latency=305ms DB_POOL=active(4/50)
+2026-09-14T09:40:40Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:47:53Z INFO [notificaciones] email enviado a=daniela.castro@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:54:06Z WARN [conector-crm-legado] retry intento=2 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T09:01:19Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:08:32Z ERROR [facturacion] rechazo pago cliente_rut=15.987.654-3 motivo=fondos_insuficientes
+2026-09-14T09:15:45Z ERROR [facturacion] rechazo pago cliente_rut=20.111.222-7 motivo=fondos_insuficientes
+2026-09-14T09:22:58Z INFO [conector-crm-legado] sync lote=46 registros=174 status=OK
+2026-09-14T09:29:11Z DEBUG [sync-worker] heartbeat ACK latency=635ms DB_POOL=active(30/50)
+2026-09-14T09:36:24Z INFO [api-gateway] GET /v1/clientes/CLI-1000 status=200 latency=129ms
+2026-09-14T09:43:37Z INFO [notificaciones] email enviado a=rodrigo.salinas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:50:50Z INFO [notificaciones] email enviado a=rodrigo.salinas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:57:03Z INFO [conector-crm-legado] sync lote=51 registros=441 status=OK
+2026-09-14T09:04:16Z INFO [conector-crm-legado] sync lote=52 registros=336 status=OK
+2026-09-14T09:11:29Z DEBUG [sync-worker] heartbeat ACK latency=603ms DB_POOL=active(27/50)
+2026-09-14T09:18:42Z ERROR [facturacion] rechazo pago cliente_rut=15.987.654-3 motivo=fondos_insuficientes
+2026-09-14T09:25:55Z WARN [reclamos] ticket=4055 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T09:32:08Z INFO [notificaciones] email enviado a=rodrigo.salinas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:39:21Z INFO [auth] login ok usuario=matias.vera@empresa-ficticia.cl ip=10.0.2.159
+2026-09-14T09:46:34Z INFO [notificaciones] email enviado a=daniela.castro@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T09:53:47Z WARN [reclamos] ticket=4059 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T10:00:00Z ERROR [facturacion] rechazo pago cliente_rut=12.345.678-5 motivo=fondos_insuficientes
+2026-09-14T10:07:13Z INFO [notificaciones] email enviado a=rodrigo.salinas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T10:14:26Z INFO [api-gateway] GET /v1/clientes/CLI-1006 status=200 latency=524ms
+2026-09-14T10:21:39Z ERROR [facturacion] rechazo pago cliente_rut=9.876.543-2 motivo=fondos_insuficientes
+2026-09-14T10:28:52Z DEBUG [sync-worker] heartbeat ACK latency=333ms DB_POOL=active(7/50)
+2026-09-14T10:35:05Z INFO [notificaciones] email enviado a=camila.rojas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T10:42:18Z DEBUG [sync-worker] heartbeat ACK latency=890ms DB_POOL=active(35/50)
+2026-09-14T10:49:31Z DEBUG [sync-worker] heartbeat ACK latency=494ms DB_POOL=active(25/50)
+2026-09-14T10:56:44Z WARN [reclamos] ticket=4068 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T10:03:57Z DEBUG [sync-worker] heartbeat ACK latency=467ms DB_POOL=active(19/50)
+2026-09-14T10:10:10Z DEBUG [sync-worker] heartbeat ACK latency=39ms DB_POOL=active(40/50)
+2026-09-14T10:17:23Z DEBUG [sync-worker] heartbeat ACK latency=494ms DB_POOL=active(13/50)
+2026-09-14T10:24:36Z WARN [conector-crm-legado] retry intento=1 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T10:31:49Z DEBUG [sync-worker] heartbeat ACK latency=540ms DB_POOL=active(19/50)
+2026-09-14T10:38:02Z ERROR [facturacion] rechazo pago cliente_rut=15.987.654-3 motivo=fondos_insuficientes
+2026-09-14T10:45:15Z INFO [api-gateway] GET /v1/clientes/CLI-1006 status=200 latency=746ms
+2026-09-14T10:52:28Z ERROR [facturacion] rechazo pago cliente_rut=9.876.543-2 motivo=fondos_insuficientes
+2026-09-14T10:59:41Z WARN [reclamos] ticket=4077 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T10:06:54Z ERROR [facturacion] rechazo pago cliente_rut=20.111.222-7 motivo=fondos_insuficientes
+2026-09-14T10:13:07Z INFO [conector-crm-legado] sync lote=79 registros=33 status=OK
+2026-09-14T10:20:20Z INFO [auth] login ok usuario=matias.vera@empresa-ficticia.cl ip=10.0.6.250
+2026-09-14T10:27:33Z DEBUG [sync-worker] heartbeat ACK latency=143ms DB_POOL=active(8/50)
+2026-09-14T10:34:46Z INFO [conector-crm-legado] sync lote=82 registros=331 status=OK
+2026-09-14T10:41:59Z WARN [reclamos] ticket=4083 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T10:48:12Z ERROR [facturacion] rechazo pago cliente_rut=20.111.222-7 motivo=fondos_insuficientes
+2026-09-14T10:55:25Z INFO [api-gateway] GET /v1/clientes/CLI-1000 status=200 latency=712ms
+2026-09-14T10:02:38Z INFO [conector-crm-legado] sync lote=86 registros=346 status=OK
+2026-09-14T10:09:51Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T10:16:04Z INFO [notificaciones] email enviado a=matias.vera@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T10:23:17Z WARN [conector-crm-legado] retry intento=2 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T11:30:30Z INFO [notificaciones] email enviado a=camila.rojas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T11:37:43Z INFO [auth] login ok usuario=andrea.fuentes@empresa-ficticia.cl ip=10.0.3.39
+2026-09-14T11:44:56Z ERROR [facturacion] rechazo pago cliente_rut=12.345.678-5 motivo=fondos_insuficientes
+2026-09-14T11:51:09Z INFO [notificaciones] email enviado a=camila.rojas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T11:58:22Z INFO [notificaciones] email enviado a=rodrigo.salinas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T11:05:35Z INFO [conector-crm-legado] sync lote=95 registros=275 status=OK
+2026-09-14T11:12:48Z INFO [api-gateway] GET /v1/clientes/CLI-1007 status=200 latency=139ms
+2026-09-14T11:19:01Z ERROR [facturacion] rechazo pago cliente_rut=20.111.222-7 motivo=fondos_insuficientes
+2026-09-14T11:26:14Z INFO [auth] login ok usuario=daniela.castro@empresa-ficticia.cl ip=10.0.2.49
+2026-09-14T11:33:27Z WARN [conector-crm-legado] retry intento=3 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T11:40:40Z INFO [api-gateway] GET /v1/clientes/CLI-1001 status=200 latency=771ms
+2026-09-14T11:47:53Z WARN [reclamos] ticket=4101 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T11:54:06Z WARN [conector-crm-legado] retry intento=3 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T11:01:19Z INFO [auth] login ok usuario=rodrigo.salinas@empresa-ficticia.cl ip=10.0.9.104
+2026-09-14T11:08:32Z INFO [api-gateway] GET /v1/clientes/CLI-1002 status=200 latency=477ms
+2026-09-14T11:15:45Z INFO [auth] login ok usuario=andrea.fuentes@empresa-ficticia.cl ip=10.0.8.196
+2026-09-14T11:22:58Z WARN [reclamos] ticket=4106 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T11:29:11Z INFO [notificaciones] email enviado a=camila.rojas@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T11:36:24Z INFO [auth] login ok usuario=andrea.fuentes@empresa-ficticia.cl ip=10.0.1.87
+2026-09-14T11:43:37Z ERROR [facturacion] rechazo pago cliente_rut=9.876.543-2 motivo=fondos_insuficientes
+2026-09-14T11:50:50Z WARN [conector-crm-legado] retry intento=2 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T11:57:03Z DEBUG [sync-worker] heartbeat ACK latency=488ms DB_POOL=active(27/50)
+2026-09-14T11:04:16Z INFO [conector-crm-legado] sync lote=112 registros=212 status=OK
+2026-09-14T11:11:29Z WARN [reclamos] ticket=4113 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T11:18:42Z DEBUG [sync-worker] heartbeat ACK latency=541ms DB_POOL=active(34/50)
+2026-09-14T11:25:55Z INFO [conector-crm-legado] sync lote=115 registros=474 status=OK
+2026-09-14T11:32:08Z INFO [api-gateway] GET /v1/clientes/CLI-1003 status=200 latency=352ms
+2026-09-14T11:39:21Z INFO [api-gateway] GET /v1/clientes/CLI-1003 status=200 latency=584ms
+2026-09-14T11:46:34Z INFO [api-gateway] GET /v1/clientes/CLI-1000 status=200 latency=443ms
+2026-09-14T11:53:47Z DEBUG [sync-worker] heartbeat ACK latency=270ms DB_POOL=active(24/50)
+2026-09-14T12:00:00Z WARN [reclamos] ticket=4120 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T12:07:13Z INFO [auth] login ok usuario=daniela.castro@empresa-ficticia.cl ip=10.0.4.88
+2026-09-14T12:14:26Z INFO [auth] login ok usuario=matias.vera@empresa-ficticia.cl ip=10.0.2.128
+2026-09-14T12:21:39Z WARN [reclamos] ticket=4123 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T12:28:52Z WARN [conector-crm-legado] retry intento=1 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T12:35:05Z DEBUG [sync-worker] heartbeat ACK latency=430ms DB_POOL=active(36/50)
+2026-09-14T12:42:18Z DEBUG [sync-worker] heartbeat ACK latency=668ms DB_POOL=active(13/50)
+2026-09-14T12:49:31Z INFO [auth] login ok usuario=camila.rojas@empresa-ficticia.cl ip=10.0.7.115
+2026-09-14T12:56:44Z INFO [auth] login ok usuario=matias.vera@empresa-ficticia.cl ip=10.0.6.230
+2026-09-14T12:03:57Z INFO [api-gateway] GET /v1/clientes/CLI-1008 status=200 latency=382ms
+2026-09-14T12:10:10Z WARN [conector-crm-legado] retry intento=1 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T12:17:23Z INFO [notificaciones] email enviado a=andrea.fuentes@correo-ficticio.cl plantilla=recordatorio_pago
+2026-09-14T12:24:36Z INFO [api-gateway] GET /v1/clientes/CLI-1008 status=200 latency=237ms
+2026-09-14T12:31:49Z DEBUG [sync-worker] heartbeat ACK latency=282ms DB_POOL=active(28/50)
+2026-09-14T12:38:02Z WARN [reclamos] ticket=4134 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T12:45:15Z WARN [reclamos] ticket=4135 reabierto canal=chat motivo=cobro_duplicado
+2026-09-14T12:52:28Z INFO [api-gateway] GET /v1/clientes/CLI-1004 status=200 latency=183ms
+2026-09-14T12:59:41Z INFO [auth] login ok usuario=andrea.fuentes@empresa-ficticia.cl ip=10.0.6.132
+2026-09-14T12:06:54Z WARN [conector-crm-legado] retry intento=1 motivo=timeout upstream=crm-legacy:8443
+2026-09-14T12:13:07Z INFO [conector-crm-legado] sync lote=139 registros=81 status=OK

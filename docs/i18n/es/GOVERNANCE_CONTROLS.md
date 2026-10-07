@@ -1,79 +1,39 @@
-# Controles que cortan el proceso — `debug`, `policies`, `on_exceed`, `dry_run`
+# Perímetro y controles
 
-Cuatro campos de `project.json`. Los cuatro funcionan **igual en CLI, `mova chat`, MCP y HTTP** — una sola implementación, cuatro puertas.
+[README](README.md) · [English](../en/GOVERNANCE_CONTROLS.md)
 
-## `debug: true` — ver la ruta exacta de cada política
-
-```json
-"debug": true
-```
-
-Con esto, `mova context-trace` agrega una línea por cada política incluida/excluida, con su **ruta absoluta real**:
+## Orden fijo dentro de Mova
 
 ```
-[debug] incluida: security.json -> /ruta/real/config/policy/security.json
-[debug] excluida: pii_permissive.json -> /ruta/real/config/policy/pii_permissive.json (excluida por configuración)
+especificación (project.json) → cierre de dependencias → selección (focus/exclude, AST)
+  → sanitizador (dedup, comentarios) → secretos y PII por bloque → circuit breaker → max_tokens
+  → evidencia (runs/<run_id>/) → dry_run → liberación (stdout, host MCP o proveedor)
 ```
 
-Sin `debug`, esas líneas no aparecen — el resto del reporte es idéntico. `debug` nunca cambia una decisión, solo la explica.
+Toda puerta (`mova run`, `mova chat`, `get_full_context`, `chat_completion`, `run_agent`) usa la misma función (`budget.BuildGatedContext`) y escribe un run **antes** de liberar. Si la evidencia no se puede escribir, no se libera nada.
 
-## `policies` — qué reglas se cargan
+## Qué corta el proceso
 
-```json
-"policies": { "include": ["security.json", "pii_strict.json"], "exclude": ["pii_permissive.json"] }
-```
-
-Ver `PROJECT_JSON.md § policies` para la resolución de rutas y la precedencia completa (CLI > `project.json` > `config/policy.json`).
-
-## `budget.on_exceed` — qué pasa si te pasas del presupuesto
-
-| Valor | Efecto |
-|---|---|
-| `"warn"` (default) | Avisa en consola, **continúa** y llama al LLM igual. |
-| `"abort"` / `"block"` | **Corta antes de llamar al LLM.** 0 tokens salen. Mismo corte en las 4 puertas. |
-
-## `egress_audit.dry_run` — probar todo sin llamar al LLM
-
-```json
-"egress_audit": { "dry_run": true, "output_file": "egress_sanitized.md" }
-```
-
-Con `dry_run: true`: se arma el contexto, se sanitiza, se audita — y **nunca se llama al proveedor, en ninguna herramienta/comando que exponga contexto** (`chat_completion`, `get_full_context`, `get_memory`, `get_memory_all`, `get_workflow`, `read_file`, `read_document_layer` y `mova run` por igual — ver `PROJECT_JSON.md § Air-gap real`). Devuelve una respuesta de éxito indicando que fue un dry-run, más una **directiva explícita anti-elusión** dirigida al modelo/agente que la recibe (ver la nota "Límites honestos" más abajo — esa directiva es una instrucción reforzada, no una garantía técnica). Sirve para probar todo el pipeline de gobernanza **sin tener un modelo corriendo** — ver `MCP_HTTP_TESTING.md` para probar así, gratis, sin GPU.
-
-La directiva y el encabezado del bloque de auditoría son 100% personalizables y multiidioma —
-viven en `config/lang/{es,en}.json` (`reports.egress_airgap_message` y
-`reports.egress_airgap_directive`) y se recargan **en caliente**, sin reiniciar Mova: editás el
-archivo, el cambio se aplica dentro de ~1 segundo. Si borrás la clave `egress_airgap_directive`
-(o la dejás vacía), el bloqueo sigue funcionando igual — solo desaparece la directiva extra, nunca
-se rompe el proceso ni se filtra el nombre de la clave.
-
-### Límites : el `dry_run` es lo que Mova controla, no lo que el anfitrión hace después
-
-Mova garantiza su propia parte del contrato: mientras `dry_run: true` esté activo, el contexto real
-**nunca sale del proceso de Mova** — ni al proveedor, ni en el resultado de la herramienta — y queda
-evidencia en disco de cada intento. Lo que Mova **no puede garantizar** es qué hace el **modelo/agente
-anfitrión** (Cursor, Claude Code, Grok, etc.) con el bloqueo que recibe: un anfitrión insistente puede
-intentar leer otros archivos locales (`context-report.md`, `project.json`, memoria, etc.) para
-"reconstruir" el contexto por su cuenta, en vez de detenerse — esto ya ocurrió en pruebas reales. La
-directiva anti-elusión reduce la probabilidad de eso (le dice explícitamente al modelo que no lo
-haga), pero no puede impedirlo técnicamente: Mova no tiene control sobre el proceso del anfitrión una
-vez que este decide invocar otras herramientas por su cuenta. Tratá el `dry_run` como "Mova nunca te
-da el contexto real", no como "es imposible que el anfitrión consiga el contexto por otra vía".
-
-## Sin `llm_profile` — Mova nunca llama a un modelo por su cuenta
-
-Si `project.json` no declara `llm_profile`, Mova no intenta contactar ningún proveedor local/cloud. En MCP/HTTP, `chat_completion` devuelve el contexto ya gobernado para que el **LLM anfitrión** (Cursor, Claude Code, etc.) responda. En `mova chat` se avisa explícitamente qué modelo global se usa en su lugar.
-
-## Verificado en las 4 puertas (no solo documentado)
-
-| Puerta | `debug` | `on_exceed: block` | `dry_run: true` |
+| Control | Configuración | Efecto | Evidencia |
 |---|---|---|---|
-| CLI (`mova context-trace` / `mova chat` / `mova run`) | ✅ | ✅ corta | ✅ corta |
-| MCP (stdio) | ✅ | ✅ corta | ✅ corta |
-| HTTP (`POST /mcp`) | ✅ | ✅ corta | ✅ corta |
+| Cierre de dependencias | `dependency_policy`: `block` (por defecto), `warn`, `off`; `accept_missing: [{symbol, reason}]` | `block` + conflicto → no se libera contexto | `manifest.json → dependency_closure`, `decision.gate = dependency_closure` |
+| Secretos | `config/policy/security.json`: `block_on_private_key`, `block_on_api_key` (true por defecto) | El bloque afectado se reemplaza por `[MOVA: contenido omitido por política …]`. Sin bloqueo, se redacta solo el literal (`[REDACTED_SECRET]`) y la sintaxis del código queda intacta | `governance.changed_blocks[]` |
+| Presupuesto | `budget.max_tokens`, `on_exceed`, circuit breaker | Se rechaza el contexto. En los loops que controla Mova, también los tool results que superen el tope acumulado | `decision.gate = budget` / evento `tool_result.budget_exceeded` |
+| `dry_run` | `egress_audit.dry_run: true` | Nada sale de Mova: ni stdout, ni host, ni proveedor; tampoco memoria ni lecturas | `decision.outcome = dry_run` / evento `dry_run_block` |
+| Política de lectura | `read_scope`: `focus` (por defecto si hay focus) o `repo`; `exclude`; límite del repo | Deniega `read_file`/`read_document_layer`, lecturas del loop y `check_read` | evento `read` / `tool_result` / `hook_check_read` |
 
-Ejemplo real, ejecutado contra `examples/02-pii-compliance-governance` (que trae los 4 campos activados):
+## Qué solo transforma
 
-```bash
-mova context-trace 02-pii-compliance-governance   # muestra [debug] con rutas reales
-```
+- **PII** (`budget.pii_masking.enabled: true`):
+  - `field_keys`: los valores de esas claves en datos estructurados se seudonimizan, y el mismo valor se enmascara en cualquier otro bloque del contexto;
+  - detectores tipados (email, RUT, teléfono);
+  - un puntaje de forma/entropía, **solo en bloques de datos**.
+  
+  **No detecta** nombres ni direcciones en texto libre que no aparezcan como valor de `field_keys`. No se ha medido precisión ni recall. Es mitigación, no cumplimiento.
+- **Sanitizador:** colapsa líneas repetidas y quita comentarios o líneas en blanco. El reporte de `mova budget --focus` separa el ahorro por **selección** del ahorro por **sanitización**.
+
+## Qué queda fuera del perímetro
+
+- Lo que un agente o IDE lee o envía por su cuenta (sus tools, @-menciones, otros servidores MCP). Sin hooks, Mova no lo ve. Con hooks, solo ve lo que dispara un hook.
+- El modelo que usa un host MCP: el manifest lo marca como `not_observable`.
+- El autor de la política y el agente declarado por el cliente MCP: se registran como `declared` / `observed: mcp-initialize`. No hay verificación de identidad.

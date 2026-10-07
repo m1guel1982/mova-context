@@ -8,6 +8,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"mova.local/evidence"
 	"os"
 	"runtime"
 	"strconv"
@@ -39,6 +40,19 @@ func RunAgent(adapter core.Adapter, root, group, agent, task string) AgentResult
 	gated := budget.BuildGatedContext(adapter, root, project, task)
 	if gated.Err != nil {
 		logging.L().Warning("orchestrator", "agent %s failed: %v", project, gated.Err)
+	}
+	// Same evidence rule as every other door: one immutable run per
+	// release attempt, and no release without it.
+	proj, _ := adapter.GetProject(project)
+	dryRun, _ := core.ResolveEgressAudit(root, project, proj)
+	if _, rerr := budget.RecordRun(root, project, task, proj, gated, budget.RunInfo{
+		Door:  "orchestrator:run_agent",
+		Model: evidence.Attr{Value: "unknown", Source: "not_observable: el contexto se devuelve al llamador"},
+	}, dryRun); rerr != nil {
+		return AgentResult{Agent: agent, Project: project, Err: rerr}
+	}
+	if dryRun && gated.Err == nil {
+		return AgentResult{Agent: agent, Project: project, Tokens: gated.Tokens, Text: "[egress_audit.dry_run] contexto no liberado"}
 	}
 	return AgentResult{Agent: agent, Project: project, Text: gated.Text, Tokens: gated.Tokens, Err: gated.Err}
 }

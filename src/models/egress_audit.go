@@ -24,8 +24,6 @@
 package models
 
 import (
-	"fmt"
-
 	"mova.local/budget"
 	"mova.local/i18n"
 )
@@ -52,6 +50,7 @@ import (
 //   - or delete/blank the key entirely to turn the directive off
 //     without breaking the base audit block, since a value of ""
 //     and a wholly-missing key both make this function skip it.
+//
 // This is why the check is `directive != "" && directive != the key
 // itself` rather than assuming the key exists.
 func buildAirgapMessage(tokens int) string {
@@ -99,14 +98,8 @@ type EgressGateResult struct {
 // do not return a Blocked=false result. A write failure is not a
 // softer case than dry_run; it is the same "evidence must exist before
 // anything leaves" rule the whole feature is for.
-func EgressGate(dryRun bool, outputFile, contextText, modelHint string) (EgressGateResult, error) {
+func EgressGate(dryRun bool, contextText, modelHint string) (EgressGateResult, error) {
 	tokens, _, _ := budget.CountTokens(contextText, modelHint)
-
-	if outputFile != "" {
-		if err := WriteEgressAuditLog(outputFile, contextText); err != nil {
-			return EgressGateResult{}, fmt.Errorf("egress_audit: could not write %s: %w", outputFile, err)
-		}
-	}
 	if !dryRun {
 		return EgressGateResult{Blocked: false, Tokens: tokens}, nil
 	}
@@ -139,22 +132,10 @@ type egressAuditOutcome struct {
 // rather than re-resolved from project.json on every single message.
 func (s *Session) applyEgressAudit() egressAuditOutcome {
 	tokens, _, _ := budget.CountTokens(s.System, s.Model)
-	if s.EgressAuditOutputFile != "" {
-		if err := WriteEgressAuditLog(s.EgressAuditOutputFile, s.System); err != nil {
-			return egressAuditOutcome{stop: true, err: fmt.Errorf("egress_audit: could not write %s: %w", s.EgressAuditOutputFile, err)}
-		}
-	}
 	if s.EgressAuditDryRun {
+		_ = s.Run.Event("dry_run_block", map[string]any{"tokens_estimated": tokens, "history_messages": len(s.History)})
 		msg := buildAirgapMessage(tokens)
 		return egressAuditOutcome{stop: true, reply: msg, dryRun: true}
 	}
 	return egressAuditOutcome{}
-}
-
-// WriteEgressAuditLog deja ctx en outputFile SIN duplicar: ver
-// egress_blocks.go / egress_store.go (igual → omitido, cambiado →
-// reemplazado, nuevo → anexado). Misma firma que siempre: los tres
-// puertos (chat, MCP, HTTP) siguen llamándola igual.
-func WriteEgressAuditLog(outputFile, sanitizedContext string) error {
-	return writeEgressBlocks(outputFile, sanitizedContext)
 }

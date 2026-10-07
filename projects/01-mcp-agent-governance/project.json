@@ -7,8 +7,7 @@
   "adapter": "file",
   "default_task": "revisar-api",
   "egress_audit": {
-  "dry_run": false,
-  "output_file": "egress_sanitized.md"
+  "dry_run": false
   },
 
   "variables": { "STACK": "Node.js / Express" },

@@ -16,7 +16,7 @@ mova run 01-mcp-agent-governance --diagram --export png --path ./evidencia.png
 | Contexto seleccionado | `repo/api.js` + `repo/config.txt` (`focus` en `project.json`) |
 | Control aplicado | Sanitizer ON · `config.txt` contiene un secreto de ejemplo (`STRIPE_SECRET_KEY=...`) que Mova reconoce como indicador de credencial |
 | Decisión | Contexto permitido, con la política y el agente que lo autorizaron |
-| Evidencia | `evidencia.png` (diagrama) + `context-report.md` + `pii-audit-log.json` |
+| Evidencia | `projects/<proyecto>/runs/<run_id>/` (`context.txt` + `manifest.json`). El PNG y `context-report.md` son reportes para leer, no evidencia de egreso |
 
 `evidencia-ejemplo.png` en esta carpeta es una muestra ya generada — corré el comando de arriba para regenerarla tú mismo.
 

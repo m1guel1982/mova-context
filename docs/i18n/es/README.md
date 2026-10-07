@@ -1,120 +1,56 @@
-![mova en acción: salidas reales de 3 comandos](../../assets/mova-demo.gif)
-
-# mova — soberanía del contexto antes de la inferencia
-
-> **Tú decides qué contexto puede llegar a la IA. mova deja evidencia de esa decisión.**
-> *You decide what context may reach the AI. mova leaves evidence of that decision.*
+# mova — especificación de contexto por tarea, validada y con evidencia
 
 [Español](README.md) · [English](../en/README.md) · [Volver a la raíz](../../../README.md)
 
-| Tú decides | Tú bloqueas | Tú compruebas |
+## Qué problema resuelve (y cuál no)
+
+Cuando **restringes** lo que un modelo puede ver para una tarea — por costo, por privacidad o porque el código excluido no debe tocarse — aparecen dos preguntas que ni `AGENTS.md`, ni el propio agente, ni un gateway responden:
+
+1. **¿La restricción rompe la tarea?** Si el código seleccionado llama a código que la misma especificación excluye, el contexto está incompleto por construcción. Mova lo detecta por AST **antes** de liberar nada (`dependency_policy`).
+2. **¿Qué se liberó exactamente, bajo qué reglas y desde qué código?** Mova deja un registro inmutable por ejecución, con el hash de los bytes liberados.
+
+Si tu agente puede leer todo el repo y no quieres restringirlo, Mova aporta poco: el agente resuelve las dependencias leyendo, y un gateway registra lo que se envió.
+
+## El modelo en 4 piezas
+
+| Pieza | Qué hace | Dónde |
 |---|---|---|
-| **Qué entra:** `focus`/`exclude` (AST: funciones, no archivos enteros), tarea | **Qué no debe salir:** enmascarado PII (opt-in), tope de tokens (`max_tokens`), `dry_run` | **Qué recibió el modelo:** `context-report.md`, `pii-audit-log.json`, `egress_sanitized.md`, diagrama |
+| **Especificación** | `project.json`: por tarea, `focus` (archivo o símbolo: `archivo::func=a,b`), `exclude`, `policies`, `budget`, `read_scope` | [PROJECT_JSON](PROJECT_JSON.md) |
+| **Validación de cierre** | Si un símbolo en focus llama o referencia algo **excluido** → conflicto. `block` (por defecto) no libera nada; `warn` libera y registra; `accept_missing` acepta con una razón escrita. También lista lo que queda **fuera** del contexto | [AST_FILTER](AST_FILTER.md) |
+| **Contexto determinista y sanitizado** | Mismas entradas → mismos bytes (sin timestamps). Secretos: bloqueo o redacción solo del literal. PII (opcional): `field_keys`, detectores tipados (email, RUT, teléfono) y un puntaje heurístico solo sobre bloques de datos | [GOVERNANCE_CONTROLS](GOVERNANCE_CONTROLS.md) |
+| **Evidencia inmutable** | `projects/<p>/runs/<run_id>/`: `context.txt`, `manifest.json` (de escritura única) y `events.jsonl` (solo anexado) | [ARTIFACTS](ARTIFACTS.md) |
 
-`mova` es un binario local que corre **antes** de la llamada al modelo (CLI · `mova chat` · MCP · HTTP). Funciona con Claude Code, Cursor, Windsurf, Ollama y cualquier cliente MCP.
+## Perímetro: qué controla y qué no
 
-**Alcance honesto:** «tú decides» aplica al contexto que pasa **a través de mova**. No puede ver lo que un IDE o agente envíe por su cuenta, y el enmascarado PII es heurístico: evidencia y mitigación, no garantía de cumplimiento. No es un gateway, un IDE, un RAG ni una plataforma.
+| Integración | Contexto inicial | Turnos posteriores / tool results |
+|---|---|---|
+| `mova run` (stdout) | Controla y registra | No existen para Mova |
+| `mova chat` / `chat_completion` con `llm_profile` (Mova llama al modelo) | Controla y registra | **Controla**: cada tool result pasa por la misma política de lectura, sanitización y presupuesto, y queda en `events.jsonl` |
+| MCP / HTTP con un host (Claude Code, Cursor, Codex) | Controla lo que el host pide a Mova | **No ve** las tools propias del host (Read, Bash, Grep, @-menciones), salvo con hooks |
+| Claude Code **con hooks** (`check_read`, `sanitize_tool_output`) | — | Deniega lecturas fuera de la especificación y reemplaza la salida de Read por la vista gobernada. No cubre @-menciones ni lo que no dispara hooks |
+| Codex con hooks | — | Hoy solo es aplicable un bloqueo grueso: Codex lee por shell y no permite reemplazar la salida de MCP. Ver [MCP_INTEGRATION](MCP_INTEGRATION.md) |
 
-## Pruébalo (lo que muestra el GIF — todo salida real)
+Las tools de Mova **no** pueden saltarse sus propias reglas: toda lectura exige `project`, queda confinada al repo (rutas absolutas, `../` y symlinks se rechazan), respeta `exclude` y `read_scope`, y se sanitiza.
+
+## Pruébalo (sin API key, sin llamar a un modelo)
 
 ```bash
-# 1) Contexto gobernado, ahorro de tokens, PII e imagen de evidencia (sin API key, sin llamar a un modelo)
-mova run 02-pii-compliance-governance --diagram --export png
-#    → 02-pii-compliance-governance.png   (20.014 tok antes → 7.153 tok después; 171 de 1.694 tokens pseudonimizados)
-
-# 2) Audita CUALQUIER repo antes de enviarlo a una IA — no se envía nada (en scripts añade "< /dev/null": pregunta [Y/n] al final)
-mova context-trace --repo https://github.com/fastapi/fastapi --export pdf \
-  --task "solve_dependencies get_dependant in fastapi/dependencies/utils.py" --prune-docstrings \
-  --ignore "docs/**, tests/**, *.lock, docs_src/**, .github/**, docs/en/**"
-#    → context-report.pdf · context-diagram.png · pii-audit-log.json
-
-# 3) Grafos de dependencias + registro de egreso sanitizado, sin llamar a un LLM (el ejemplo 04 tiene "memory": true y "dry_run": false)
-mova run 04-nebula-delivery analizar-trazabilidad
-mova run 04-nebula-delivery agregar-columnas
-#    → analizar.png · agregar-columnas.png · egress_sanitized.md   (memory.md lo escribe `mova chat` / `save_memory`)
+mova run 04-nebula-delivery agregar-columnas     # se libera; [Evidence] run <id> → projects/04-nebula-delivery/runs/<id>
+mova run 04-nebula-delivery recalcular-tarifas   # BLOQUEADO: calcularTarifa -> tarifaPlanaV1 (src/legacy/tarifasV1.js está excluido)
+mova run 02-pii-compliance-governance            # dry_run: nada se libera; el manifest muestra qué se enmascaró por bloque
 ```
 
-Instalar: `make install` (requiere Go ≥ 1.24) o doble clic en `installers/<tu SO>/…`. Desinstalar: [`uninstallers/`](../../../uninstallers/README.md). Los costos mostrados son estimaciones teóricas de tokens de entrada (`config/prices.json`).
+Instalar: `make install` (Go ≥ 1.24). Los costos que muestra Mova son estimaciones de tokens de entrada con `cl100k_base` (otros proveedores tokenizan distinto); cuando Mova llama al modelo, los tokens reales reportados por el proveedor quedan en `events.jsonl`.
 
-## Úsalo con Claude Code
-`claude mcp add --transport stdio --scope project --env MOVA_PROJECT_ROOT=<ruta de mova> mova-context -- mova mcp start --stdio` → [guía completa, límites y permisos](../es/MCP_INTEGRATION.md). Claude Code sigue siendo el modelo; mova gobierna el contexto que pide.
+## En qué se diferencia (y en qué no)
 
-## Dónde se ha verificado
-Windows: sesiones del autor (pasos 1–2 del GIF). Linux amd64: compilación, 21 paquetes de tests, MCP stdio y ejemplo 08 (ver [VERIFICATION](../../VERIFICATION.md)). macOS y Linux arm64: compilados, **no ejecutados**.
-
-## Matriz de Auditoría Pre-Inferencia
-
-| # | Pregunta de Seguridad / CISO | Cómo responde `mova` | Evidencia / Artefacto |
-|---|---|---|---|
-| 1 | ¿Qué información llegó al modelo? | Inventario exacto de archivos y símbolos AST seleccionados | `context-report.md`/`.pdf` |
-| 2 | ¿Por qué llegó? | Relevancia por tarea + reglas `focus`/`exclude` (incl. AST) | `context-trace` |
-| 3 | ¿Qué política/autoridad permitió esta salida? | `PolicyAuthor` — jerarquía `project.json` → `config/policy.json` → `MOVA_POLICY_AUTHOR` → `system:default` | `project.json` / reportes |
-| 4 | ¿Qué política aplicó? | Reglas de inclusión/exclusión del escaneo | `config/policy.json` |
-| 5 | ¿Tenía PII o secretos? | Detección heurística de patrones sensibles | `pii-audit-log.json` |
-| 6 | ¿Se sanitizó? | Sanitizer + PII Masking (opt-in) vs paso sin cambios | Diagrama · `mova-budget-report.md` |
-| 7 | ¿Cuántos tokens fueron? | Medición con tokenizer real (`cl100k_base`) | `context-report.md` |
-| 8 | ¿Cuánto costó? | Estimación por proveedor antes del envío | `mova budget` |
-| 9 | ¿Qué commit se analizó? | Estado exacto del repo en el momento de auditar | `context-report.md` (Execution ID + commit) |
-| 10 | ¿Qué agente lo pidió? | `AgentClient` — `mova-cli`, o el cliente MCP real capturado en `initialize` | Reportes / diagrama |
-| 11 | ¿Qué modelo lo recibió? | `TargetModel` — `<provider>/<config>` de `llm_profile` | Reportes / diagrama |
-
-## Arquitectura
-
-```
-[ Agente / IDE (Claude Code, Cursor, MCP) ]
-                   │
-                   ▼  Solicitud de contexto
-┌───────────────────────────────────────────────────┐
-│     MOVA — MOTOR DE GOBERNANZA PRE-INFERENCIA      │
-│  Focus/Exclude (AST) · Sanitizer · PII Masking     │
-│  Circuit Breaker de presupuesto · Diagrama PNG/PDF │
-└───────────────────────────────────────────────────┘
-                   │
-                   ▼  Contexto auditable, con evidencia
-        [ LLM destino (Anthropic, Ollama, etc.) ]
-```
-
-Un motor, cuatro puertas — CLI, `mova chat`, MCP (stdio/HTTP), HTTP REST — todas llaman a la misma función.
-
-## Ejemplos (1 clic, 15 segundos)
-
-| Ejemplo | Qué demuestra |
-|---|---|
-| `examples/01-mcp-agent-governance` | Un agente MCP pide contexto; Mova decide y deja evidencia |
-| `examples/02-pii-compliance-governance` | PII/secretos, enmascarado, política aplicada (escenario Ley 21.719) |
-| `examples/03-tokenomics-context-trace` | `focus`/`exclude` (AST)/`task`, presupuesto, Context Trace |
-| `examples/04-output-mova-trace-fastApi` | Validación de `mova context-trace` sobre el repositorio remoto de FastAPI. Demuestra el filtrado preciso por `focus`/`exclude` mediante parsing de AST, control de presupuesto de tokens y trazabilidad de contexto en proyectos de código real. |
-| `examples/05-test-mcp-cursor` | Validación del aislamiento Air-Gap y gobernanza de egresos sobre el proyecto `02-pii-compliance-governance`. Demuestra la interceptación de `chat_completion` bajo `dry_run: true`, sanitización de PII y evidencia de auditoría consumida desde un cliente MCP.|
-| `examples/06-nebula-delivery-graph-memory` | Dos tareas encadenadas (analizar → agregar columnas) con memoria, grafo AST y egress auditado (proyecto `04-nebula-delivery`) |
-| `examples/07-nebula-multiagente-flota` | Grupo de 3 agentes con memoria compartida (proyecto `05-nebula-flota`) |
-| `examples/08-nebula-release-gate` | Multiagente sin LLM propio: un agente anfitrión orquesta vía MCP/HTTP con `run_agent` + `save_memory` |
-
-## Límites honestos del "Air-Gap" (`dry_run`) — en 15 segundos
-
-Con `egress_audit.dry_run: true`, Mova garantiza SU parte: nunca envía el contexto real a ningún
-proveedor, y siempre deja evidencia en disco. Lo que Mova **no puede garantizar** es que el **modelo
-anfitrión** (Cursor, Claude Code, Grok, etc. — quien invoca la herramienta MCP) obedezca la directiva
-de seguridad que viene con el bloqueo: un anfitrión insistente puede intentar leer otros archivos
-locales (`context-report.md`, `project.json`, memoria, etc.) para "reconstruir" el contexto por su
-cuenta — esto ya ocurrió en pruebas reales. Mova refuerza el mensaje bloqueado con una directiva
-explícita anti-elusión (ver `GOVERNANCE_CONTROLS.md § dry_run`), pero el cumplimiento final de esa
-directiva depende del anfitrión, no de Mova — Mova no controla, ni puede controlar, qué hace un
-proceso externo con el texto que recibe. No se ofrece esto como una garantía absoluta porque no lo es.
+- **Commodity — no es argumento para elegir Mova:** conteo de tokens, deduplicación, enmascarado de PII, dry-run, logs por request, memoria entre sesiones, empaquetado del repo y compresión por AST. Gateways (LiteLLM, Portkey), empaquetadores (Repomix) y los propios agentes ya lo hacen, y en varios casos mejor.
+- **Lo que Mova agrega:** una especificación de contexto **por tarea**, versionable y a nivel de símbolo; la verificación de que esa especificación es **cerrada** respecto de lo que excluye, antes de liberar; y un manifiesto que dice **por qué** se liberó o bloqueó cada contexto (regla, conflicto, decisión humana con razón). Un gateway sabe qué bytes se enviaron; no sabe qué tarea, qué símbolos ni qué dependencias faltaban.
 
 ## Documentación
 
-- [`docs/i18n/es/COMMANDS.md`](../es/COMMANDS.md) — comandos (estilo MAN page)
-- [`docs/i18n/es/PROJECT_JSON.md`](../es/PROJECT_JSON.md) — referencia de `project.json`
-- [`docs/i18n/es/AST_FILTER.md`](../es/AST_FILTER.md) — sintaxis `archivo::kind=nombre`
-- [`docs/i18n/es/CONTEXT-TRACE.md`](../es/CONTEXT-TRACE.md) — cómo se toma la decisión de contexto
-- [`docs/i18n/es/ARTIFACTS.md`](../es/ARTIFACTS.md) — qué es cada archivo que Mova genera
-- [`docs/i18n/es/GOVERNANCE_CONTROLS.md`](../es/GOVERNANCE_CONTROLS.md) — `debug`, `policies`, `on_exceed`, `dry_run`: qué corta el proceso y qué solo explica
-- [`docs/i18n/es/MCP_INTEGRATION.md`](../es/MCP_INTEGRATION.md) — **usar mova con Claude Code** (MCP, permisos, límites)
-- [`docs/i18n/es/POSITIONING.md`](../es/POSITIONING.md) — qué es mova y qué no es
-- [`docs/VERIFICATION.md`](../../VERIFICATION.md) — qué se ejecutó realmente y dónde
-- [`uninstallers/`](../../../uninstallers/README.md) — quitar mova (binario, PATH, `MOVA_PROJECT_ROOT`) sin dejar rastros
-- [`docs/i18n/es/FUNCTIONS.md`](../es/FUNCTIONS.md) — todas las funciones y argumentos, por canal (MCP · HTTP · Chat/CLI)
-- [`docs/i18n/es/SOURCE.md`](../es/SOURCE.md) — referencia técnica de arquitectura
-- [`docs/i18n/es/FAQ.md`](../es/FAQ.md)
-
-**Nota técnica:** el enmascarado de PII es una mitigación heurística, no una garantía de cumplimiento legal.
+- [GOVERNANCE_CONTROLS](GOVERNANCE_CONTROLS.md) — perímetro, controles y qué corta el proceso
+- [MCP_INTEGRATION](MCP_INTEGRATION.md) — Claude Code (MCP + hooks), Codex, HTTP seguro
+- [PROJECT_JSON](PROJECT_JSON.md) · [AST_FILTER](AST_FILTER.md) · [COMMANDS](COMMANDS.md) · [FUNCTIONS](FUNCTIONS.md)
+- [ARTIFACTS](ARTIFACTS.md) — formato de `runs/<run_id>/`
+- [CONTEXT-TRACE](CONTEXT-TRACE.md) · [SOURCE](SOURCE.md) · [FAQ](FAQ.md) · [VERIFICATION](../../VERIFICATION.md)

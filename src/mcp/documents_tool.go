@@ -17,6 +17,20 @@ import (
 )
 
 func documentTool(adapter core.Adapter, root, tool string, args map[string]any) (string, error) {
+	// No project → no repo boundary and no policy: every file tool called
+	// through MCP/HTTP or by a model requires one (before, a missing
+	// "project" silently meant "Mova's own working directory, no rules").
+	if _, err := requireProject(adapter, args); err != nil {
+		return "", err
+	}
+	return localFileTool(adapter, root, tool, args)
+}
+
+// localFileTool is documentTool without the project requirement — ONLY
+// for writes a person confirmed in the CLI (ApplyFileChange). Paths are
+// still confined (documents.ResolveFilePath): without a project, to
+// Mova's root. Reads never come through here.
+func localFileTool(adapter core.Adapter, root, tool string, args map[string]any) (string, error) {
 	switch tool {
 	// delete_path — the SINGLE unified entry point for removing files and
 	// directories (see documents/delete_service.go), reachable
@@ -106,42 +120,8 @@ func documentTool(adapter core.Adapter, root, tool string, args map[string]any) 
 		}
 		return result.Message, nil
 
-	case "read_document_layer":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		return documents.ReadDocumentLayer(path)
-
-	case "read_file":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		return documents.ReadFile(path)
-
-	case "write_file":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		if err := ensureDir(path); err != nil {
-			return "", err
-		}
-		content := str(args, "content")
-		if err := documents.WriteFile(path, content); err != nil {
-			return "", err
-		}
-		return "file written: " + path, nil
+	case "read_document_layer", "read_file":
+		return governedReadTool(adapter, root, tool, args)
 
 	case "patch_file":
 		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
@@ -160,99 +140,6 @@ func documentTool(adapter core.Adapter, root, tool string, args map[string]any) 
 			return "", err
 		}
 		return "file patched: " + path, nil
-
-	case "generate_word_contract":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		if err := ensureDir(path); err != nil {
-			return "", err
-		}
-		content := str(args, "markdown_content")
-		if err := documents.GenerateWordContract(path, content); err != nil {
-			return "", err
-		}
-		return "Word document generated: " + path, nil
-
-	case "generate_pdf_document":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		if err := ensureDir(path); err != nil {
-			return "", err
-		}
-		layout := str(args, "layout_html_css")
-		if err := documents.GeneratePDFDocument(path, layout); err != nil {
-			return "", err
-		}
-		return "PDF generated: " + path, nil
-
-	case "generate_vector_graphic":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		if err := ensureDir(path); err != nil {
-			return "", err
-		}
-		svgCode := str(args, "svg_code")
-		if err := documents.GenerateVectorGraphic(path, svgCode); err != nil {
-			return "", err
-		}
-		return "SVG generated: " + path, nil
-
-	case "generate_excel_report":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		if err := ensureDir(path); err != nil {
-			return "", err
-		}
-		sheets, err := parseSheetsData(args["sheets_data"])
-		if err != nil {
-			return "", err
-		}
-		if err := documents.GenerateExcelReport(path, sheets); err != nil {
-			return "", err
-		}
-		return "Excel generated: " + path, nil
-
-	case "trigger_diffusion_image":
-		path, ambiguousMsg, err := resolveSmartFile(adapter, root, args, "filename")
-		if err != nil {
-			return "", err
-		}
-		if ambiguousMsg != "" {
-			return ambiguousMsg, nil
-		}
-		if err := ensureDir(path); err != nil {
-			return "", err
-		}
-		cfg, err := loadDiffusionConfig(root)
-		if err != nil {
-			return "", err
-		}
-		prompt := str(args, "prompt")
-		aspectRatio := str(args, "aspect_ratio")
-		if err := documents.TriggerDiffusionImage(cfg, path, prompt, aspectRatio); err != nil {
-			return "", err
-		}
-		return "image generated: " + path, nil
 
 	default:
 		return "", fmt.Errorf("unknown tool: %s", tool)

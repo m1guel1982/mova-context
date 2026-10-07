@@ -8,7 +8,7 @@ call() { # call <tool> <json-arguments>
   curl -s "$URL" -H 'Content-Type: application/json' \
     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$1\",\"arguments\":$2}}"; }
 
-mova mcp start --port "$PORT" >/dev/null 2>&1 & MOVA_PID=$!; trap 'kill $MOVA_PID 2>/dev/null' EXIT
+mova mcp start --http --port "$PORT" >/dev/null 2>&1 & MOVA_PID=$!; trap 'kill $MOVA_PID 2>/dev/null' EXIT
 for _ in $(seq 20); do curl -sf "localhost:$PORT/health" >/dev/null && break; sleep 0.5; done
 
 echo "== 1. Agentes del grupo";            call list_agents  "{\"group\":\"$G\"}"; echo

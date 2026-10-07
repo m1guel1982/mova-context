@@ -1,40 +1,18 @@
-# 02 — Gobernanza de PII y secretos antes de la inferencia
+# Ejemplo 02 — PII y secretos por bloque, con `dry_run`
 
-**Qué es:** datos reales de clientes (ficticios) van a ser consultados por un LLM.
-Mova detecta indicadores de PII, aplica enmascarado técnico, y deja evidencia — antes del envío.
+[English](README_EN.md)
 
-**Escenario ilustrativo:** Ley 21.719 (Chile). Esto es evidencia y control pre-inferencia,
-**no** es una certificación de cumplimiento normativo.
-
-## Ejecutar (1 comando)
+Datos ficticios de clientes chilenos (`customers.json`, una ficha PDF, una política DOCX y un log de sistema variado). El proyecto tiene `pii_masking` activo y `egress_audit.dry_run: true`: **nada se libera**, y el run muestra qué se habría enviado.
 
 ```bash
-mova run 02-pii-compliance-governance --diagram --export png --path ./diagramas/evidencia.png
+mova run 02-pii-compliance-governance                    # [Evidence] run <id>; dry_run
+mova budget 02-pii-compliance-governance --focus         # ahorro separado por selección y por sanitización
 ```
 
-## Qué vas a ver  
+Qué mirar en `projects/02-pii-compliance-governance/runs/<id>/`:
+- `context.txt`: los 10 nombres, direcciones, RUT y emails aparecen seudonimizados (`[PII_…]`), también dentro del texto del PDF (propagación de valores conocidos desde `field_keys`). Los marcadores `FOCUS:` y la estructura JSON quedan intactos.
+- `manifest.json → governance.changed_blocks`: qué se enmascaró en cada archivo y con qué detector (`field_values_masked`, `typed_pii_masked`, `shape_pii_masked`, `known_values_masked`).
 
-| Paso | Resultado |
-|---|---|
-| Contexto seleccionado | `customers.json`, `customer-profile.pdf`, `privacy-policy.docx`, `system-logs.txt` |
-| Control aplicado | Sanitizer ON · **PII Masking ON** (`budget.pii_masking.enabled: true`) |
-| Decisión | ~78 de 1.694 tokens candidatos pseudonimizados con `[PII_xxxxxxxx]`; 64% de reducción total |
-| Evidencia | `evidencia.png` (diagrama) + `context-report.md` + `mova-budget-report.md` + `pii-audit-log.json` |
-
-`evidencia-ejemplo.png` en esta carpeta es una muestra ya generada.
-
-## Dónde queda cada evidencia (importante, no es redundante)
-
-- **`mova-budget-report.md`** (en `projects/02-pii-compliance-governance/`, se genera con `mova budget`) — el resultado REAL de PII Masking para esta corrida: cuántos tokens se pseudonimizaron y por qué.
-- **`pii-audit-log.json`** — aquí su sección `security` queda en cero porque ese detalle fino (archivos con PII, hallazgos clasificados) solo se llena en modo *discovery* (escaneo de un repo remoto sin `project.json`), no en una corrida con `project.json` como esta. `execution.policy_author` / `agent_client` / `target_model` sí quedan siempre completos.
-
-## Ver la traza en texto (sin diagrama)
-
-```bash
-mova context-trace 02-pii-compliance-governance --export md
-```
-
-**Disclaimer técnico:** el enmascarado es heurístico (forma estructural + entropía), no un diccionario de nombres.
-No detecta el 100% de la PII y puede marcar falsos positivos. No reemplaza revisión legal.
-
-`project/project.json` en esta carpeta es una copia de lectura — el archivo real vive en `projects/02-pii-compliance-governance/project.json`.
+**Lo que este ejemplo NO demuestra:**
+- **Selección:** el focus incluye los 4 archivos. La diferencia entre "repo completo" y "focus" que muestra `mova budget --focus` viene de extraer texto de PDF/DOCX, no de seleccionar.
+- **Exactitud del enmascarado:** el puntaje de forma/entropía enmascara de más en los logs (timestamps, identificadores) y no tiene precisión ni recall medidos. Es mitigación, no cumplimiento de la Ley 21.719.

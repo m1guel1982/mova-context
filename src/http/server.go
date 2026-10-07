@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -22,6 +23,23 @@ import (
 
 // StartServer inicia el servidor MCP sobre HTTP (ideal para Postman/curl).
 func StartServer(adapter core.Adapter, root string, port int) error {
+	return StartServerOn(adapter, root, "127.0.0.1", port)
+}
+
+// StartServerOn serves MCP over HTTP on bind:port. Security model (the
+// server exposes reads AND writes/deletes of the project's repo):
+//   - default bind is 127.0.0.1 (loopback only);
+//   - any non-loopback bind REQUIRES MOVA_HTTP_TOKEN (refuses to start
+//     otherwise); when the token is set, every request must send
+//     "Authorization: Bearer <token>" (constant-time compare);
+//   - requests with an Origin header that is not localhost/127.0.0.1 are
+//     rejected (browser DNS-rebinding protection), except /health.
+func StartServerOn(adapter core.Adapter, root, bind string, port int) error {
+	token := os.Getenv("MOVA_HTTP_TOKEN")
+	if !isLoopbackBind(bind) && token == "" {
+		return fmt.Errorf("mova http: bind %q no es loopback; define MOVA_HTTP_TOKEN para exigir autenticación (se rehúsa a arrancar sin ella)", bind)
+	}
+	mcp.SetHTTPMode(true)
 	logger := logging.Open(root)
 	logging.SetDefault(logger)
 	defer logger.Close()
@@ -226,8 +244,8 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3"})
 	})
 
-	addr := fmt.Sprintf(":%d", port)
-	log.Printf("Mova MCP (HTTP) running → http://localhost%s/mcp", addr)
+	addr := net.JoinHostPort(bind, strconv.Itoa(port))
+	log.Printf("Mova MCP (HTTP) running → http://%s/mcp (token: %v)", addr, token != "")
 
 	// net/http already gives every request its own goroutine; what it
 	// does NOT give is a ceiling, so a burst of concurrent callers (CLI
@@ -239,7 +257,7 @@ func StartServer(adapter core.Adapter, root string, port int) error {
 	// worker slot forever.
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      limitConcurrency(mux, httpConcurrencyLimit()),
+		Handler:      Guard(limitConcurrency(mux, httpConcurrencyLimit()), token),
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  120 * time.Second,

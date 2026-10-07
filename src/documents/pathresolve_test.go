@@ -1,6 +1,7 @@
 package documents
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,9 +45,9 @@ func TestResolveDirectoryPathEmptyDefaultsToRepo(t *testing.T) {
 	}
 }
 
-func TestResolveDirectoryPathUnixAbsolute(t *testing.T) {
+func TestResolveDirectoryPathUnixAbsoluteInsideRepo(t *testing.T) {
 	root := t.TempDir()
-	abs := filepath.Join(root, "otra-carpeta") // valid absolute path on this host
+	abs := filepath.Join(root, "mi-repo", "otra-carpeta") // absolute, inside repo
 	resolved, ambiguous, err := ResolveDirectoryPath(root, "mi-repo", abs)
 	if err != nil {
 		t.Fatalf("ResolveDirectoryPath: %v", err)
@@ -56,6 +57,35 @@ func TestResolveDirectoryPathUnixAbsolute(t *testing.T) {
 	}
 	if resolved != filepath.Clean(abs) {
 		t.Errorf("resolved = %q, want %q", resolved, abs)
+	}
+}
+
+// Repo boundary: absolute paths outside the repo, "../" traversal and
+// symlinks escaping the repo are all rejected, for files and directories.
+func TestResolvePathRejectsEscapes(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "mi-repo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(repo, "fuga")); err != nil {
+		t.Skip("symlinks not available:", err)
+	}
+	cases := []string{
+		"/etc/passwd",
+		filepath.Join(root, "otra-carpeta", "x.txt"),
+		"../../x.txt",
+		"sub/../../x.txt",
+		"fuga/secreto.txt",
+	}
+	for _, c := range cases {
+		if _, _, err := ResolveFilePath(root, "mi-repo", c); !errors.Is(err, ErrOutsideRepo) {
+			t.Errorf("ResolveFilePath(%q) err = %v, want ErrOutsideRepo", c, err)
+		}
+		if _, _, err := ResolveDirectoryPath(root, "mi-repo", c); !errors.Is(err, ErrOutsideRepo) {
+			t.Errorf("ResolveDirectoryPath(%q) err = %v, want ErrOutsideRepo", c, err)
+		}
 	}
 }
 

@@ -58,6 +58,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"mova.local/evidence"
 	"os"
 	"strings"
 
@@ -116,6 +117,18 @@ func runChat(root, project, task string) {
 		}
 		printSanitizeStatus(gated.Sanitize)
 		printCircuitBreakerStatus(gated.CircuitBreaker)
+		dryRun, _ := core.ResolveEgressAudit(root, project, proj)
+		run, rerr := budget.RecordRun(root, project, task, proj, gated, budget.RunInfo{
+			Door:  "chat:provider",
+			Agent: evidence.Attr{Value: "mova-chat", Source: "observed:cli"},
+			Model: evidence.Attr{Value: sess.Provider + "/" + sess.Model, Source: "observed:sesión de Mova (Mova llama al proveedor)"},
+		}, dryRun)
+		if rerr != nil {
+			consolePrint("\n[Evidence] ERROR: no se pudo escribir la evidencia: " + rerr.Error() + "\n")
+			return
+		}
+		sess.Run, sess.ProjectName, sess.TaskName = run, project, task
+		consolePrint(fmt.Sprintf("[Evidence] run %s → %s\n", run.ID, run.Dir))
 		if gated.Err != nil {
 			consolePrint("\n" + gated.Err.Error() + "\n\n")
 			return
@@ -124,7 +137,7 @@ func runChat(root, project, task string) {
 		systemText, boundary := applyCacheLayout(gated.Sections, proj)
 		sess.SetSystem(systemText + mcp.ToolsSystemPrompt(proj.Tools))
 		sess.CacheBoundary = boundary
-		sess.EgressAuditDryRun, sess.EgressAuditOutputFile = core.ResolveEgressAudit(root, project, proj)
+		sess.EgressAuditDryRun = dryRun
 		if core.ToolsEnabled(proj.Tools) {
 			consolePrint("[Tools] Enabled for this chat — the model may create/write files and directories (see project.json's \"tools\").\n")
 		}

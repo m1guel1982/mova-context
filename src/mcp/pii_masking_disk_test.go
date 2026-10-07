@@ -166,11 +166,8 @@ func TestGetFullContext_PIIMasking_NoRawPIIOnDisk(t *testing.T) {
 			text := callTool(t, root, "get_full_context", map[string]any{"project": project})
 			assertNoRawPII(t, "get_full_context tool result", text)
 
-			data, err := os.ReadFile(outputFile)
-			if err != nil {
-				t.Fatalf("expected %s to exist: %v", outputFile, err)
-			}
-			assertNoRawPII(t, "on-disk evidence file ("+outputFile+")", string(data))
+			_ = outputFile
+			assertNoRawPII(t, "run context.txt", string(latestRunContext(t, root, project)))
 		})
 	}
 }
@@ -188,11 +185,8 @@ func TestChatCompletion_PIIMasking_NoRawPIIOnDisk(t *testing.T) {
 			text := callTool(t, root, "chat_completion", map[string]any{"project": project, "message": "resume el contexto"})
 			assertNoRawPII(t, "chat_completion tool result", text)
 
-			data, err := os.ReadFile(outputFile)
-			if err != nil {
-				t.Fatalf("expected %s to exist: %v", outputFile, err)
-			}
-			assertNoRawPII(t, "on-disk evidence file ("+outputFile+")", string(data))
+			_ = outputFile
+			assertNoRawPII(t, "run context.txt", string(latestRunContext(t, root, project)))
 		})
 	}
 }

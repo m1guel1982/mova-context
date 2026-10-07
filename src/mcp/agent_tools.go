@@ -22,8 +22,12 @@ import (
 	"fmt"
 	"strings"
 
+	"mova.local/budget"
 	"mova.local/core"
 	"mova.local/documents"
+	"mova.local/evidence"
+	"mova.local/models"
+	"mova.local/sanitize"
 )
 
 // toolCallStart/End delimit a tool call inside a model's plain-text
@@ -396,4 +400,71 @@ func RunFileTool(adapter core.Adapter, root, name string, arguments map[string]a
 		return "", fmt.Errorf("tool %q is not a recognized file/directory tool", name)
 	}
 	return documentTool(adapter, root, name, arguments)
+}
+
+// loopTokens accumulates governed tool-result tokens per run (budget).
+var loopTokens = map[*evidence.Run]int{}
+
+// RunLoopTool runs a tool call emitted by the model inside a loop Mova
+// controls (`mova chat`, chat_completion) under the SAME policy as the
+// initial context: the project/task are forced (the model cannot pick
+// another project or omit it), reads go through core.CheckRead +
+// sanitization, every other result is sanitized, the result's tokens
+// count against the task's max_tokens together with the system context,
+// and each call is appended to the run's events.jsonl.
+func RunLoopTool(adapter core.Adapter, root string, sess *models.Session, proj *core.Project, name string, args map[string]any) (string, error) {
+	if args == nil {
+		args = map[string]any{}
+	}
+	if sess.ProjectName == "" {
+		return "", fmt.Errorf("tool-calling sin proyecto: no hay política que aplicar")
+	}
+	args["project"], args["task"] = sess.ProjectName, sess.TaskName
+	ev := map[string]any{"tool": name}
+	var result string
+	var err error
+	if name == "read_file" || name == "read_document_layer" {
+		var path, amb string
+		path, amb, err = resolveSmartFile(adapter, root, args, "filename")
+		switch {
+		case err != nil:
+			ev["allowed"], ev["rule"], ev["reason"] = false, "repo_boundary", err.Error()
+		case amb != "":
+			result = amb
+		default:
+			var rev map[string]any
+			result, rev, err = GovernedRead(root, proj, sess.TaskName, path)
+			for k, v := range rev {
+				ev[k] = v
+			}
+		}
+	} else {
+		result, err = RunAgentTool(adapter, root, name, args, proj.Tools)
+		if err == nil {
+			var rep sanitize.BlockReport
+			result, rep = budget.GovernText(root, proj, sess.TaskName, name+".result", result)
+			if rep.Changed() {
+				ev["governance"] = rep
+			}
+		}
+	}
+	if err == nil {
+		tokens, _, _ := budget.CountTokens(result, sess.Model)
+		systemTokens, _, _ := budget.CountTokens(sess.System, sess.Model)
+		loopTokens[sess.Run] += tokens
+		ev["tokens_estimated"], ev["loop_tokens_total"] = tokens, loopTokens[sess.Run]
+		t := budget.ResolveTask(proj, core.ResolveTaskName(proj, sess.TaskName))
+		if cfg := core.ResolveBudget(proj, t); cfg != nil && cfg.MaxTokens > 0 && systemTokens+loopTokens[sess.Run] > cfg.MaxTokens {
+			err = fmt.Errorf("presupuesto excedido: contexto (%d) + resultados de tools (%d) > max_tokens (%d); resultado no entregado al modelo", systemTokens, loopTokens[sess.Run], cfg.MaxTokens)
+			ev["budget_exceeded"] = true
+			result = ""
+		}
+	}
+	if err != nil {
+		ev["error"] = err.Error()
+	} else {
+		ev["sha256"] = evidence.SHA256([]byte(result))
+	}
+	_ = sess.Run.Event("tool_result", ev)
+	return result, err
 }

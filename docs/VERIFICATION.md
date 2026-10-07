@@ -1,35 +1,21 @@
-# Verification log (what was actually run)
+# Qué se ejecutó realmente
 
-Date: 2026-10-05 · Host: Linux amd64 sandbox · Go 1.24.13 · dependencies resolved with `GOPROXY=direct` (the `replace` mirrors of `golang.org/x/*` in `src/go.mod` to `github.com/golang/*` worked; `go.mod`/`go.sum` unchanged).
+Entorno: Linux amd64, Go 1.27.1 (el `go.mod` declara 1.24.4), binario compilado desde `src/cli`. macOS, Windows y arm64 **no** se ejecutaron en esta verificación.
 
-## Verified (executed)
-| Item | Result |
+| Verificación | Resultado |
 |---|---|
-| `make build` in a clean copy | OK → `dist/mova` (41 MB), `mova list` runs |
-| `go test -tags <GO_TAGS> ./...` | 21 packages `ok`, 3 without tests, **0 FAIL** (re-run with `-count=1` after the final identifier renames in tests) |
-| `mova run --count 02-pii-compliance-governance` | 7153 tokens (cl100k_base) |
-| `mova run 02-… --diagram --export png` | PNG generated: 20,014 → 7,153 tok (−64 %); Focus 20,101 → 5,325 (−74 %); PII 171/1,694 pseudonymized; 199 repeated lines collapsed |
-| `mova budget 04-nebula-delivery --focus` | Focus 1,965 → 779 tok (−60.4 %); task 2: 598 (−69.6 %) (tiny fictional repo) |
-| `mova run --count 08-nebula-release-gate` / `agents list` / `agents run --all` | 3 agents, 4,994 tok total |
-| MCP stdio `tools/list` | 26 tools; all documented in `FUNCTIONS.md` |
-| HTTP+MCP flow `examples/08/run-demo.sh` | OK; shared memory written/read; output in `examples/08-*/evidence/` |
-| `mova context-trace --repo <local path>` and `<GitHub URL>` | OK; asks `[Y/n]` on stdin (use `< /dev/null`) |
-| MCP stdio handshake as Claude Code does it (`initialize` → `tools/list` → `tools/call`) | server `mova-context`, protocol 2024-11-05, 26 tools; `get_full_context` ex.02: `dry_run:true` → 555 B notice; `dry_run:false` → 23,463 B, 171 `[PII_…]`, 0 raw e-mails |
-| `uninstallers/linux/uninstall.sh` in an isolated HOME (install → uninstall) | `.bashrc` byte-identical to the original; shared bin folder keeps PATH; refuses folders without `workflow.md`+`src/` |
-| `mova run 04-nebula-delivery <task>` from scratch | creates both PNG graphs, `egress_sanitized.md`, caches; does **not** create `memory.md` (written by chat/`save_memory`) |
-| `mova trace 03-…`, `memory-read`, `show config nebula-demo` | OK |
+| `go test ./...` | Todos los paquetes pasan, incluidos los tests nuevos: límite del repo (`documents`), política de lectura y hooks (`mcp/documents_policy_test.go`), loop de tools (`TestRunLoopTool_GovernsToolResults`), sanitización por bloque (`sanitize/govern_test.go`), cierre de dependencias (`graph/closure_test.go`), evidencia de escritura única (`evidence`), guard HTTP (`http/guard_test.go`) |
+| `read_file` por MCP stdio sobre `src/legacy/tarifasV1.js` (excluido en 04) | Denegado (`exclude`) |
+| `read_file` sobre `datos/pedidos-demo.json` (fuera del focus en 04) | Denegado (`focus_scope`) |
+| `read_file` sin `project` con ruta absoluta a datos con PII | Denegado (`project` obligatorio) |
+| `read_file` sobre `/etc/passwd` | Denegado (fuera del repo) |
+| `mova run 04-nebula-delivery analizar-trazabilidad` / `agregar-columnas` | Liberados, cada uno con su `runs/<run_id>/` |
+| `mova run 04-nebula-delivery recalcular-tarifas` | Bloqueado: `calcularTarifa -> tarifaPlanaV1 (call, excluido)`; `context.txt` vacío y `decision.gate = dependency_closure` |
+| `mova run 02-pii-compliance-governance` dos veces | Mismo `context.sha256` en ambos runs; 0/10 nombres, 0 direcciones, 0 emails, 0 RUT y 0 IP en claro en `context.txt`; 4 bloques `FOCUS:` separados |
+| `mova mcp start --http --bind 0.0.0.0` sin `MOVA_HTTP_TOKEN` | Se rehúsa a arrancar (test) |
+| `examples/08-nebula-release-gate/run-demo.sh` | Ejecutado sobre HTTP loopback; las 3 entradas de memoria quedan con `source=host` |
 
-## Built but NOT executed
-`linux-arm64`, `macos-amd64`, `macos-arm64` (Mach-O), `windows-amd64.exe` (PE32+): compile cleanly with `CGO_ENABLED=0`; no machine available to run them. Do not claim support until `ci.yml` is green on those runners.
-
-## Not verified
-`uninstallers` on Windows/macOS · a live Claude Code session · `mova chat` against a real model · `/save` `/delete` `/diagram` HTTP routes · `chat_completion` · `release.yml` and `ci.yml` on GitHub · PII precision/recall · Windows installers.
-
-## Defects found and fixed
-1. `COMMANDS` docs described `is_group`/`members`; code uses `projects/<group>/config.json` (`group`,`agents`).
-2. Broken links (`source.md`, `context-trace.md`, `MCP_HTTP_TOOLS.md`), `cd src && make install` (Makefile is at the root).
-3. Missing model profile `nebula-demo` (documented, absent) → created `config/models/ollama/nebula-demo.json` (local Ollama).
-4. `.gitignore` ignored `/Makefile`; `make test` ignored build tags; `install` did not build.
-5. Example 08 initially used `dry_run: true`, which blocks MCP reads → `false` (see `FUNCTIONS.md`).
-6. A demo GIF with wrong figures was regenerated from the real output above.
-7. Private-case identifiers removed from a unit-test fixture, `PROJECT_JSON.md` and example text.
+**No verificado:**
+- La integración de punta a punta de los hooks `check_read` / `sanitize_tool_output` dentro de Claude Code (solo están probadas las respuestas de las tools).
+- La precisión y el recall del enmascarado PII.
+- Que un modelo resuelva mejor una tarea con el contexto de Mova que sin él.

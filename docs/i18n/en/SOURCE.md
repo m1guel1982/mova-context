@@ -1,7 +1,7 @@
 # Mova Context — Technical Architecture Reference
 
 **One binary. One behavior.** `mova` ships as a single Go executable. Every capability is reachable
-identically from four doors — **CLI**, **Chat (REPL)**, **MCP** (stdio/HTTP), and **HTTP REST** — because
+from several doors — **CLI**, **Chat (REPL)**, **MCP** (stdio/HTTP), and **HTTP REST** — because
 all four call the exact same underlying function. There is never a second, door-specific implementation
 of business logic.
 
@@ -66,14 +66,14 @@ the `context_trace` MCP tool, and `POST /api/v1/context-trace` (HTTP).
 - **Discovery mode** (`AnalyzeRemote`, remote repo, no `project.json`) — counts tokens file by file so it
   can build the "tokens by directory" breakdown.
 
-**Audit identity** (new — answers Audit Matrix questions #3, #10, #11, see `README.md`):
-`Data.AgentClient` / `Data.TargetModel` / `Data.PolicyAuthor`, computed in `trace.applyAuditIdentity` and
-`core.ResolvePolicyAuthor`/`core.TargetModelFor`. Never left empty — see `docs/i18n/en/ARTIFACTS.md`.
+**Evidence** (`src/evidence`, `budget/run_evidence.go`): every context release writes `runs/<run_id>/` with `context.txt` and `manifest.json` (write-once) plus `events.jsonl` (append-only). Agent, model and author carry their source (`declared`, `observed`, `not_observable`) — see `ARTIFACTS.md`.
+
+**Read policy** (`core/access_policy.go`): `CheckRead`/`GovernedRead` is the single read gate for MCP tools, the `mova chat`/`chat_completion` loops (`mcp.RunLoopTool`) and hooks (`mcp/hook_tools.go`). **Dependency closure**: `graph/closure.go`, registered in `core.ClosureHook` and run as a gate in `budget.BuildGatedContext`. **Per-block sanitization**: `sanitize/govern.go`.
 
 ## 5. Transports — same engine, different door
 
 CLI, Chat, MCP (stdio/HTTP), and HTTP REST all call `mcp.Process()` or the same `core`/`trace`/`budget`
-functions. The only difference between doors is **who's** calling — see `AgentClient` above.
+functions. Doors differ in who calls and where the context goes (`manifest.door`). An MCP host's own tools stay outside Mova except via hooks.
 
 ## 6. Diagrams
 

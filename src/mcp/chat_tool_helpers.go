@@ -70,7 +70,7 @@ func sendWithToolsMCP(statusLog *strings.Builder, sess *models.Session, adapter 
 				terr = fmt.Errorf(`"changes" must be a non-empty array of {"action","path","content"}`)
 			}
 		} else {
-			result, terr = RunAgentTool(adapter, root, name, args, proj.Tools)
+			result, terr = RunLoopTool(adapter, root, sess, proj, name, args)
 		}
 		if terr != nil {
 			result = "ERROR: " + terr.Error()

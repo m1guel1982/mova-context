@@ -1,17 +1,13 @@
 {
   "project": "04-nebula-delivery",
   "author": "system:default",
-  "description": "Ejemplo 6 — Nebula Delivery (ficticio): 2 tareas encadenadas. 'analizar-trazabilidad' encuentra dónde se pierde la hora real de llegada y deja su síntesis en memory.md; 'agregar-columnas' parte de esa memoria. Cada tarea genera su grafo AST y el egress queda auditado.",
+  "description": "Ejemplo 6 — Nebula Delivery (ficticio). Demuestra la validación de cierre de dependencias: 'analizar-trazabilidad' y 'agregar-columnas' tienen un focus cerrado respecto de lo excluido y se liberan; 'recalcular-tarifas' selecciona calcularTarifa pero excluye src/legacy/tarifasV1.js, del que calcularTarifa depende (tarifaPlanaV1): Mova BLOQUEA ese contexto y deja el conflicto en runs/<run_id>/manifest.json. Ver examples/06-nebula-delivery-graph-memory/README.md para resolverlo con focus o accept_missing.",
   "repo": "examples/06-nebula-delivery-graph-memory/repo",
   "lang": "es",
   "adapter": "file",
   "default_task": "analizar-trazabilidad",
 
   "memory": true,
-  "egress_audit": {
-    "dry_run": false,
-    "output_file": "egress_sanitized.md"
-  },
 
   "paths": {
     "agents": "examples/06-nebula-delivery-graph-memory/capabilities/agents",
@@ -89,14 +85,35 @@
       },
       "focus": [
         "src/despacho/planificador.js::func=normalizarPedido",
-        "src/facturacion/cobros.js::func=generarCobro,construirFilaReporte,exportarReporteCobros,registrarCobro",
+        "src/facturacion/cobros.js::func=generarCobro,construirFilaReporte,exportarReporteCobros"
+      ],
+      "exclude": [
+        "src/legacy/tarifasV1.js"
+      ],
+      "graph": "agregar-columnas.png"
+    },
+
+    "recalcular-tarifas": {
+      "prompt": "agregar-columnas",
+      "variables": {
+        "PROJECT_NAME": "04-nebula-delivery",
+        "LANG": "es",
+        "STACK": "Node.js / JavaScript",
+        "QUERY": "Revisar el cálculo de tarifas sin tocar el catálogo legacy.",
+        "MAPPER_FUNCS": "calcularTarifa",
+        "GENERATOR_FUNCS": "redondearCreditos",
+        "SOURCE_KEYS": "pesoKg, catalogo",
+        "PRIORITY_RULE": "n/a",
+        "OUTPUT_FORMAT": "n/a"
+      },
+      "focus": [
         "src/facturacion/tarifas.js::func=calcularTarifa,aplicarDescuentoFlota,recargoRadiacion,redondearCreditos"
       ],
       "exclude": [
         "src/legacy/tarifasV1.js",
         "src/facturacion/tarifas.js::func=recargoRadiacionLegacy"
       ],
-      "graph": "agregar-columnas.png"
+      "dependency_policy": "block"
     }
   },
 

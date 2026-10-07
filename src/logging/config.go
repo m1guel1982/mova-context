@@ -1,6 +1,6 @@
 // Package logging implements Mova Context's opt-in logging system
 // (spec section 3). Configuration lives at config/log/logging.json
-// (English keys, see config/log/README.en.md / README.es.md for the
+// (English keys, see logging.json itself for the
 // full parameter reference) and is DISABLED by default — Load returns a
 // Config with Enabled=false whenever the file is missing or unreadable,
 // so a fresh checkout never writes logs until someone opts in.

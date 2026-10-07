@@ -1,13 +1,13 @@
 # FAQ — mova en 15 segundos
 
-> **Tú decides qué contexto puede llegar a la IA. mova deja evidencia de esa decisión.**
+> **Especificación de contexto por tarea, validada (cierre de dependencias) y con evidencia inmutable por ejecución.**
 
 | En 15 segundos | |
 |---|---|
 | **Qué es** | Un binario Go local (CLI · `mova chat` · MCP · HTTP) que corre **antes** de la llamada al modelo. |
-| **Qué hace** | `Focus → PII → Budget → Egress Gate → LLM → Evidence`: elige, enmascara, cotiza, bloquea si hace falta y deja evidencia en disco. |
+| **Qué hace** | Aplica un `project.json` por tarea: valida que el focus no dependa de código excluido, arma un contexto determinista, aplica secretos/PII por bloque y presupuesto, y escribe `runs/<run_id>/` antes de liberar. |
 | **Qué NO es** | Un gateway, IDE, RAG, framework de agentes ni certificación de cumplimiento. No ve lo que un IDE/agente envía por su cuenta. |
-| **Pruébalo** | `mova run --count 02-pii-compliance-governance` → **7153 tokens**, sin API key y sin llamar a un modelo. |
+| **Pruébalo** | `mova run 04-nebula-delivery recalcular-tarifas` → bloqueado por cierre de dependencias, sin API key y sin llamar a un modelo. |
 
 **Atajos:** [Esencial](#1-lo-esencial) · [Privacidad](#2-privacidad-y-egreso) · [Tokens y costo](#3-tokens-y-costo) · [Flujo y arquitectura](#4-flujo-y-arquitectura) · [context-trace y ranking](#5-context-trace-y-ranking) · [Chat y archivos](#6-chat-y-archivos) · [Instalación](#7-instalación-y-windows)
 
@@ -23,17 +23,19 @@
 |---|---|---|
 | `focus` (archivos/símbolos, no todo el repo) y agents/skills/prompts declarados; nunca «todo lo que haya en disco» | Sanitizer: párrafos duplicados, logs repetidos, comentarios/líneas en blanco (opcional) | PII Masking (opcional), `max_tokens` (techo duro), circuit breaker de gasto |
 
-**¿Mis datos salen de mi máquina?** Solo si tu `llm_profile` apunta a un proveedor cloud. Con `ollama`/`lm-studio` nada sale; el reporte lo confirma en `TargetModel`. Con `dry_run: true`, mova no envía nada y escribe lo que habría enviado en `egress_sanitized.md`.
+**¿Mis datos salen de mi máquina?** Por Mova, solo si `llm_profile` apunta a un proveedor cloud (`mova chat`/`chat_completion`) o si un host MCP recibe el contexto y lo envía a su modelo. Con `dry_run: true`, Mova no libera nada; lo que habría liberado queda en `runs/<run_id>/context.txt`.
 
 **¿Funciona con Claude Code?** Sí, como servidor MCP local; Claude Code sigue siendo el modelo. Guía, permisos y límites: [`MCP_INTEGRATION.md`](MCP_INTEGRATION.md).
 
-**¿Qué NO garantiza?** Gobierna el contexto que pasa **por mova**. Un agente puede leer archivos por su cuenta (`Read`, `Bash`) y mova no lo controla. El PII es heurístico, no certificación legal.
+**¿Qué NO garantiza?** Gobierna lo que pasa **por Mova**. Las tools propias de un agente (`Read`, `Bash`, @-menciones) quedan fuera, salvo las lecturas que pasen por los hooks `check_read`/`sanitize_tool_output` en Claude Code. El PII es heurístico, sin precisión ni recall medidos.
+
+**¿Para qué lo necesito si ya tengo AGENTS.md, el agente y un gateway?** Si el agente puede leerlo todo, probablemente no lo necesitas. Mova aporta cuando **restringes** el contexto: AGENTS.md es una instrucción que nadie verifica, el agente resuelve dependencias leyendo justamente lo que restringiste, y el gateway ve bytes, no la tarea ni los símbolos. Mova verifica que la restricción no deje fuera código del que depende la tarea, y registra por qué liberó o bloqueó cada contexto.
 
 ---
 
 ## 2. Privacidad y egreso
 
-**¿Cómo protege la PII?** Enmascarado **estructural**, sin diccionarios ni reglas de idioma: puntúa la forma del token (dígitos, separadores, símbolos, longitud, mayúsculas) y su entropía de Shannon. Si supera `min_score` (0,62 por defecto; `pii_strict` 0,40, `pii_permissive` 0,85) se reemplaza por `[PII_a1b2c3d4]` (mismo valor → mismo tag). Se activa con `budget.pii_masking.enabled`. No es infalible ni sustituye una revisión legal; su valor es hacer **visible y auditable** cuánto de lo enviado parece dato personal. *Medido en el ejemplo 02: 171 de 1.694 tokens candidatos pseudonimizados. Precisión/recall: sin medir.*
+**¿Cómo protege la PII?** Por bloque y según el tipo de archivo. En **datos**: los valores de `field_keys` (nombre, dirección, RUT…) se seudonimizan y el mismo valor se enmascara en los demás bloques; además hay detectores tipados (email, RUT, teléfono) y un puntaje de forma/entropía. En **código**: solo detectores tipados y redacción del literal de secretos, para no romper la sintaxis. Se activa con `budget.pii_masking.enabled`. No detecta nombres en texto libre que no aparezcan como valor de `field_keys`.
 
 **¿Qué hace `dry_run`?** Con `egress_audit.dry_run: true` mova **no entrega** contexto: ni al proveedor ni a un agente MCP/HTTP (recibe un aviso con `tokens_sent: 0`). Para que un agente anfitrión (p. ej. Claude Code) lea el contexto **gobernado**, usa `dry_run: false`. Límite honesto: mova garantiza *su* lado; no puede garantizar que un agente decidido no intente reconstruir el contexto leyendo otros archivos locales.
 
@@ -117,7 +119,7 @@ Los pasos 1–6 ocurren **siempre en tu máquina**. `mova run` arma el contexto,
 
 **¿El chat siempre crea/edita/borra archivos con solo pedirlo?** Con modelos cloud (Claude, GPT, Gemini), de forma fiable. Con modelos locales pequeños (p. ej. un Qwen 3B en LM Studio) no siempre: a veces responden «no puedo crear archivos» en vez de invocar `apply_file_changes`, aun con la instrucción reforzada de `mova chat`. No es del motor sino del modelo: prueba uno más grande o pide explícitamente «usa `apply_file_changes` para crear…».
 
-**¿Funciona igual en las 4 puertas?** Mismo motor. El CLI pide confirmación interactiva (menú o y/n); MCP y HTTP, sin terminal, **devuelven la propuesta como texto y exigen una segunda llamada explícita** (p. ej. `delete_path` con `confirm:"true"`); nunca aplican solos. Referencia: [`FUNCTIONS.md`](FUNCTIONS.md), [`PROJECT_JSON.md`](PROJECT_JSON.md) (`apply`).
+**¿Funciona igual en todas las puertas?** Mismo motor. El CLI pide confirmación interactiva (menú o y/n); MCP y HTTP, sin terminal, **devuelven la propuesta como texto y exigen una segunda llamada explícita** (p. ej. `delete_path` con `confirm:"true"`); nunca aplican solos. Referencia: [`FUNCTIONS.md`](FUNCTIONS.md), [`PROJECT_JSON.md`](PROJECT_JSON.md) (`apply`).
 
 **¿Quién escribe `memory.md`?** `mova chat` (con `"memory": true`) y la tool `save_memory`. **`mova run` no la escribe.**
 

@@ -141,18 +141,20 @@ func dispatch(root string) {
 
 	case "mcp":
 		if arg(2, "") != "start" {
-			die("usage: mova mcp start [--port 3000] [--stdio]")
+			die("usage: mova mcp start [--stdio] | mova mcp start --http [--port 3000] [--bind 127.0.0.1]")
 		}
 
 		adapter := core.NewFileAdapter(root)
 		enableBackgroundGraphs(logGraphNotice) // servidor de larga vida: los grafos no bloquean ninguna llamada
 
-		// Flag --stdio determina si se levanta por Entrada/Salida estándar o por HTTP
-		if flagBool("--stdio") {
-			must(mcp.StartStdio(adapter, root))
-		} else {
+		// stdio por defecto (lo que usan Claude Code/Cursor/Codex). HTTP
+		// solo con --http explícito: escucha en 127.0.0.1 salvo --bind, y
+		// un bind no-loopback exige MOVA_HTTP_TOKEN (ver http/guard.go).
+		if flagBool("--http") || flagStr("--port", "") != "" {
 			port := flagInt("--port", 3000)
-			must(httptransport.StartServer(adapter, root, port))
+			must(httptransport.StartServerOn(adapter, root, flagStr("--bind", "127.0.0.1"), port))
+		} else {
+			must(mcp.StartStdio(adapter, root))
 		}
 
 	case "memory-clear":

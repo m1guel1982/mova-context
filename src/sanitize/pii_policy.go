@@ -30,6 +30,12 @@ type PIIPolicy struct {
 	HashLength     int           `json:"hash_length"`
 	TagFormat      string        `json:"tag_format"`
 	ShapeRules     PIIShapeRules `json:"shape_rules"`
+	// FieldKeys: structured-data keys whose VALUES are always pseudonymized
+	// (JSON "key": "value"), regardless of their shape — the only
+	// deterministic way to cover names and street addresses, which have no
+	// detectable token shape. Values found this way are also masked
+	// wherever else they appear in the same context. See govern.go.
+	FieldKeys []string `json:"field_keys,omitempty"`
 }
 
 type policyFile struct {
@@ -46,6 +52,7 @@ func DefaultPIIPolicy() PIIPolicy {
 		MinTokenLength: 4,
 		HashLength:     8,
 		TagFormat:      "[PII_%s]",
+		FieldKeys:      DefaultFieldKeys(),
 		ShapeRules: PIIShapeRules{
 			DigitRatioThreshold:          0.3,
 			DigitRatioBonus:              0.3,
@@ -72,4 +79,11 @@ func PolicyPath(root string) string {
 func LoadPIIPolicy(root string) PIIPolicy {
 	ps := LoadPolicySet(root)
 	return ps.PII
+}
+
+// DefaultFieldKeys are the structured-data keys whose values are masked
+// when no policy file declares "field_keys".
+func DefaultFieldKeys() []string {
+	return []string{"nombre", "name", "full_name", "apellido", "last_name", "direccion", "address",
+		"street", "telefono", "phone", "email", "correo", "rut", "documento", "dni", "fecha_nacimiento", "birth_date"}
 }

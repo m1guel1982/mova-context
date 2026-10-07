@@ -11,6 +11,7 @@ package main
 import (
 	"encoding/json"
 	"io"
+	"mova.local/evidence"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
@@ -140,21 +141,27 @@ func TestRunProject_DryRunTrue_BlocksContextAndShowsDirective(t *testing.T) {
 	}
 }
 
-// TestRunProject_DryRunTrue_WritesEvidenceFile confirms the on-disk
-// audit trail (egress_audit.output_file) is written here too, exactly
-// like every other door — this is what closes the "todo integrado"
-// gap for `mova run` specifically.
+// TestRunProject_DryRunTrue_WritesEvidenceFile: every `mova run` writes
+// one immutable run (context.txt + manifest.json), dry_run included.
 func TestRunProject_DryRunTrue_WritesEvidenceFile(t *testing.T) {
 	root, project := writeRunCmdProject(t, map[string]any{"dry_run": true, "output_file": "egress_sanitized.md"})
 	adapter := core.NewFileAdapter(root)
 
 	_ = captureStdout(t, func() { runProject(root, adapter, project, "") })
 
-	data, err := os.ReadFile(filepath.Join(root, "projects", project, "egress_sanitized.md"))
+	runs, err := evidence.Runs(filepath.Join(root, "projects", project, "runs"))
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("expected exactly one run, got %v (err %v)", runs, err)
+	}
+	data, err := os.ReadFile(filepath.Join(runs[0], "context.txt"))
 	if err != nil {
-		t.Fatalf("expected the evidence file to exist: %v", err)
+		t.Fatalf("expected context.txt: %v", err)
 	}
 	if !strings.Contains(string(data), "TOP_SECRET_CONTEXT_MARKER_98213") {
-		t.Fatalf("expected the real (governed) context in the evidence file, got:\n%s", data)
+		t.Fatalf("expected the governed context in context.txt, got:\n%s", data)
+	}
+	m, err := evidence.ReadManifest(runs[0])
+	if err != nil || m.Decision.Outcome != "dry_run" || m.Context.SHA256 != evidence.SHA256(data) {
+		t.Fatalf("manifest mismatch: %+v (err %v)", m.Decision, err)
 	}
 }

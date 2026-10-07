@@ -48,7 +48,6 @@ func runBudget(root, project, task string, withFocus bool) {
 		consolePrint(fmt.Sprintf("  %s/%s: $%.4f %s\n", c.Provider, c.Model, c.USD, report.Currency))
 	}
 	if report.Focus != nil {
-		consolePrint(fmt.Sprintf("\nFocus savings: %.1f%% fewer tokens (%d → %d)\n",
-			report.Focus.SavingsPercent, report.Focus.TokensWithoutFocus, report.Focus.TokensWithFocus))
+		consolePrint("\n" + budget.FocusSavingsLine(report.Focus))
 	}
 }

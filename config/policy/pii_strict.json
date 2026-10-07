@@ -8,6 +8,7 @@
     "min_token_length": 4,
     "hash_length": 8,
     "tag_format": "[PII_%s]",
+    "field_keys": ["nombre", "name", "full_name", "apellido", "last_name", "direccion", "address", "street", "telefono", "phone", "email", "correo", "rut", "documento", "dni", "fecha_nacimiento", "birth_date"],
     "shape_rules": {
       "digit_ratio_threshold": 0.3,
       "digit_ratio_bonus": 0.3,

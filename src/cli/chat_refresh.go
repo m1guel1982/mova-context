@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"mova.local/evidence"
 	"strings"
 
 	"mova.local/budget"
@@ -129,7 +130,16 @@ func refreshProjectContext(root, project, task string, sess *models.Session, pro
 	systemText, boundary, _ := applyCacheLayoutQuiet(gated.Sections, freshProj)
 	sess.SetSystem(systemText + mcp.ToolsSystemPrompt(freshProj.Tools))
 	sess.CacheBoundary = boundary
-	sess.EgressAuditDryRun, sess.EgressAuditOutputFile = core.ResolveEgressAudit(root, project, freshProj)
+	sess.EgressAuditDryRun, _ = core.ResolveEgressAudit(root, project, freshProj)
+	// The released context changed: a new immutable run for it.
+	if run, rerr := budget.RecordRun(root, project, task, freshProj, gated, budget.RunInfo{
+		Door:  "chat:provider",
+		Agent: evidence.Attr{Value: "mova-chat", Source: "observed:cli"},
+		Model: evidence.Attr{Value: sess.Provider + "/" + sess.Model, Source: "observed:sesión de Mova (Mova llama al proveedor)"},
+	}, sess.EgressAuditDryRun); rerr == nil {
+		sess.Run, sess.ProjectName, sess.TaskName = run, project, task
+		emit("[Evidence] run " + run.ID + "\n")
+	}
 
 	emit("[Project] contexto recargado (cambió project.json, un prompt/agent/skill o memory.md).\n")
 	if gated.Sections != nil && gated.Sections.GraphStatus != "" {

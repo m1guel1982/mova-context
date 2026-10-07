@@ -20,6 +20,7 @@
 package mcp
 
 import (
+	"mova.local/evidence"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -182,10 +183,7 @@ func TestAirgapDirective_Inactive_OnDiskEvidenceHasNoDirectiveText(t *testing.T)
 
 	_ = callTool(t, root, "get_full_context", map[string]any{"project": project})
 
-	data, err := os.ReadFile(filepath.Join(root, "projects", project, "egress_sanitized.md"))
-	if err != nil {
-		t.Fatalf("expected the evidence file to exist: %v", err)
-	}
+	data := latestRunContext(t, root, project)
 	assertAirgapDirectiveAbsent(t, string(data))
 	if !strings.Contains(string(data), "TOP_SECRET_CONTEXT_MARKER_98213") {
 		t.Fatalf("expected the real (governed) context in the evidence file, got:\n%s", data)
@@ -220,4 +218,18 @@ func assertAirgapDirectiveAbsent(t *testing.T, text string) {
 	if strings.Contains(text, "CRITICAL SECURITY DIRECTIVE FOR ASSISTANT") {
 		t.Fatalf("the anti-bypass directive must only appear when the air-gap actually blocks something, got:\n%s", text)
 	}
+}
+
+// latestRunContext returns context.txt of the newest run of project.
+func latestRunContext(t *testing.T, root, project string) []byte {
+	t.Helper()
+	runs, err := evidence.Runs(filepath.Join(root, "projects", project, "runs"))
+	if err != nil || len(runs) == 0 {
+		t.Fatalf("expected at least one run: %v (err %v)", runs, err)
+	}
+	data, err := os.ReadFile(filepath.Join(runs[len(runs)-1], "context.txt"))
+	if err != nil {
+		t.Fatalf("expected context.txt: %v", err)
+	}
+	return data
 }

@@ -30,6 +30,41 @@ type Task struct {
 	// Apply: bool u objeto {"enabled","backup"}; anula al del proyecto para
 	// esta tarea. false = solo lectura; ausente = el valor del proyecto.
 	Apply json.RawMessage `json:"apply,omitempty"`
+	// DependencyPolicy: qué hacer cuando un símbolo en focus depende de
+	// algo explícitamente excluido (ver graph/closure.go). "block" (por
+	// defecto): el contexto NO se libera; "warn": se libera y el conflicto
+	// queda en la evidencia; "off": no se valida. Sobrescribe al del
+	// proyecto.
+	DependencyPolicy string `json:"dependency_policy,omitempty"`
+	// AcceptMissing: conflictos aceptados explícitamente por una persona,
+	// con su razón — quedan registrados como decisión en la evidencia.
+	AcceptMissing []AcceptedDependency `json:"accept_missing,omitempty"`
+}
+
+// AcceptedDependency acepta que el contexto omita Symbol ("archivo::nombre"
+// o solo "nombre") aunque un símbolo en focus dependa de él.
+type AcceptedDependency struct {
+	Symbol string `json:"symbol"`
+	Reason string `json:"reason"`
+}
+
+// DependencyPolicyFor resuelve la política de cierre de una tarea:
+// tarea > proyecto > "block".
+func DependencyPolicyFor(proj *Project, task *Task) string {
+	for _, v := range []string{taskDependencyPolicy(task), proj.DependencyPolicy} {
+		switch v {
+		case "block", "warn", "off":
+			return v
+		}
+	}
+	return "block"
+}
+
+func taskDependencyPolicy(task *Task) string {
+	if task == nil {
+		return ""
+	}
+	return task.DependencyPolicy
 }
 
 // ProjectSummary is used by mova list.

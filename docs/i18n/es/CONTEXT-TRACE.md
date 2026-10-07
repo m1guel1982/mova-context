@@ -15,7 +15,7 @@ código" y "esto está a punto de ir a un LLM".
 | `BLOCKED` | Algo crítico (llave privada) — el archivo **completo** queda fuera. |
 | `EXCLUDED` | Fuera por razones no relacionadas a seguridad (binario, build, no relevante a la tarea). |
 
-Nunca se sanea nada en silencio: cada decisión queda con la regla exacta que la tomó, en `context-report.md`
+Cada decisión de context-trace queda con la regla que la tomó en `context-report.md` (el ranking por relevancia BM25 es heurístico, no una garantía de que el contexto sea el correcto)
 y `pii-audit-log.json`.
 
 ## Dos modos

@@ -8,7 +8,7 @@
   "default_task": "auditar-datos",
 
   "memory": "../memory.md",
-  "egress_audit": { "dry_run": false, "output_file": "egress_sanitized.md" },
+  "egress_audit": { "dry_run": false },
 
   "variables": { "REGULATION": "Ley 21.719 (Chile) — protección de datos personales" },
   "agents": { "domain": "base", "use": ["ai-privacy-reviewer"], "custom": [] },

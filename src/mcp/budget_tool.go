@@ -48,8 +48,7 @@ func formatBudgetReport(root, project string, proj *core.Project, report *budget
 		summary += fmt.Sprintf("  %s/%s: $%.4f %s\n", c.Provider, c.Model, c.USD, report.Currency)
 	}
 	if report.Focus != nil {
-		summary += fmt.Sprintf("\nFocus savings: %.1f%% fewer tokens (%d → %d)\n",
-			report.Focus.SavingsPercent, report.Focus.TokensWithoutFocus, report.Focus.TokensWithFocus)
+		summary += "\n" + budget.FocusSavingsLine(report.Focus)
 	}
 	return summary, nil
 }
