@@ -1,3 +1,5 @@
+![mova en acción / mova in action](docs/assets/mova-demo.gif)
+
 # mova — especificación de contexto por tarea, validada y con evidencia
 
 [Español](README.md) · [English](../en/README.md) · [Volver a la raíz](../../../README.md)

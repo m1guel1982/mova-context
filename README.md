@@ -1,3 +1,5 @@
+![mova en acción / mova in action](docs/assets/mova-demo.gif)
+
 # Mova Context
 
 **Especificación de contexto por tarea, validada y con evidencia — antes de la inferencia.**
